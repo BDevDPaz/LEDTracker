@@ -1,50 +1,40 @@
-# Welcome to your Expo app 👋
+# LEDTracker V2.1 (Gold Master) 🛡️📍
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicación profesional de rastreo de horas laborales y ubicación GPS para Android, diseñada con estándares de auditoría forense y lógica multi-sitio.
 
-## Get started
+## 🚀 Características Principales
 
-1. Install dependencies
+### 1. Rastreo GPS de Alta Precisión
+- **Auto Check-Out:** Detección automática de salida del perímetro laboral (Geofencing inverso).
+- **Background Tracking:** Rastreo persistente en segundo plano optimizado para batería.
 
-   ```bash
-   npm install
-   ```
+### 2. Gestión de Nómina y Tiempo
+- **Cálculo de Overtime:** Soporte configurable para multiplicadores de horas extra (1.5x, 2.0x).
+- **Modo Tránsito (Travel Time):** Registro de tiempos de traslado entre sitios como horas pagadas.
+- **Deducción de Almuerzo:** Lógica automática de descuento (-1h) con confirmación del usuario.
 
-2. Start the app
+### 3. Sistema de Auditoría Forense (Anti-Fraude) 🕵️‍♂️
+- **Logs Inmutables:** Cada edición, borrado o modificación manual queda registrada en una base de datos de auditoría.
+- **Reportes PDF Certificados:** Generación de reportes semanales que incluyen una sección de "Integridad de Datos" mostrando cualquier manipulación manual.
 
-   ```bash
-   npx expo start
-   ```
+### 4. Experiencia de Usuario (UX)
+- **Recordatorios Inteligentes:** Notificaciones diarias con opción de "Posponer" (Snooze).
+- **Interfaz Nativa:** Iconos adaptativos y Splash Screen personalizada.
+- **Multi-Idioma:** Soporte completo Español/Inglés en tiempo real.
 
-In the output, you'll find options to open the app in a
+## 🛠️ Stack Tecnológico
+- **Core:** React Native (Expo SDK 52)
+- **Lenguaje:** TypeScript (Strict Mode)
+- **Base de Datos:** SQLite (Modo WAL para alto rendimiento)
+- **Servicios:** Expo Location, Expo TaskManager, Expo Notifications.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 📱 Compilación
+Este proyecto está optimizado para EAS Build (Android).
 
 ```bash
-npm run reset-project
+eas build -p android --profile preview
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+**Desarrollado por:** Byron De Paz (BDevDPaz)
+**Licencia:** Privada / Propietaria
