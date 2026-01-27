@@ -6,8 +6,16 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ledtracker",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+
     "newArchEnabled": true,
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.bdevdpaz.ledtracker",
@@ -18,10 +26,11 @@
         ]
       }
     },
+
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundColor": "#000000",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -39,10 +48,12 @@
         "POST_NOTIFICATIONS"
       ]
     },
+
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       "expo-sqlite",
@@ -50,24 +61,30 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "LEDTracker necesita tu ubicación en segundo plano para registrar automáticamente tu entrada y salida del trabajo."
+          "locationAlwaysAndWhenInUsePermission": "LEDTracker needs your location in the background to automatically record your entry and exit from work. / LEDTracker necesita tu ubicación en segundo plano para registrar automáticamente tu entrada y salida del trabajo.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-task-manager",
       "expo-background-fetch",
       "expo-notifications",
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "expo-font"
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+
     "extra": {
       "router": {},
       "eas": {
         "projectId": "806cc651-5078-4d0f-bea4-c96e24ee7f6a"
       }
     },
+
     "owner": "bdevdpaz"
   }
 }

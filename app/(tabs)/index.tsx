@@ -1,7 +1,6 @@
-// app/(tabs)/index.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ CORRECCIÓN SAFE AREA
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'; 
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -12,43 +11,40 @@ import { LocationService } from '../../src/services/LocationManager';
 import { DailySetupModal } from '../../src/components/DailySetupModal';
 import { LunchModal } from '../../src/components/LunchModal';
 import { useLanguage } from '../../src/context/LanguageContext';
+import { useLuxuryUI } from '../../src/context/LuxuryUIContext'; // ✅ TOASTS
+import { COLORS } from '../../src/constants/theme';
+import { LuxuryCard, LuxuryButton } from '../../src/components/LuxuryUI';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
-  const router = useRouter(); // ✅ Necesario para limpiar la orden
-  const params = useLocalSearchParams(); // ✅ Leemos los parámetros
+  const { showToast } = useLuxuryUI();
+  const router = useRouter(); 
+  const params = useLocalSearchParams(); 
 
   const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
   const [address, setAddress] = useState<string>('Cargando...');
   const [stats, setStats] = useState({ hours: 0, earnings: 0 });
   
-  // Modales y Carga
   const [showDailyModal, setShowDailyModal] = useState(false);
   const [showLunchModal, setShowLunchModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // ✅ Nuevo estado para evitar "trabe" visual
+  const [isProcessing, setIsProcessing] = useState(false); 
 
-  // Cargar datos
   const loadData = async () => {
     try {
       const db = getDB();
       const settings = await getSettings();
-
-      // Buscar sesión activa
       const session = await db.getFirstAsync<WorkSession>(
         "SELECT * FROM work_sessions WHERE status = 'active' OR status = 'travel' ORDER BY id DESC"
       );
       
       setActiveSession(session || null);
-      
       if (session) {
         setAddress(session.address);
       } else {
         setAddress(t.status_inactive || "Fuera de Servicio");
       }
-
       calculateDailyStats(settings);
-
     } catch (e) {
       console.error("Error loading data:", e);
     }
@@ -59,10 +55,8 @@ export default function HomeScreen() {
     const db = getDB();
     const startOfDay = new Date();
     startOfDay.setHours(0,0,0,0);
-    
     const sessions = await db.getAllAsync<WorkSession>(
-      "SELECT * FROM work_sessions WHERE start_time >= ?", 
-      [startOfDay.getTime()]
+      "SELECT * FROM work_sessions WHERE start_time >= ?", [startOfDay.getTime()]
     );
 
     let totalMs = 0;
@@ -82,39 +76,25 @@ export default function HomeScreen() {
     });
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { loadData(); }, []));
 
-  // ✅ CORRECCIÓN CRÍTICA: BUCLE INFINITO
   useEffect(() => {
     if (params.showSetup === 'true') {
-      console.log("🔔 Notificación recibida: Abriendo modal...");
       setShowDailyModal(true);
-      
-      // 🔥 ESTO FALTABA: Borramos la orden inmediatamente
       router.setParams({ showSetup: undefined }); 
     }
   }, [params.showSetup]);
 
-  // Acciones
   const handleStartDay = async (addr: string) => {
-    setIsProcessing(true); // Mostramos spinner
+    setIsProcessing(true); 
     try {
-      // 1. Permisos
       const perm = await LocationService.requestPermissions();
       if (!perm) {
-        Alert.alert("Permiso Requerido", "Necesitamos acceso a tu ubicación.");
+        showToast("Se requiere ubicación para iniciar", "error");
         setIsProcessing(false);
         return;
       }
-
-      // 2. Obtener GPS
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      
-      // 3. Guardar en DB
       await insertWorkSession({
         start_time: Date.now(),
         status: 'active',
@@ -126,19 +106,15 @@ export default function HomeScreen() {
         lunch_taken: 0,
         date_string: new Date().toISOString().split('T')[0]
       });
-
-      // 4. Iniciar Rastreo
       await LocationService.startActiveTracking();
-      
-      // 5. Cerrar y Recargar
       setShowDailyModal(false);
       await loadData();
-
+      showToast("Jornada iniciada con éxito", "success");
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "No se pudo iniciar la sesión.");
+      showToast("No se pudo iniciar la sesión", "error");
     } finally {
-      setIsProcessing(false); // Ocultamos spinner
+      setIsProcessing(false); 
     }
   };
 
@@ -164,9 +140,10 @@ export default function HomeScreen() {
        }
        setShowLunchModal(false);
        await loadData();
-       Alert.alert("Jornada Finalizada", "Horas registradas correctamente.");
+       showToast("Jornada finalizada correctamente", "success");
      } catch (e) {
        console.error(e);
+       showToast("Error al finalizar jornada", "error");
      } finally {
        setIsProcessing(false);
      }
@@ -182,64 +159,65 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView 
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFF"/>}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.gold}/>}
       >
-        {/* HEADER */}
+        {/* HEADER LIMPIO (Sin botón +) */}
         <View style={styles.header}>
           <View>
              <Text style={styles.greeting}>{t.header_title || "WorkTracker"}</Text>
-             <Text style={styles.subGreeting}>{activeSession ? t.status_active : t.status_inactive}</Text>
+             <View style={styles.statusBadge}>
+                <View style={[styles.statusDot, { backgroundColor: activeSession ? COLORS.success : '#666' }]} />
+                <Text style={styles.statusText}>{activeSession ? t.status_active : t.status_inactive}</Text>
+             </View>
           </View>
-          <TouchableOpacity onPress={() => setShowDailyModal(true)} style={styles.iconBtn}>
-            <Ionicons name="add-circle-outline" size={32} color="#007AFF" />
-          </TouchableOpacity>
         </View>
 
-        {/* TARJETA PRINCIPAL (ESTADO) */}
-        <View style={[styles.card, activeSession ? styles.cardActive : styles.cardInactive]}>
+        {/* TARJETA PRINCIPAL */}
+        <LuxuryCard active={!!activeSession} style={{ minHeight: 200, justifyContent: 'center' }}>
            {isProcessing ? (
-             <ActivityIndicator size="large" color="#FFF" style={{margin: 20}} />
+             <ActivityIndicator size="large" color={COLORS.gold} />
            ) : (
-             <>
-               <Ionicons 
-                 name={activeSession ? (activeSession.status==='travel' ? "car-sport" : "location") : "moon"} 
-                 size={40} 
-                 color="#FFF" 
-                 style={{marginBottom: 10}}
-               />
-               <Text style={styles.addressText}>{address}</Text>
+             <View style={{ alignItems: 'center' }}>
+               <View style={[styles.iconBubble, activeSession && { backgroundColor: COLORS.goldDim }]}>
+                 <Ionicons 
+                   name={activeSession ? (activeSession.status==='travel' ? "car-sport" : "location") : "moon"} 
+                   size={32} 
+                   color={activeSession ? COLORS.gold : COLORS.textSecondary} 
+                 />
+               </View>
+               <Text style={styles.label}>UBICACIÓN ACTUAL</Text>
+               <Text style={[styles.addressText, activeSession && { color: '#FFF' }]}>{address}</Text>
+               
                {activeSession && (
-                 <Text style={styles.timerText}>
-                   {new Date(activeSession.start_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - En curso
-                 </Text>
+                 <View style={styles.timerBadge}>
+                    <Ionicons name="time-outline" size={14} color={COLORS.gold} />
+                    <Text style={styles.timerText}>
+                      {new Date(activeSession.start_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - En curso
+                    </Text>
+                 </View>
                )}
-             </>
+             </View>
            )}
-        </View>
+        </LuxuryCard>
 
         {/* BOTÓN DE ACCIÓN */}
-        <TouchableOpacity 
-          style={[
-            activeSession ? styles.stopBtn : styles.startBtn,
-            isProcessing && { opacity: 0.5 }
-          ]} 
-          onPress={activeSession ? handleClockOut : () => setShowDailyModal(true)}
-          disabled={isProcessing}
-        >
-          <Text style={styles.btnText}>
-            {activeSession ? t.btn_clock_out : t.btn_new_job}
-          </Text>
-        </TouchableOpacity>
+        <LuxuryButton 
+            text={activeSession ? t.btn_clock_out : t.btn_new_job}
+            variant={activeSession ? 'danger' : 'primary'}
+            onPress={activeSession ? handleClockOut : () => setShowDailyModal(true)}
+            disabled={isProcessing}
+            icon={<Ionicons name={activeSession ? "stop" : "play"} size={18} color={activeSession ? "#FFF" : "#000"} />}
+        />
 
-        {/* ESTADÍSTICAS HOY */}
+        {/* ESTADÍSTICAS */}
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>{t.stats_hours}</Text>
             <Text style={styles.statValue}>{stats.hours.toFixed(2)}h</Text>
           </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>{t.stats_earnings}</Text>
-            <Text style={styles.statValue}>${stats.earnings.toFixed(2)}</Text>
+          <View style={[styles.statBox, styles.statBoxGold]}>
+            <Text style={[styles.statLabel, {color: COLORS.gold}]}>{t.stats_earnings}</Text>
+            <Text style={[styles.statValue, {color: COLORS.gold}]}>${stats.earnings.toFixed(2)}</Text>
           </View>
         </View>
 
@@ -248,7 +226,7 @@ export default function HomeScreen() {
           visible={showDailyModal} 
           onClose={() => {
             setShowDailyModal(false);
-            router.setParams({ showSetup: undefined }); // Limpiar también al cerrar manual
+            router.setParams({ showSetup: undefined });
           }}
           onStart={handleStartDay}
         />
@@ -265,22 +243,21 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  greeting: { fontSize: 24, fontWeight: 'bold', color: '#FFF' },
-  subGreeting: { fontSize: 14, color: '#AAA', marginTop: 2 },
-  iconBtn: { padding: 5 },
-  card: { padding: 20, borderRadius: 16, alignItems: 'center', marginBottom: 20, shadowColor: "#000", shadowOffset: {width:0, height:4}, shadowOpacity: 0.3, shadowRadius: 5, elevation: 6, minHeight: 150, justifyContent: 'center' },
-  cardActive: { backgroundColor: '#2E7D32' },
-  cardInactive: { backgroundColor: '#1E1E1E' },
-  addressText: { color: '#FFF', fontSize: 18, fontWeight: '600', textAlign: 'center', marginBottom: 5 },
-  timerText: { color: '#DDD', fontSize: 14 },
-  startBtn: { backgroundColor: '#007AFF', padding: 18, borderRadius: 12, alignItems: 'center', marginBottom: 20 },
-  stopBtn: { backgroundColor: '#D32F2F', padding: 18, borderRadius: 12, alignItems: 'center', marginBottom: 20 },
-  btnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold', letterSpacing: 1 },
-  statsContainer: { flexDirection: 'row', gap: 15 },
-  statBox: { flex: 1, backgroundColor: '#1E1E1E', padding: 15, borderRadius: 12, alignItems: 'center' },
-  statLabel: { color: '#AAA', fontSize: 12, marginBottom: 5 },
-  statValue: { color: '#FFD700', fontSize: 22, fontWeight: 'bold' }
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  greeting: { fontFamily: 'Montserrat_300Light', fontSize: 28, color: '#FFF', letterSpacing: 1 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 6 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontFamily: 'Montserrat_700Bold', fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, textTransform: 'uppercase' },
+  iconBubble: { padding: 15, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 15 },
+  label: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 2, marginBottom: 8 },
+  addressText: { fontFamily: 'Montserrat_600SemiBold', color: COLORS.textSecondary, fontSize: 22, textAlign: 'center', marginBottom: 10 },
+  timerBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.surfaceHighlight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  timerText: { fontFamily: 'Montserrat_600SemiBold', color: COLORS.gold, fontSize: 12 },
+  statsContainer: { flexDirection: 'row', gap: 12 },
+  statBox: { flex: 1, backgroundColor: COLORS.surface, padding: 15, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
+  statBoxGold: { borderColor: 'rgba(212,175,55,0.3)', backgroundColor: 'rgba(212,175,55,0.05)' },
+  statLabel: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 5, textTransform: 'uppercase' },
+  statValue: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 24 }
 });
