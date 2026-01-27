@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ CORRECCIÓN SAFE AREA
+import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'; 
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 
 import { getDB, insertWorkSession, updateSessionEndTime, getSettings } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
@@ -11,9 +12,9 @@ import { LocationService } from '../../src/services/LocationManager';
 import { DailySetupModal } from '../../src/components/DailySetupModal';
 import { LunchModal } from '../../src/components/LunchModal';
 import { useLanguage } from '../../src/context/LanguageContext';
-import { useLuxuryUI } from '../../src/context/LuxuryUIContext'; // ✅ TOASTS
+import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
-import { LuxuryCard, LuxuryButton } from '../../src/components/LuxuryUI';
+import { LuxuryCard, LuxuryButton, GlassModalWrapper } from '../../src/components/LuxuryUI';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
@@ -29,6 +30,31 @@ export default function HomeScreen() {
   const [showLunchModal, setShowLunchModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false); 
+
+  // --- EASTER EGG LOGIC ---
+  const [easterEggCount, setEasterEggCount] = useState(0);
+  const [showSpecialCard, setShowSpecialCard] = useState(false);
+  const pulseAnim = useSharedValue(1);
+
+  useEffect(() => {
+    pulseAnim.value = withRepeat(
+      withSequence(withTiming(1.2, { duration: 1000 }), withTiming(1, { duration: 1000 })),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedIconStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulseAnim.value }] }));
+
+  const handleEasterEggTap = () => {
+    const newCount = easterEggCount + 1;
+    setEasterEggCount(newCount);
+    if (newCount === 3) {
+      setShowSpecialCard(true);
+      setEasterEggCount(0);
+    }
+  };
+  // ------------------------
 
   const loadData = async () => {
     try {
@@ -161,10 +187,21 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.gold}/>}
       >
-        {/* HEADER LIMPIO (Sin botón +) */}
+        {/* HEADER CON EASTER EGG */}
         <View style={styles.header}>
           <View>
-             <Text style={styles.greeting}>{t.header_title || "WorkTracker"}</Text>
+             {/* ✅ TITULO EN NEGRITA y FLEX ROW para el icono */}
+             <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                <Text style={styles.appTitle}>{t.header_title || "LED Tracker"}</Text>
+                
+                {/* ⚡ EASTER EGG ICON */}
+                <TouchableOpacity onPress={handleEasterEggTap} activeOpacity={0.8}>
+                   <Animated.View style={animatedIconStyle}>
+                      <Ionicons name="flash" size={18} color={COLORS.gold} />
+                   </Animated.View>
+                </TouchableOpacity>
+             </View>
+
              <View style={styles.statusBadge}>
                 <View style={[styles.statusDot, { backgroundColor: activeSession ? COLORS.success : '#666' }]} />
                 <Text style={styles.statusText}>{activeSession ? t.status_active : t.status_inactive}</Text>
@@ -173,7 +210,7 @@ export default function HomeScreen() {
         </View>
 
         {/* TARJETA PRINCIPAL */}
-        <LuxuryCard active={!!activeSession} style={{ minHeight: 200, justifyContent: 'center' }}>
+        <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
            {isProcessing ? (
              <ActivityIndicator size="large" color={COLORS.gold} />
            ) : (
@@ -237,6 +274,28 @@ export default function HomeScreen() {
           onCancel={() => completeSession(false)}
         />
 
+        {/* MODAL SPECIAL EDITION (EASTER EGG) */}
+        <GlassModalWrapper visible={showSpecialCard}>
+           <View style={{alignItems: 'center', padding: 10}}>
+              <Ionicons name="trophy" size={40} color={COLORS.gold} style={{marginBottom: 20}} />
+              <Text style={{fontFamily: 'Montserrat_700Bold', color: COLORS.gold, fontSize: 18, textAlign: 'center', marginBottom: 5}}>
+                LED Tracker Special Edition
+              </Text>
+              <Text style={{fontFamily: 'Montserrat_400Regular', color: '#FFF', fontSize: 12, textAlign: 'center', marginBottom: 20, letterSpacing: 1}}>
+                by BDevDPaz
+              </Text>
+              <View style={{height: 1, width: 50, backgroundColor: COLORS.border, marginBottom: 20}} />
+              <Text style={{fontFamily: 'Montserrat_600SemiBold', color: '#AAA', fontSize: 10, textAlign: 'center', lineHeight: 18}}>
+                Para uso restringido de{"\n"}
+                <Text style={{color: '#FFF'}}>Alex León</Text>{"\n"}
+                CEO de LEON'S ELECTRICAL DESIGN
+              </Text>
+              <TouchableOpacity onPress={() => setShowSpecialCard(false)} style={{marginTop: 30}}>
+                 <Text style={{color: COLORS.gold, fontSize: 12, fontFamily: 'Montserrat_700Bold'}}>CERRAR</Text>
+              </TouchableOpacity>
+           </View>
+        </GlassModalWrapper>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -244,20 +303,21 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  scroll: { padding: 24, paddingBottom: 120 }, // ✅ Aumentado padding
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
+  appTitle: { fontFamily: 'Montserrat_700Bold', fontSize: 28, color: '#FFF', letterSpacing: 1 }, // ✅ NEGRITA
   greeting: { fontFamily: 'Montserrat_300Light', fontSize: 28, color: '#FFF', letterSpacing: 1 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 6 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontFamily: 'Montserrat_700Bold', fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, textTransform: 'uppercase' },
-  iconBubble: { padding: 15, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 15 },
+  iconBubble: { padding: 16, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 16 },
   label: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 2, marginBottom: 8 },
-  addressText: { fontFamily: 'Montserrat_600SemiBold', color: COLORS.textSecondary, fontSize: 22, textAlign: 'center', marginBottom: 10 },
+  addressText: { fontFamily: 'Montserrat_600SemiBold', color: COLORS.textSecondary, fontSize: 22, textAlign: 'center', marginBottom: 12 },
   timerBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.surfaceHighlight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   timerText: { fontFamily: 'Montserrat_600SemiBold', color: COLORS.gold, fontSize: 12 },
-  statsContainer: { flexDirection: 'row', gap: 12 },
-  statBox: { flex: 1, backgroundColor: COLORS.surface, padding: 15, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
+  statsContainer: { flexDirection: 'row', gap: 14 },
+  statBox: { flex: 1, backgroundColor: COLORS.surface, padding: 20, borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
   statBoxGold: { borderColor: 'rgba(212,175,55,0.3)', backgroundColor: 'rgba(212,175,55,0.05)' },
   statLabel: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 5, textTransform: 'uppercase' },
-  statValue: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 24 }
+  statValue: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 22 }
 });

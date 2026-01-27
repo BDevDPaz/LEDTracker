@@ -3,10 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics'; // ✅ Importamos Haptics
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated'; // ✅ Para Skeletons
+import * as Haptics from 'expo-haptics';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { COLORS } from '../constants/theme';
 
+// --- TARJETA ---
 export const LuxuryCard = ({ children, active, style }: any) => (
   <View style={[styles.cardContainer, style, active && styles.cardActive]}>
     <LinearGradient
@@ -20,6 +21,7 @@ export const LuxuryCard = ({ children, active, style }: any) => (
   </View>
 );
 
+// --- MODAL WRAPPER ---
 export const GlassModalWrapper = ({ visible, children }: any) => (
   <Modal visible={visible} transparent animationType="fade">
     <View style={styles.modalOverlay}>
@@ -31,7 +33,7 @@ export const GlassModalWrapper = ({ visible, children }: any) => (
   </Modal>
 );
 
-// ✅ COMPONENTE NUEVO: EMPTY STATE (Tarea 6)
+// --- EMPTY STATE ---
 export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: any) => (
   <View style={styles.emptyContainer}>
     <View style={styles.emptyIconBubble}>
@@ -41,10 +43,9 @@ export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: any) => (
   </View>
 );
 
-// ✅ COMPONENTE NUEVO: SKELETON (Tarea 8)
+// --- SKELETON ---
 export const LuxurySkeleton = ({ width, height, style }: any) => {
   const opacity = useSharedValue(0.3);
-
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(withTiming(0.6, { duration: 800 }), withTiming(0.3, { duration: 800 })),
@@ -52,31 +53,45 @@ export const LuxurySkeleton = ({ width, height, style }: any) => {
       true
     );
   }, []);
-
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
   return (
     <Animated.View style={[{ width, height, backgroundColor: '#333', borderRadius: 12 }, style, animatedStyle]} />
   );
 };
 
+// --- BOTÓN ---
 export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled }: any) => {
-  const bgColors = variant === 'danger' ? ['#FF3B30', '#991B1B'] : ['#D4AF37', '#8a7224'];
-  const textColor = variant === 'danger' ? '#FFF' : '#000';
-  
+  // Definir colores según variante
+  let bgColors = ['#D4AF37', '#8a7224']; // Gold (Primary)
+  let textColor = '#000';
+  let borderColor = 'transparent';
+  let borderWidth = 0;
+
+  if (variant === 'danger') {
+    bgColors = ['#FF3B30', '#991B1B'];
+    textColor = '#FFF';
+  } else if (variant === 'outline') {
+    bgColors = ['transparent', 'transparent']; // Transparente
+    textColor = '#AAA';
+    borderColor = '#333';
+    borderWidth = 1;
+  } else if (variant === 'success') {
+    bgColors = ['#22c55e', '#14532d'];
+    textColor = '#000';
+  }
+
   const handlePress = (e: any) => {
     if (!disabled) {
-      // ✅ IMPLEMENTACIÓN TAREA 7: Vibración al pulsar
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onPress(e);
     }
   };
 
   return (
-    <TouchableOpacity onPress={handlePress} disabled={disabled} activeOpacity={0.8}>
+    <TouchableOpacity onPress={handlePress} disabled={disabled} activeOpacity={0.7} style={{marginBottom: 16}}>
       <LinearGradient
         colors={disabled ? ['#333', '#111'] : bgColors}
-        style={styles.button}
+        style={[styles.button, { borderColor, borderWidth }]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
@@ -88,16 +103,16 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
 };
 
 const styles = StyleSheet.create({
-  cardContainer: { borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 16 },
+  cardContainer: { borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 20 },
   cardActive: { borderColor: COLORS.gold, shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
-  cardGradient: { padding: 20 },
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', padding: 20 },
-  modalContent: { width: '100%', backgroundColor: '#111', borderRadius: 32, borderWidth: 1, borderColor: COLORS.border, padding: 24 },
-  button: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  cardGradient: { padding: 24 }, // Padding interno aumentado
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)', padding: 20 },
+  modalContent: { width: '100%', backgroundColor: '#111', borderRadius: 32, borderWidth: 1, borderColor: COLORS.border, padding: 30 },
+  button: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   buttonText: { fontFamily: 'Montserrat_700Bold', fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' },
-  iconBubble: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, padding: 6 },
+  iconBubble: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, padding: 4 },
   
-  // Empty State Styles
+  // Empty State
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.7 },
   emptyIconBubble: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#333' },
   emptyText: { fontFamily: 'Montserrat_400Regular', color: '#666', fontSize: 14, letterSpacing: 1 },

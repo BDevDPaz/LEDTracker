@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ CORRECCIÓN SAFE AREA
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, TextInput } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../src/context/LanguageContext';
@@ -38,16 +37,48 @@ export default function HistoryScreen() {
     );
     setSessions(res);
 
+    // ✅ CÁLCULO REAL (SOLO SEMANA ACTUAL)
+    calculateWeeklyTotals(res, rate);
+  };
+
+  const calculateWeeklyTotals = (allSessions: WorkSession[], rate: number) => {
+    const now = new Date();
+    // Obtener el Lunes de esta semana
+    const day = now.getDay(); 
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Ajustar si es domingo
+    const monday = new Date(now.setDate(diff));
+    monday.setHours(0,0,0,0);
+
     let tMs = 0;
-    res.forEach(s => {
-      const end = s.end_time || Date.now();
-      let dur = end - s.start_time;
-      if (s.lunch_taken) dur -= 3600000;
-      tMs += Math.max(0, dur);
+    allSessions.forEach(s => {
+      // Solo sumar si la fecha es >= Lunes
+      if (s.start_time >= monday.getTime()) {
+        const end = s.end_time || Date.now();
+        let dur = end - s.start_time;
+        if (s.lunch_taken) dur -= 3600000;
+        tMs += Math.max(0, dur);
+      }
     });
+
     const tHours = tMs / (1000 * 60 * 60);
     setTotalHours(tHours);
     setEstEarnings(tHours * rate);
+  }
+
+  // ✅ HELPER: FORMATEAR HORA (HH:MM)
+  const formatTimeInput = (text: string, setter: (t: string) => void) => {
+    // 1. Quitar todo lo que no sea número
+    const cleaned = text.replace(/[^0-9]/g, '');
+    
+    // 2. Limitar longitud
+    if (cleaned.length > 4) return;
+
+    // 3. Insertar dos puntos
+    if (cleaned.length > 2) {
+      setter(`${cleaned.slice(0,2)}:${cleaned.slice(2)}`);
+    } else {
+      setter(cleaned);
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -78,16 +109,25 @@ export default function HistoryScreen() {
 
   const saveEdit = async () => {
     if (!selectedSession || !selectedSession.id) return;
+    
+    // Validar hora simple
+    if (editTimeIn.length < 5) {
+      showToast("Formato de hora incorrecto (HH:MM)", "error");
+      return;
+    }
+
     const baseDate = new Date(selectedSession.start_time); 
     const [hIn, mIn] = editTimeIn.split(':').map(Number);
     const newStart = new Date(baseDate);
     newStart.setHours(hIn || 0, mIn || 0);
+    
     let newEnd = null;
-    if (editTimeOut) {
+    if (editTimeOut && editTimeOut.length === 5) {
       const [hOut, mOut] = editTimeOut.split(':').map(Number);
       newEnd = new Date(baseDate);
       newEnd.setHours(hOut || 0, mOut || 0);
     }
+    
     await updateWorkSessionManual(selectedSession.id, newStart.getTime(), newEnd ? newEnd.getTime() : null, editNote);
     setEditModalVisible(false);
     showToast("Cambios guardados", "success");
@@ -107,7 +147,8 @@ export default function HistoryScreen() {
         <View style={styles.row}>
           <Text style={styles.date}>{new Date(item.start_time).toLocaleDateString()}</Text>
           <View style={styles.statusBadge}>
-            {item.is_manual_edit === 1 && <Text style={{color: COLORS.gold, fontSize: 10, marginRight:4}}>✎</Text>}
+            {/* ✅ ICONO EN VEZ DE EMOJI */}
+            {item.is_manual_edit === 1 && <Ionicons name="pencil" size={12} color={COLORS.gold} style={{marginRight: 6}} />}
             <View style={[styles.dot, { backgroundColor: item.status==='active' ? COLORS.success : '#666' }]} />
           </View>
         </View>
@@ -131,12 +172,13 @@ export default function HistoryScreen() {
         <View>
           <Text style={styles.header}>{t.history_title}</Text>
           <Text style={styles.subHeader}>
-            TOTAL: <Text style={{color: '#FFF'}}>{totalHours.toFixed(1)}h</Text> • <Text style={{color: COLORS.gold}}>${estEarnings.toFixed(0)}</Text>
+            ESTA SEMANA: <Text style={{color: '#FFF'}}>{totalHours.toFixed(1)}h</Text> • <Text style={{color: COLORS.gold}}>${estEarnings.toFixed(0)}</Text>
           </Text>
         </View>
+        {/* ✅ BOTÓN PDF MÁS LLAMATIVO Y REDONDO */}
         <TouchableOpacity style={styles.pdfBtn} onPress={() => generateWeeklyReport(true)}>
+          <Ionicons name="document-text" size={16} color="#000" />
           <Text style={styles.pdfText}>PDF</Text>
-          <Ionicons name="download-outline" size={14} color={COLORS.gold} />
         </TouchableOpacity>
       </View>
 
@@ -144,7 +186,7 @@ export default function HistoryScreen() {
         data={sessions}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
         ListEmptyComponent={<LuxuryEmptyState text={t.no_activity || "No hay actividad reciente"} icon="time-outline" />}
         showsVerticalScrollIndicator={false}
       />
@@ -156,21 +198,41 @@ export default function HistoryScreen() {
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
          </View>
+         
+         {/* INPUTS MEJORADOS: TECLADO NUMÉRICO Y AUTO-FORMATO */}
          <View style={styles.inputGroup}>
             <Text style={styles.label}>ENTRADA (HH:MM)</Text>
-            <TextInput style={styles.input} value={editTimeIn} onChangeText={setEditTimeIn} keyboardType="numbers-and-punctuation"/>
+            <TextInput 
+              style={styles.input} 
+              value={editTimeIn} 
+              onChangeText={(t) => formatTimeInput(t, setEditTimeIn)} 
+              keyboardType="number-pad"
+              maxLength={5}
+              placeholder="00:00"
+              placeholderTextColor="#333"
+            />
          </View>
          <View style={styles.inputGroup}>
             <Text style={styles.label}>SALIDA (HH:MM)</Text>
-            <TextInput style={styles.input} value={editTimeOut} onChangeText={setEditTimeOut} placeholder="En progreso..." placeholderTextColor="#444" keyboardType="numbers-and-punctuation"/>
+            <TextInput 
+              style={styles.input} 
+              value={editTimeOut} 
+              onChangeText={(t) => formatTimeInput(t, setEditTimeOut)} 
+              placeholder="En progreso..." 
+              placeholderTextColor="#333" 
+              keyboardType="number-pad"
+              maxLength={5}
+            />
          </View>
          <View style={styles.inputGroup}>
             <Text style={styles.label}>NOTA AUDITORÍA</Text>
-            <TextInput style={styles.input} value={editNote} onChangeText={setEditNote} placeholder="Razón del cambio..." placeholderTextColor="#444"/>
+            <TextInput style={styles.input} value={editNote} onChangeText={setEditNote} placeholder="Razón del cambio..." placeholderTextColor="#333"/>
          </View>
-         <View style={{ gap: 10, marginTop: 10 }}>
+         
+         <View style={{ gap: 4, marginTop: 10 }}>
             <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
-            <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} disabled={true} />
+            {/* ✅ BOTÓN CANCELAR AHORA FUNCIONA (Outline) */}
+            <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
          </View>
       </GlassModalWrapper>
 
@@ -183,9 +245,12 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-end', padding: 24, paddingBottom: 10 },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
   subHeader: { fontFamily: 'Montserrat_700Bold', fontSize: 11, color: COLORS.textSecondary, letterSpacing: 1, marginTop: 6 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.goldDim, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(212,175,55,0.3)' },
-  pdfText: { fontFamily: 'Montserrat_700Bold', color: COLORS.gold, fontSize: 10 },
-  card: { backgroundColor: COLORS.surface, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
+  
+  // ✅ NUEVO ESTILO PDF
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, shadowColor: COLORS.gold, shadowOpacity: 0.4, shadowRadius: 8 },
+  pdfText: { fontFamily: 'Montserrat_700Bold', color: '#000', fontSize: 10 },
+  
+  card: { backgroundColor: COLORS.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   cardContent: { padding: 20 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   date: { fontFamily: 'Montserrat_400Regular', color: COLORS.textSecondary, fontSize: 12 },
