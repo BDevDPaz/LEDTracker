@@ -1,6 +1,5 @@
-// app/(tabs)/index.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'; // 👈 Agregado Alert
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'; 
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +17,7 @@ import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton, GlassModalWrapper } from '../../src/components/LuxuryUI';
 import { formatTime } from '../../src/utils/dateUtils';
+import { getDistanceFromLatLonInMeters } from '../../src/utils/geoUtils'; // 👈 Importamos tu utilidad
 
 export default function HomeScreen() {
   const { t } = useLanguage();
@@ -34,7 +34,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false); 
 
-  // --- EASTER EGG ---
   const [easterEggCount, setEasterEggCount] = useState(0);
   const [showSpecialCard, setShowSpecialCard] = useState(false);
   const pulseAnim = useSharedValue(1);
@@ -44,10 +43,13 @@ export default function HomeScreen() {
       withSequence(withTiming(1.2, { duration: 1000 }), withTiming(1, { duration: 1000 })), -1, true
     );
 
-    // 🎧 NOTIFICATION LISTENER
     const subscription = Notifications.addNotificationResponseReceivedListener(async response => {
       const actionId = response.actionIdentifier;
-      if (actionId === 'FINISH_DAY') {
+      // ✅ TU LÓGICA: Si tocan la notificación de la mañana, abrir el setup
+      if (actionId === 'OPEN_DAILY_SETUP' || actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+         setShowDailyModal(true);
+      } 
+      else if (actionId === 'FINISH_DAY') {
         showToast("Jornada finalizada correctamente", "success");
         await loadData();
       } else if (actionId === 'TRANSIT') {
@@ -95,7 +97,6 @@ export default function HomeScreen() {
     sessions.forEach(s => {
       const end = s.end_time ? s.end_time : Date.now();
       let duration = end - s.start_time;
-      // Deducción simple para stats rápidas
       if (s.lunch_taken) duration -= 3600000; 
       totalMs += Math.max(0, duration);
     });
@@ -115,13 +116,57 @@ export default function HomeScreen() {
     }
   }, [params.showSetup]);
 
-  const handleStartDay = async (addr: string) => {
+  // 🔥 AQUÍ ESTÁ LA VALIDACIÓN QUE DISEÑASTE
+  const handleStartDay = async (addrInput: string) => {
     setIsProcessing(true); 
     try {
       const perm = await LocationService.requestPermissions();
       if (!perm) { showToast("Se requiere ubicación", "error"); setIsProcessing(false); return; }
       
+      // 1. Obtener GPS Real
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      
+      // 2. 👮 EL POLICÍA: Validar coherencia (Geocoding)
+      // Intentamos convertir lo que el usuario escribió en coordenadas
+      try {
+        const geocoded = await Location.geocodeAsync(addrInput);
+        
+        if (geocoded && geocoded.length > 0) {
+          const target = geocoded[0];
+          const dist = getDistanceFromLatLonInMeters(
+            loc.coords.latitude, loc.coords.longitude,
+            target.latitude, target.longitude
+          );
+
+          // Si la distancia es mayor a 2km entre lo que escribió y dónde está... ALERTA
+          if (dist > 2000) {
+             Alert.alert(
+               "Ubicación Incorrecta 🛑",
+               `Dices estar en "${addrInput}", pero el GPS te ubica a ${(dist/1000).toFixed(1)}km de ahí.\n\n¿Estás realmente en el sitio de trabajo?`,
+               [
+                 { text: "Corregir Dirección", style: "cancel", onPress: () => setIsProcessing(false) },
+                 { text: "Iniciar de todas formas", style: "destructive", onPress: () => processStartSession(addrInput, loc) }
+               ]
+             );
+             return; // Detenemos aquí si no confirma
+          }
+        }
+      } catch (geoError) {
+        console.log("Geocoding skip (address not found or API limits)", geoError);
+        // Si no podemos geocodificar (ej. usuario escribe "Proyecto Alpha"), dejamos pasar confiando en el usuario
+      }
+
+      // Si pasa la validación, procesamos
+      await processStartSession(addrInput, loc);
+
+    } catch (error) { console.error(error); showToast("Error al iniciar", "error"); setIsProcessing(false); } 
+  };
+
+  // Función auxiliar para insertar en DB
+  const processStartSession = async (addr: string, loc: Location.LocationObject) => {
+      const localDate = new Date();
+      const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+
       await insertWorkSession({
         start_time: Date.now(),
         status: 'active',
@@ -131,14 +176,13 @@ export default function HomeScreen() {
         location_confirmed: 1,
         is_manual_edit: 0,
         lunch_taken: 0,
-        date_string: new Date().toISOString().split('T')[0]
+        date_string: dateStr
       });
       await LocationService.startActiveTracking();
       setShowDailyModal(false);
       await loadData();
       showToast("Jornada iniciada", "success");
-    } catch (error) { console.error(error); showToast("Error al iniciar", "error"); } 
-    finally { setIsProcessing(false); }
+      setIsProcessing(false);
   };
 
   const handleClockOut = async () => {
@@ -156,8 +200,12 @@ export default function HomeScreen() {
        if (activeSession) {
          const now = Date.now();
          if (lunchMinutes > 0) {
-             const lunchEnd = now - 1000;
-             const lunchStart = lunchEnd - (lunchMinutes * 60 * 1000);
+             const sessionDuration = now - activeSession.start_time;
+             const lunchMidPoint = activeSession.start_time + (sessionDuration / 2);
+             
+             const lunchStart = lunchMidPoint - (lunchMinutes * 60 * 1000 / 2);
+             const lunchEnd = lunchMidPoint + (lunchMinutes * 60 * 1000 / 2);
+             
              await updateSessionLunch(activeSession.id!, lunchStart, lunchEnd);
          }
          await updateSessionEndTime(activeSession.id!, now);

@@ -26,7 +26,6 @@ export const generateWeeklyReport = async (
       startTs = customRange.start;
       endTs = customRange.end;
     } else {
-      // Por defecto: Lunes de la semana actual hasta ahora
       const now = new Date();
       const day = now.getDay(); 
       const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -52,9 +51,13 @@ export const generateWeeklyReport = async (
 
     if (sessions.length === 0 && auditLogs.length === 0 && !shouldShare) return null;
 
+    // ✅ MEJORA 1: Agrupar por fecha sortable (YYYY-MM-DD)
     const days: { [key: string]: WorkSession[] } = {};
     sessions.forEach(s => {
-      const dateKey = new Date(s.start_time).toDateString();
+      const d = new Date(s.start_time);
+      // Formato ISO local para garantizar orden correcto: 2026-01-25
+      const dateKey = `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`;
+      
       if (!days[dateKey]) days[dateKey] = [];
       days[dateKey].push(s);
     });
@@ -63,8 +66,10 @@ export const generateWeeklyReport = async (
     let totalWeeklyReg = 0;
     let totalWeeklyOT = 0;
 
-    // --- CÁLCULO DE NÓMINA ---
-    for (const dateKey in days) {
+    // ✅ MEJORA 2: Ordenar claves cronológicamente
+    const sortedDates = Object.keys(days).sort();
+
+    for (const dateKey of sortedDates) {
       const daySessions = days[dateKey];
       let dayMs = 0;
 
@@ -73,11 +78,10 @@ export const generateWeeklyReport = async (
         const end = s.end_time ? new Date(s.end_time) : new Date();
         let ms = end.getTime() - start.getTime();
 
-        // Deducción de Almuerzo Real
         if (s.lunch_start && s.lunch_end) {
             ms -= (s.lunch_end - s.lunch_start);
         } else if (s.lunch_taken) {
-            ms -= 3600000; // Fallback 1h
+            ms -= 3600000;
         }
         dayMs += Math.max(0, ms);
       });
@@ -86,7 +90,6 @@ export const generateWeeklyReport = async (
       let reg = dayHours;
       let ot = 0;
 
-      // Overtime Diario (>8h)
       if (dayHours > 8) {
         reg = 8;
         ot = dayHours - 8;
@@ -95,7 +98,6 @@ export const generateWeeklyReport = async (
       totalWeeklyReg += reg;
       totalWeeklyOT += ot;
 
-      // HTML Filas
       daySessions.forEach(s => {
         const start = new Date(s.start_time);
         const end = s.end_time ? new Date(s.end_time) : new Date();
@@ -128,7 +130,6 @@ export const generateWeeklyReport = async (
       });
     }
 
-    // REGLA SEMANAL: Si Regular > 40h, el exceso es OT
     if (totalWeeklyReg > 40) {
         const excess = totalWeeklyReg - 40;
         totalWeeklyReg = 40;
@@ -137,7 +138,6 @@ export const generateWeeklyReport = async (
 
     const totalMoney = (totalWeeklyReg * rate) + (totalWeeklyOT * rate * multiplier);
 
-    // Auditoría
     let auditRows = '';
     if (auditLogs.length > 0) {
       auditLogs.forEach(log => {

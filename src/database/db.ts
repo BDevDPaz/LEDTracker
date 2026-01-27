@@ -94,10 +94,15 @@ export const getSettings = async (): Promise<AppSettings | null> => {
   return await db.getFirstAsync<AppSettings>('SELECT * FROM settings WHERE id = 1');
 };
 
-// ✅ INSERT INTELIGENTE CON SANITIZACIÓN
 export const insertWorkSession = async (session: WorkSession) => {
   const db = getDB();
-  const date_string = session.date_string || new Date(session.start_time).toISOString().split('T')[0];
+  
+  // ✅ MEJORA: Generación de fecha Local (No UTC) para evitar error de zona horaria
+  let dateStr = session.date_string;
+  if (!dateStr) {
+      const localDate = new Date(session.start_time);
+      dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+  }
 
   // Buscar sesiones huérfanas
   const activeSession = await db.getFirstAsync<WorkSession>(
@@ -108,7 +113,6 @@ export const insertWorkSession = async (session: WorkSession) => {
     const now = Date.now();
     const durationHours = (now - activeSession.start_time) / (1000 * 60 * 60);
 
-    // Si excede 12 horas, cortar y marcar
     if (durationHours > 12) {
       const maxEndTime = activeSession.start_time + (12 * 60 * 60 * 1000);
       await db.runAsync(
@@ -135,7 +139,7 @@ export const insertWorkSession = async (session: WorkSession) => {
     [
       session.start_time, session.status, session.latitude, session.longitude, session.address,
       session.location_confirmed, session.is_manual_edit, session.manual_note || '',
-      session.lunch_taken, date_string
+      session.lunch_taken, dateStr // Usamos la fecha local
     ]
   );
 
@@ -162,7 +166,6 @@ export const updateSessionEndTime = async (id: number, end_time: number) => {
   await insertAuditLog(id, 'CLOCK_OUT', 'Normal Exit');
 };
 
-// ✅ GUARDAR ALMUERZO REAL
 export const updateSessionLunch = async (id: number, start: number, end: number) => {
   const db = getDB();
   await db.runAsync(
@@ -171,7 +174,6 @@ export const updateSessionLunch = async (id: number, start: number, end: number)
   );
 };
 
-// ✅ VALIDAR SUPERPOSICIÓN
 export const checkSessionOverlap = async (startTime: number, endTime: number, excludeId?: number): Promise<boolean> => {
   const db = getDB();
   const effectiveEnd = endTime || Date.now() + 86400000; 
