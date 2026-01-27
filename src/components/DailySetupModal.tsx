@@ -1,6 +1,6 @@
-// src/components/DailySetupModal.tsx
 import React, { useState } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
 
 interface Props {
@@ -9,57 +9,54 @@ interface Props {
   onStart: (address: string) => void;
 }
 
-export default function DailySetupModal({ visible, onClose, onStart }: Props) {
+// ✅ CORRECTO: Exportación con nombre
+export function DailySetupModal({ visible, onClose, onStart }: Props) {
   const { t } = useLanguage();
   const [address, setAddress] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const handleStart = () => {
-    if (!address) return;
-    setLoading(true);
-    // Pequeño delay para UX
-    setTimeout(() => {
+    if (address.trim().length > 0) {
       onStart(address);
-      setLoading(false);
-      setAddress('');
-    }, 500);
+      setAddress(''); 
+    }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.center}>
-        <View style={styles.card}>
-          <Text style={styles.emoji}>📍</Text>
-          <Text style={styles.title}>{t.daily_title}</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder={t.daily_placeholder} 
+    <Modal visible={visible} animationType="slide" transparent>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.overlay}>
+        <View style={styles.modalContainer}>
+          <TouchableOpacity style={styles.closeIcon} onPress={onClose}>
+            <Ionicons name="close" size={24} color="#AAA" />
+          </TouchableOpacity>
+
+          <Text style={styles.title}>{t.daily_title || "Configuración Diaria"}</Text>
+          <Text style={styles.label}>{t.daily_label || "¿Dónde trabajarás hoy?"}</Text>
+          
+          <TextInput
+            style={styles.input}
+            placeholder={t.daily_placeholder || "Ej: 5601 Balboa Blvd..."}
             placeholderTextColor="#666"
             value={address}
             onChangeText={setAddress}
+            autoFocus
           />
-          <View style={styles.row}>
-            <TouchableOpacity onPress={onClose} style={styles.btnCancel}>
-              <Text style={styles.txt}>{t.btn_cancel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleStart} style={styles.btnStart} disabled={loading}>
-              {loading ? <ActivityIndicator color="#FFF"/> : <Text style={styles.txt}>{t.daily_btn_start}</Text>}
-            </TouchableOpacity>
-          </View>
+
+          <TouchableOpacity style={styles.btnStart} onPress={handleStart}>
+            <Text style={styles.btnText}>{t.daily_btn_start || "Iniciar Jornada"}</Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.8)' },
-  card: { margin: 20, backgroundColor: '#1E1E1E', padding: 25, borderRadius: 15 },
-  emoji: { fontSize: 40, textAlign: 'center', marginBottom: 10 },
-  title: { color: '#FFF', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
-  input: { backgroundColor: '#333', color: '#FFF', padding: 15, borderRadius: 8, marginBottom: 20 },
-  row: { flexDirection: 'row', gap: 10 },
-  btnCancel: { flex: 1, padding: 15, backgroundColor: '#333', borderRadius: 8, alignItems: 'center' },
-  btnStart: { flex: 1, padding: 15, backgroundColor: '#007AFF', borderRadius: 8, alignItems: 'center' },
-  txt: { color: '#FFF', fontWeight: 'bold' }
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
+  modalContainer: { backgroundColor: '#1E1E1E', borderRadius: 16, padding: 25 },
+  closeIcon: { alignSelf: 'flex-end', padding: 5 },
+  title: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
+  label: { color: '#AAA', marginBottom: 10 },
+  input: { backgroundColor: '#333', color: '#FFF', padding: 15, borderRadius: 10, fontSize: 16, marginBottom: 20 },
+  btnStart: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center' },
+  btnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 }
 });

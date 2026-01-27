@@ -1,26 +1,25 @@
-// app/(tabs)/settings.tsx
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, KeyboardAvoidingView, Platform
+import { 
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert, KeyboardAvoidingView, Platform 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { getSettings, getDB } from '../../src/database/db';
-import { scheduleDailyMorningNotification } from '../../src/services/Notifications'; // ✅ Para la alarma diaria
+import { scheduleDailyMorningNotification } from '../../src/services/Notifications';
 
 const ADMIN_PASSWORD = "admin123";
 
 export default function SettingsScreen() {
   const { t, language, setLanguage } = useLanguage();
-
+  
   const [form, setForm] = useState({
     employee_name: '',
     hourly_rate: '',
     employer_name: '',
     company_email: '',
     tolerance_radius: '',
-    start_time: '06:00',           // ✅ Nuevo campo
-    overtime_multiplier: '1.5'     // ✅ Nuevo campo
+    start_time: '06:00',
+    overtime_multiplier: '1.5'
   });
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -28,22 +27,28 @@ export default function SettingsScreen() {
   const [showPass, setShowPass] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Cargar datos AL INICIO solamente
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const settings = await getSettings();
-    if (settings) {
-      setForm({
-        employee_name: settings.employee_name || '',
-        hourly_rate: settings.hourly_rate.toString(),
-        employer_name: settings.employer_name,
-        company_email: settings.company_email || '',
-        tolerance_radius: settings.tolerance_radius.toString(),
-        start_time: settings.start_time || '06:00',
-        overtime_multiplier: (settings.overtime_multiplier || 1.5).toString()
-      });
+    try {
+      const settings = await getSettings();
+      if (settings) {
+        setForm({
+          employee_name: settings.employee_name || '',
+          hourly_rate: settings.hourly_rate ? settings.hourly_rate.toString() : '',
+          employer_name: settings.employer_name || '',
+          company_email: settings.company_email || '',
+          tolerance_radius: settings.tolerance_radius ? settings.tolerance_radius.toString() : '50',
+          start_time: settings.start_time || '06:00',
+          overtime_multiplier: settings.overtime_multiplier ? settings.overtime_multiplier.toString() : '1.5'
+        });
+      }
+    } catch (e) {
+      console.error("Error loading settings:", e);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleSave = async () => {
@@ -54,19 +59,19 @@ export default function SettingsScreen() {
       const numericMultiplier = parseFloat(form.overtime_multiplier.replace(',', '.')) || 1.5;
 
       await db.runAsync(
-        `UPDATE settings SET
-          employee_name = ?, hourly_rate = ?,
-          employer_name = ?, company_email = ?, tolerance_radius = ?,
+        `UPDATE settings SET 
+          employee_name = ?, hourly_rate = ?, 
+          employer_name = ?, company_email = ?, tolerance_radius = ?, 
           start_time = ?, overtime_multiplier = ?
          WHERE id = 1`,
         [
           form.employee_name, numericRate,
-          form.employer_name, form.company_email, numericRadius,
+          form.employer_name, form.company_email, numericRadius, 
           form.start_time, numericMultiplier
         ]
       );
-
-      // ✅ Reprogramar notificación diaria
+      
+      // Reprogramar notificación con la nueva hora
       await scheduleDailyMorningNotification();
 
       Alert.alert(t.btn_save, "Configuración actualizada.");
@@ -74,6 +79,7 @@ export default function SettingsScreen() {
       setShowPass(false);
       setPassInput('');
     } catch (e) {
+      console.error(e);
       Alert.alert("Error", "No se pudo guardar.");
     }
   };
@@ -88,8 +94,9 @@ export default function SettingsScreen() {
     }
   };
 
+  // ✅ AQUÍ ESTABA EL ERROR: Sintaxis corregida para inputs
   const updateForm = (key: keyof typeof form, value: string) => {
-    setForm(prev => ({ ...prev, value }));
+    setForm(prev => ({ ...prev, [key]: value }));
   };
 
   if (isLoading) return <View style={styles.container} />;
@@ -114,20 +121,20 @@ export default function SettingsScreen() {
                 <Text style={{color: language === 'en' ? '#FFF' : '#666'}}>EN</Text>
               </View>
             </View>
-
+            
             <View style={styles.divider} />
-
-            {/* ✅ Hora Recordatorio */}
+            
             <Text style={styles.label}>{t.label_start_time}</Text>
-            <TextInput
-              style={styles.input}
-              value={form.start_time}
-              onChangeText={(t) => updateForm('start_time', t)}
-              maxLength={5}
-              placeholder="06:00"
+            <TextInput 
+              style={styles.input} 
+              value={form.start_time} 
+              onChangeText={(text) => updateForm('start_time', text)} 
+              maxLength={5} 
+              placeholder="06:00" 
+              placeholderTextColor="#555"
               keyboardType="numbers-and-punctuation"
             />
-
+            
             <TouchableOpacity style={[styles.saveBtn, {marginTop:15, backgroundColor:'#333'}]} onPress={handleSave}>
               <Text style={styles.saveBtnText}>{t.btn_save}</Text>
             </TouchableOpacity>
@@ -138,49 +145,46 @@ export default function SettingsScreen() {
             <View style={styles.row}>
               <Text style={[styles.sectionTitle, {color: isAdmin ? '#FFD700' : '#AAA'}]}>{t.admin_zone}</Text>
               {!isAdmin && !showPass && (
-                <TouchableOpacity onPress={() => setShowPass(true)} style={styles.smallBtn}>
-                  <Text style={styles.smallBtnText}>{t.admin_unlock}</Text>
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowPass(true)} style={styles.smallBtn}><Text style={styles.smallBtnText}>{t.admin_unlock}</Text></TouchableOpacity>
               )}
             </View>
 
             {!isAdmin ? (
               showPass ? (
                 <View style={styles.row}>
-                  <TextInput
-                    style={[styles.input, {flex:1, marginRight:10}]}
-                    placeholder={t.admin_pass_placeholder}
-                    placeholderTextColor="#666"
-                    secureTextEntry
-                    value={passInput}
-                    onChangeText={setPassInput}
+                  <TextInput 
+                    style={[styles.input, {flex:1, marginRight:10}]} 
+                    placeholder={t.admin_pass_placeholder} 
+                    placeholderTextColor="#666" 
+                    secureTextEntry 
+                    value={passInput} 
+                    onChangeText={setPassInput} 
                     autoFocus
                   />
-                  <TouchableOpacity onPress={unlockAdmin} style={styles.btnAction}>
-                    <Text style={{color:'#FFF'}}>OK</Text>
-                  </TouchableOpacity>
+                  <TouchableOpacity onPress={unlockAdmin} style={styles.btnAction}><Text style={{color:'#FFF'}}>OK</Text></TouchableOpacity>
                 </View>
-              ) : (
-                <Text style={{color:'#666', fontStyle:'italic', marginTop: 5}}>{t.admin_locked_msg}</Text>
-              )
+              ) : <Text style={{color:'#666', fontStyle:'italic', marginTop: 5}}>{t.admin_locked_msg}</Text>
             ) : (
               <View>
                 <Text style={styles.subHeader}>Datos de Empleado</Text>
                 <Text style={styles.label}>{t.label_name}</Text>
                 <TextInput style={[styles.input, styles.adminInput]} value={form.employee_name} onChangeText={(t) => updateForm('employee_name', t)}/>
+                
                 <Text style={styles.label}>{t.label_rate}</Text>
                 <TextInput style={[styles.input, styles.adminInput]} keyboardType="decimal-pad" value={form.hourly_rate} onChangeText={(t) => updateForm('hourly_rate', t)}/>
 
                 <View style={styles.divider} />
                 <Text style={styles.subHeader}>Datos de Empresa</Text>
+                
                 <Text style={styles.label}>{t.label_company_name}</Text>
                 <TextInput style={[styles.input, styles.adminInput]} value={form.employer_name} onChangeText={(t) => updateForm('employer_name', t)}/>
+                
                 <Text style={styles.label}>{t.label_report_email}</Text>
                 <TextInput style={[styles.input, styles.adminInput]} value={form.company_email} onChangeText={(t) => updateForm('company_email', t)} keyboardType="email-address" autoCapitalize="none"/>
+                
                 <Text style={styles.label}>{t.label_radius}</Text>
                 <TextInput style={[styles.input, styles.adminInput]} keyboardType="number-pad" value={form.tolerance_radius} onChangeText={(t) => updateForm('tolerance_radius', t)}/>
-
-                {/* ✅ Multiplicador */}
+                
                 <Text style={styles.label}>{t.label_multiplier} (1.0, 1.5, 2.0)</Text>
                 <TextInput style={[styles.input, styles.adminInput]} keyboardType="decimal-pad" value={form.overtime_multiplier} onChangeText={(t) => updateForm('overtime_multiplier', t)} placeholder="1.5"/>
 

@@ -1,9 +1,9 @@
 // src/services/Notifications.ts
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { getSettings } from '../database/db'; // ✅ Para leer hora configurada
+import { getSettings } from '../database/db';
 
-// ✅ Configuración inicial de permisos y canal
+// 1. Configuración Inicial
 export async function setupNotifications() {
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') return;
@@ -16,21 +16,13 @@ export async function setupNotifications() {
       vibrationPattern: [0, 250, 250, 250],
     });
   }
-
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowList: true,
-    }),
-  });
 }
 
-// ✅ Alarma diaria según hora en DB
+// 2. Alarma Diaria (CORREGIDA)
 export async function scheduleDailyMorningNotification() {
   await Notifications.cancelAllScheduledNotificationsAsync();
-
+  
+  // Leemos la hora configurada (o usamos 06:00 por defecto)
   const settings = await getSettings();
   const timeStr = settings?.start_time || '06:00';
   const [hour, minute] = timeStr.split(':').map(Number);
@@ -43,25 +35,29 @@ export async function scheduleDailyMorningNotification() {
       sound: true,
     },
     trigger: {
+      // ✅ FIX CRÍTICO: Especificar el tipo de trigger explícitamente
+      type: Notifications.SchedulableTriggerInputTypes.DAILY, 
       hour: hour || 6,
       minute: minute || 0,
-      repeats: true,
     },
   });
-
+  
   console.log(`⏰ Alarma diaria programada: ${hour}:${minute}`);
 }
 
-// ✅ Snooze para recordatorio (ej. viaje)
+// 3. Snooze (CORREGIDA)
 export async function snoozeNotification(minutes: number) {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "Recordatorio ⏳",
+      title: "Recordatorio Pospuesto ⏳",
       body: "¿Ya llegaste al nuevo sitio? Toca para iniciar.",
       data: { action: 'OPEN_DAILY_SETUP' },
     },
-    trigger: { seconds: minutes * 60, repeats: false },
+    trigger: { 
+      // ✅ FIX CRÍTICO: Especificar tipo intervalo
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: minutes * 60, 
+      repeats: false 
+    },
   });
-
-  console.log(`🔔 Snooze programado en ${minutes} minutos`);
 }
