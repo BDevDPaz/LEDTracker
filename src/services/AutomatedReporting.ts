@@ -11,20 +11,29 @@ const STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 TaskManager.defineTask(TASK_NAME, async () => {
   try {
     const now = new Date();
-    // Identificador único de la semana (Lunes de la semana actual)
-    const d = new Date(now);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day == 0 ? -6 : 1); 
-    const currentWeekId = new Date(d.setDate(diff)).toISOString().split('T')[0];
+    const day = now.getDay();
+    
+    // Semana pasada (Lunes anterior a Domingo anterior)
+    const lastWeekMonday = new Date(now);
+    lastWeekMonday.setDate(now.getDate() - 7 - (day - 1));
+    lastWeekMonday.setHours(0,0,0,0);
+    const startTs = lastWeekMonday.getTime();
 
+    const lastWeekSunday = new Date(startTs);
+    lastWeekSunday.setDate(lastWeekSunday.getDate() + 6);
+    lastWeekSunday.setHours(23,59,59,999);
+    const endTs = lastWeekSunday.getTime();
+
+    const currentWeekId = lastWeekMonday.toISOString().split('T')[0];
     const lastReported = await AsyncStorage.getItem(STORAGE_KEY);
 
-    // Si estamos en Domingo Noche (0) o Lunes/Martes (1,2) Y no se ha hecho reporte de esta semana
+    // Ventana: Domingo noche a Martes
     const isWindow = (day === 0 && now.getHours() >= 22) || day === 1 || day === 2;
     
     if (isWindow && lastReported !== currentWeekId) {
       console.log("📄 Generando reporte automático...");
-      const pdfUri = await generateWeeklyReport(false); // No compartir, solo generar
+      // ✅ Pasamos rango exacto
+      const pdfUri = await generateWeeklyReport(false, { start: startTs, end: endTs });
       
       if (pdfUri) {
         await Notifications.scheduleNotificationAsync({
@@ -48,7 +57,7 @@ TaskManager.defineTask(TASK_NAME, async () => {
 export const AutomatedReporting = {
   register: async () => {
     return BackgroundFetch.registerTaskAsync(TASK_NAME, {
-      minimumInterval: 60 * 15, // 15 minutos
+      minimumInterval: 60 * 15,
       stopOnTerminate: false,
       startOnBoot: true,
     });

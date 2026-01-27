@@ -1,12 +1,15 @@
 // src/services/ReportGenerator.ts
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy'; // ✅ Legacy para moveAsync
+import * as FileSystem from 'expo-file-system/legacy';
 import { getDB, getSettings } from '../database/db';
 import { WorkSession, AuditLog } from '../types';
 import { translations } from '../utils/i18n';
 
-export const generateWeeklyReport = async (shouldShare = true): Promise<string | null> => {
+export const generateWeeklyReport = async (
+  shouldShare = true,
+  customRange?: { start: number; end: number }
+): Promise<string | null> => {
   try {
     const db = getDB();
     const settings = await getSettings();
@@ -16,25 +19,39 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
     const multiplier = settings.overtime_multiplier || 1.5;
     const rate = settings.hourly_rate || 0;
 
-    // ✅ Últimos 7 días
-    const now = new Date();
-    const past = new Date();
-    past.setDate(now.getDate() - 7);
-    const pastTs = past.getTime();
+    let startTs: number;
+    let endTs: number;
 
-    // ✅ Sesiones y Auditoría
+    if (customRange) {
+      startTs = customRange.start;
+      endTs = customRange.end;
+    } else {
+      // Por defecto: Lunes de la semana actual hasta ahora
+      const now = new Date();
+      const day = now.getDay(); 
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      monday.setHours(0,0,0,0);
+      
+      startTs = monday.getTime();
+      endTs = Date.now();
+    }
+
     const sessions = await db.getAllAsync<WorkSession>(
-      `SELECT * FROM work_sessions WHERE start_time >= ? AND status != 'deleted' ORDER BY start_time ASC`,
-      [pastTs]
+      `SELECT * FROM work_sessions 
+       WHERE start_time >= ? AND (end_time <= ? OR end_time IS NULL) 
+       AND status != 'deleted' 
+       ORDER BY start_time ASC`,
+      [startTs, endTs]
     );
+
     const auditLogs = await db.getAllAsync<AuditLog>(
       `SELECT * FROM audit_logs WHERE timestamp >= ? ORDER BY timestamp ASC`,
-      [pastTs]
+      [startTs]
     );
 
     if (sessions.length === 0 && auditLogs.length === 0 && !shouldShare) return null;
 
-    // ✅ Agrupar por día
     const days: { [key: string]: WorkSession[] } = {};
     sessions.forEach(s => {
       const dateKey = new Date(s.start_time).toDateString();
@@ -43,10 +60,10 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
     });
 
     let rows = '';
-    let totalRegHours = 0;
-    let totalOTHours = 0;
+    let totalWeeklyReg = 0;
+    let totalWeeklyOT = 0;
 
-    // ✅ Calcular horas regulares y extras por día
+    // --- CÁLCULO DE NÓMINA ---
     for (const dateKey in days) {
       const daySessions = days[dateKey];
       let dayMs = 0;
@@ -55,29 +72,46 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
         const start = new Date(s.start_time);
         const end = s.end_time ? new Date(s.end_time) : new Date();
         let ms = end.getTime() - start.getTime();
-        if (s.lunch_taken) ms -= 3600000;
+
+        // Deducción de Almuerzo Real
+        if (s.lunch_start && s.lunch_end) {
+            ms -= (s.lunch_end - s.lunch_start);
+        } else if (s.lunch_taken) {
+            ms -= 3600000; // Fallback 1h
+        }
         dayMs += Math.max(0, ms);
       });
 
       const dayHours = dayMs / (1000 * 60 * 60);
       let reg = dayHours;
       let ot = 0;
+
+      // Overtime Diario (>8h)
       if (dayHours > 8) {
         reg = 8;
         ot = dayHours - 8;
       }
 
-      totalRegHours += reg;
-      totalOTHours += ot;
+      totalWeeklyReg += reg;
+      totalWeeklyOT += ot;
 
-      // ✅ Filas HTML por sesión
+      // HTML Filas
       daySessions.forEach(s => {
         const start = new Date(s.start_time);
         const end = s.end_time ? new Date(s.end_time) : new Date();
         let ms = end.getTime() - start.getTime();
-        if (s.lunch_taken) ms -= 3600000;
+        
+        let lunchInfo = '';
+        if (s.lunch_start && s.lunch_end) {
+             ms -= (s.lunch_end - s.lunch_start);
+             const lMin = Math.round((s.lunch_end - s.lunch_start)/60000);
+             lunchInfo = `<br/><span style="font-size:9px; color:#555">Lunch: ${lMin}m</span>`;
+        } else if (s.lunch_taken) {
+             ms -= 3600000;
+             lunchInfo = `<br/><span style="font-size:9px; color:#555">Lunch: 60m</span>`;
+        }
+        
         const hours = ms / (1000 * 60 * 60);
-
         const isTravel = s.status === 'travel';
         const locText = isTravel ? `🚗 ${t.status_travel || 'En Tránsito'}` : s.address;
         const noteHtml = s.is_manual_edit ? `<br/><span style="color:red; font-size:10px;">⚠️ EDIT: ${s.manual_note}</span>` : '';
@@ -87,17 +121,23 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
             <td>${start.toLocaleDateString()}</td>
             <td>${locText}</td>
             <td>${start.toLocaleTimeString()}</td>
-            <td>${s.end_time ? end.toLocaleTimeString() : 'Active'} ${noteHtml}</td>
+            <td>${s.end_time ? end.toLocaleTimeString() : 'Active'} ${noteHtml} ${lunchInfo}</td>
             <td>${hours.toFixed(2)}</td>
           </tr>
         `;
       });
     }
 
-    // ✅ Cálculo de dinero
-    const totalMoney = (totalRegHours * rate) + (totalOTHours * rate * multiplier);
+    // REGLA SEMANAL: Si Regular > 40h, el exceso es OT
+    if (totalWeeklyReg > 40) {
+        const excess = totalWeeklyReg - 40;
+        totalWeeklyReg = 40;
+        totalWeeklyOT += excess;
+    }
 
-    // ✅ Auditoría
+    const totalMoney = (totalWeeklyReg * rate) + (totalWeeklyOT * rate * multiplier);
+
+    // Auditoría
     let auditRows = '';
     if (auditLogs.length > 0) {
       auditLogs.forEach(log => {
@@ -116,7 +156,6 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
       auditRows = `<tr><td colspan="3" style="text-align:center; font-style:italic;">No modifications recorded.</td></tr>`;
     }
 
-    // ✅ HTML Final
     const html = `
       <html>
         <head>
@@ -137,7 +176,7 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
         <body>
           <h1>${settings.employer_name}</h1>
           <h3>${t.pdf_employee}: ${settings.employee_name}</h3>
-          <p>Email: ${settings.company_email}</p>
+          <p>Range: ${new Date(startTs).toLocaleDateString()} - ${new Date(endTs).toLocaleDateString()}</p>
 
           <h4>${t.pdf_title}</h4>
           <table>
@@ -152,8 +191,8 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
           </table>
 
           <div class="total-box">
-            <div class="total-row"><span>Reg. Hours:</span> <span>${totalRegHours.toFixed(2)}</span></div>
-            <div class="total-row"><span>Overtime (${multiplier}x):</span> <span>${totalOTHours.toFixed(2)}</span></div>
+            <div class="total-row"><span>Reg. Hours (Max 40/wk):</span> <span>${totalWeeklyReg.toFixed(2)}</span></div>
+            <div class="total-row"><span>Overtime (${multiplier}x):</span> <span>${totalWeeklyOT.toFixed(2)}</span></div>
             <div class="total-row grand-total"><span>EST. PAY:</span> <span>$${totalMoney.toFixed(2)}</span></div>
           </div>
 
@@ -171,7 +210,6 @@ export const generateWeeklyReport = async (shouldShare = true): Promise<string |
       </html>
     `;
 
-    // ✅ Generar PDF y renombrar
     const { uri } = await Print.printToFileAsync({ html });
     const safeName = (settings.employee_name || 'Employee').replace(/[^a-zA-Z0-9]/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];

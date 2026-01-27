@@ -1,20 +1,23 @@
+// app/(tabs)/index.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'; 
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 
-import { getDB, insertWorkSession, updateSessionEndTime, getSettings } from '../../src/database/db';
+import { getDB, insertWorkSession, updateSessionEndTime, getSettings, updateSessionLunch } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
-import { LocationService } from '../../src/services/LocationManager';
+import { LocationService, createTransitSession } from '../../src/services/LocationManager';
 import { DailySetupModal } from '../../src/components/DailySetupModal';
 import { LunchModal } from '../../src/components/LunchModal';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton, GlassModalWrapper } from '../../src/components/LuxuryUI';
+import { formatTime } from '../../src/utils/dateUtils';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
@@ -31,30 +34,39 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false); 
 
-  // --- EASTER EGG LOGIC ---
+  // --- EASTER EGG ---
   const [easterEggCount, setEasterEggCount] = useState(0);
   const [showSpecialCard, setShowSpecialCard] = useState(false);
   const pulseAnim = useSharedValue(1);
 
   useEffect(() => {
     pulseAnim.value = withRepeat(
-      withSequence(withTiming(1.2, { duration: 1000 }), withTiming(1, { duration: 1000 })),
-      -1,
-      true
+      withSequence(withTiming(1.2, { duration: 1000 }), withTiming(1, { duration: 1000 })), -1, true
     );
+
+    // 🎧 NOTIFICATION LISTENER
+    const subscription = Notifications.addNotificationResponseReceivedListener(async response => {
+      const actionId = response.actionIdentifier;
+      if (actionId === 'FINISH_DAY') {
+        showToast("Jornada finalizada correctamente", "success");
+        await loadData();
+      } else if (actionId === 'TRANSIT') {
+        try {
+          await createTransitSession();
+          showToast("Modo Tránsito Activado", "success");
+          await loadData();
+        } catch (e) { console.error(e); }
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   const animatedIconStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulseAnim.value }] }));
-
   const handleEasterEggTap = () => {
     const newCount = easterEggCount + 1;
     setEasterEggCount(newCount);
-    if (newCount === 3) {
-      setShowSpecialCard(true);
-      setEasterEggCount(0);
-    }
+    if (newCount === 3) { setShowSpecialCard(true); setEasterEggCount(0); }
   };
-  // ------------------------
 
   const loadData = async () => {
     try {
@@ -65,15 +77,9 @@ export default function HomeScreen() {
       );
       
       setActiveSession(session || null);
-      if (session) {
-        setAddress(session.address);
-      } else {
-        setAddress(t.status_inactive || "Fuera de Servicio");
-      }
+      setAddress(session ? session.address : (t.status_inactive || "Fuera de Servicio"));
       calculateDailyStats(settings);
-    } catch (e) {
-      console.error("Error loading data:", e);
-    }
+    } catch (e) { console.error("Error loading data:", e); }
   };
 
   const calculateDailyStats = async (currentSettings: any) => {
@@ -89,6 +95,7 @@ export default function HomeScreen() {
     sessions.forEach(s => {
       const end = s.end_time ? s.end_time : Date.now();
       let duration = end - s.start_time;
+      // Deducción simple para stats rápidas
       if (s.lunch_taken) duration -= 3600000; 
       totalMs += Math.max(0, duration);
     });
@@ -96,10 +103,7 @@ export default function HomeScreen() {
     const hours = totalMs / (1000 * 60 * 60);
     const earnings = hours * currentSettings.hourly_rate;
 
-    setStats({ 
-      hours: parseFloat(hours.toFixed(2)), 
-      earnings: parseFloat(earnings.toFixed(2)) 
-    });
+    setStats({ hours: parseFloat(hours.toFixed(2)), earnings: parseFloat(earnings.toFixed(2)) });
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
@@ -115,11 +119,8 @@ export default function HomeScreen() {
     setIsProcessing(true); 
     try {
       const perm = await LocationService.requestPermissions();
-      if (!perm) {
-        showToast("Se requiere ubicación para iniciar", "error");
-        setIsProcessing(false);
-        return;
-      }
+      if (!perm) { showToast("Se requiere ubicación", "error"); setIsProcessing(false); return; }
+      
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       await insertWorkSession({
         start_time: Date.now(),
@@ -135,73 +136,56 @@ export default function HomeScreen() {
       await LocationService.startActiveTracking();
       setShowDailyModal(false);
       await loadData();
-      showToast("Jornada iniciada con éxito", "success");
-    } catch (error) {
-      console.error(error);
-      showToast("No se pudo iniciar la sesión", "error");
-    } finally {
-      setIsProcessing(false); 
-    }
+      showToast("Jornada iniciada", "success");
+    } catch (error) { console.error(error); showToast("Error al iniciar", "error"); } 
+    finally { setIsProcessing(false); }
   };
 
   const handleClockOut = async () => {
     if (!activeSession) return;
-    if (activeSession.lunch_taken === 0 && activeSession.status !== 'travel') {
+    if (activeSession.status !== 'travel' && activeSession.lunch_taken === 0) {
         setShowLunchModal(true);
     } else {
-        await completeSession();
+        await completeSession(0);
     }
   };
 
-  const completeSession = async (deductLunch = false) => {
+  const completeSession = async (lunchMinutes: number) => {
      setIsProcessing(true);
      try {
        if (activeSession) {
-         if (deductLunch) {
-             const db = getDB();
-             await db.runAsync("UPDATE work_sessions SET lunch_taken = 1 WHERE id = ?", [activeSession.id]);
+         const now = Date.now();
+         if (lunchMinutes > 0) {
+             const lunchEnd = now - 1000;
+             const lunchStart = lunchEnd - (lunchMinutes * 60 * 1000);
+             await updateSessionLunch(activeSession.id!, lunchStart, lunchEnd);
          }
-         await updateSessionEndTime(activeSession.id!, Date.now());
+         await updateSessionEndTime(activeSession.id!, now);
          await LocationService.stopMonitoring();
        }
        setShowLunchModal(false);
        await loadData();
-       showToast("Jornada finalizada correctamente", "success");
-     } catch (e) {
-       console.error(e);
-       showToast("Error al finalizar jornada", "error");
-     } finally {
-       setIsProcessing(false);
-     }
+       showToast("Jornada finalizada", "success");
+     } catch (e) { console.error(e); showToast("Error al finalizar", "error"); } 
+     finally { setIsProcessing(false); }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  };
+  const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView 
-        contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.gold}/>}
-      >
-        {/* HEADER CON EASTER EGG */}
+      <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.gold}/>}>
+        
         <View style={styles.header}>
           <View>
-             {/* ✅ TITULO EN NEGRITA y FLEX ROW para el icono */}
              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                 <Text style={styles.appTitle}>{t.header_title || "LED Tracker"}</Text>
-                
-                {/* ⚡ EASTER EGG ICON */}
                 <TouchableOpacity onPress={handleEasterEggTap} activeOpacity={0.8}>
                    <Animated.View style={animatedIconStyle}>
                       <Ionicons name="flash" size={18} color={COLORS.gold} />
                    </Animated.View>
                 </TouchableOpacity>
              </View>
-
              <View style={styles.statusBadge}>
                 <View style={[styles.statusDot, { backgroundColor: activeSession ? COLORS.success : '#666' }]} />
                 <Text style={styles.statusText}>{activeSession ? t.status_active : t.status_inactive}</Text>
@@ -209,7 +193,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* TARJETA PRINCIPAL */}
         <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
            {isProcessing ? (
              <ActivityIndicator size="large" color={COLORS.gold} />
@@ -229,7 +212,7 @@ export default function HomeScreen() {
                  <View style={styles.timerBadge}>
                     <Ionicons name="time-outline" size={14} color={COLORS.gold} />
                     <Text style={styles.timerText}>
-                      {new Date(activeSession.start_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - En curso
+                      {formatTime(activeSession.start_time)} - En curso
                     </Text>
                  </View>
                )}
@@ -237,7 +220,6 @@ export default function HomeScreen() {
            )}
         </LuxuryCard>
 
-        {/* BOTÓN DE ACCIÓN */}
         <LuxuryButton 
             text={activeSession ? t.btn_clock_out : t.btn_new_job}
             variant={activeSession ? 'danger' : 'primary'}
@@ -246,7 +228,6 @@ export default function HomeScreen() {
             icon={<Ionicons name={activeSession ? "stop" : "play"} size={18} color={activeSession ? "#FFF" : "#000"} />}
         />
 
-        {/* ESTADÍSTICAS */}
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>{t.stats_hours}</Text>
@@ -258,37 +239,26 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* MODALES */}
         <DailySetupModal 
           visible={showDailyModal} 
-          onClose={() => {
-            setShowDailyModal(false);
-            router.setParams({ showSetup: undefined });
-          }}
+          onClose={() => { setShowDailyModal(false); router.setParams({ showSetup: undefined }); }}
           onStart={handleStartDay}
         />
         
         <LunchModal
           visible={showLunchModal}
-          onConfirm={() => completeSession(true)}
-          onCancel={() => completeSession(false)}
+          onConfirm={completeSession}
+          onCancel={() => setShowLunchModal(false)}
         />
 
-        {/* MODAL SPECIAL EDITION (EASTER EGG) */}
         <GlassModalWrapper visible={showSpecialCard}>
            <View style={{alignItems: 'center', padding: 10}}>
               <Ionicons name="trophy" size={40} color={COLORS.gold} style={{marginBottom: 20}} />
-              <Text style={{fontFamily: 'Montserrat_700Bold', color: COLORS.gold, fontSize: 18, textAlign: 'center', marginBottom: 5}}>
-                LED Tracker Special Edition
-              </Text>
-              <Text style={{fontFamily: 'Montserrat_400Regular', color: '#FFF', fontSize: 12, textAlign: 'center', marginBottom: 20, letterSpacing: 1}}>
-                by BDevDPaz
-              </Text>
+              <Text style={{fontFamily: 'Montserrat_700Bold', color: COLORS.gold, fontSize: 18, textAlign: 'center', marginBottom: 5}}>LED Tracker Special Edition</Text>
+              <Text style={{fontFamily: 'Montserrat_400Regular', color: '#FFF', fontSize: 12, textAlign: 'center', marginBottom: 20, letterSpacing: 1}}>by BDevDPaz</Text>
               <View style={{height: 1, width: 50, backgroundColor: COLORS.border, marginBottom: 20}} />
               <Text style={{fontFamily: 'Montserrat_600SemiBold', color: '#AAA', fontSize: 10, textAlign: 'center', lineHeight: 18}}>
-                Para uso restringido de{"\n"}
-                <Text style={{color: '#FFF'}}>Alex León</Text>{"\n"}
-                CEO de LEON'S ELECTRICAL DESIGN
+                Para uso restringido de{"\n"}<Text style={{color: '#FFF'}}>Alex León</Text>{"\n"}CEO de LEON'S ELECTRICAL DESIGN
               </Text>
               <TouchableOpacity onPress={() => setShowSpecialCard(false)} style={{marginTop: 30}}>
                  <Text style={{color: COLORS.gold, fontSize: 12, fontFamily: 'Montserrat_700Bold'}}>CERRAR</Text>
@@ -303,10 +273,9 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 24, paddingBottom: 120 }, // ✅ Aumentado padding
+  scroll: { padding: 24, paddingBottom: 120 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
-  appTitle: { fontFamily: 'Montserrat_700Bold', fontSize: 28, color: '#FFF', letterSpacing: 1 }, // ✅ NEGRITA
-  greeting: { fontFamily: 'Montserrat_300Light', fontSize: 28, color: '#FFF', letterSpacing: 1 },
+  appTitle: { fontFamily: 'Montserrat_700Bold', fontSize: 28, color: '#FFF', letterSpacing: 1 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontFamily: 'Montserrat_700Bold', fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, textTransform: 'uppercase' },

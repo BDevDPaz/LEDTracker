@@ -1,36 +1,59 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+// src/components/LunchModal.tsx
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
 import { GlassModalWrapper, LuxuryButton } from './LuxuryUI';
 import { COLORS } from '../constants/theme';
 
-interface Props { visible: boolean; onConfirm: () => void; onCancel: () => void; }
+interface Props { 
+    visible: boolean; 
+    onConfirm: (minutes: number) => void; 
+    onCancel: () => void; 
+}
 
 export function LunchModal({ visible, onConfirm, onCancel }: Props) {
   const { t } = useLanguage();
+  const [durationStr, setDurationStr] = useState('60');
+
+  const handleConfirm = () => {
+      const minutes = parseInt(durationStr) || 0;
+      onConfirm(minutes);
+  };
 
   return (
     <GlassModalWrapper visible={visible}>
-      <View style={{alignItems: 'center', marginBottom: 24}}>
-        <View style={styles.iconBubble}>
-          <Ionicons name="fast-food-outline" size={32} color={COLORS.gold} />
+      <View style={{alignItems: 'center', marginBottom: 20}}>
+        <Ionicons name="restaurant-outline" size={40} color={COLORS.gold} style={{marginBottom:10}} />
+        <Text style={styles.title}>{t.lunch_title || "Registro de Almuerzo"}</Text>
+        <Text style={styles.msg}>Ingresa duración (minutos):</Text>
+        
+        <View style={styles.inputContainer}>
+            <TextInput 
+                style={styles.input}
+                value={durationStr}
+                onChangeText={setDurationStr}
+                keyboardType="number-pad"
+                maxLength={3}
+                selectTextOnFocus
+            />
+            <Text style={styles.suffix}>min</Text>
         </View>
-        <Text style={styles.title}>{t.lunch_title || "Descanso"}</Text>
-        <Text style={styles.msg}>{t.lunch_msg || "¿Deseas deducir 1h de almuerzo?"}</Text>
       </View>
 
-      <View style={{ gap: 4 }}>
-        <LuxuryButton text={t.lunch_yes || "SÍ, DEDUCIR (-1H)"} onPress={onConfirm} variant="success" />
-        {/* ✅ AHORA ES CLICKEABLE (Outline) */}
-        <LuxuryButton text={t.lunch_no || "NO, OMITIR"} onPress={onCancel} variant="outline" />
+      <View style={{ gap: 8 }}>
+        <LuxuryButton text="CONFIRMAR" onPress={handleConfirm} variant="success" />
+        <LuxuryButton text="NO TOMÉ ALMUERZO" onPress={() => onConfirm(0)} variant="secondary" />
+        <LuxuryButton text="CANCELAR" onPress={onCancel} variant="outline" />
       </View>
     </GlassModalWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  iconBubble: { width: 70, height: 70, borderRadius: 35, backgroundColor: COLORS.goldDim, justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(212,175,55,0.3)' },
-  title: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 20, marginBottom: 10, letterSpacing: 0.5 },
-  msg: { fontFamily: 'Montserrat_400Regular', color: COLORS.textSecondary, textAlign: 'center', fontSize: 14, lineHeight: 22 },
+  title: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 18, marginBottom: 5 },
+  msg: { fontFamily: 'Montserrat_400Regular', color: '#AAA', fontSize: 12, marginBottom: 15 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#222', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.gold },
+  input: { color: '#FFF', fontSize: 24, fontFamily: 'Montserrat_700Bold', width: 60, textAlign: 'center' },
+  suffix: { color: COLORS.gold, fontSize: 14, fontFamily: 'Montserrat_600SemiBold' }
 });

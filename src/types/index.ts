@@ -1,42 +1,39 @@
 // src/types/index.ts
 
-// Idiomas permitidos
-export type Language = 'es' | 'en';
-
-// ✅ Configuración de la App (incluye nuevos campos)
 export interface AppSettings {
   id: number;
-  employee_name: string;       // Nombre del empleado
-  employer_name: string;       // Nombre de la empresa
-  company_email: string;       // Email para reportes
-  tolerance_radius: number;    // Radio en metros
-  hourly_rate: number;         // Tarifa por hora
-  language: Language;          // Idioma seleccionado
-  start_time: string;          // ⏰ Hora alarma (Ej: "06:00")
-  overtime_multiplier: number; // 💰 Multiplicador (1.0, 1.5, 2.0)
+  employee_name: string;
+  employer_name: string;
+  company_email: string;
+  tolerance_radius: number;
+  hourly_rate: number;
+  language: 'es' | 'en';
+  start_time: string;
+  overtime_multiplier: number;
 }
 
-// ✅ Estructura de una sesión de trabajo
 export interface WorkSession {
-  id?: number; // Opcional porque al crearla aún no tiene ID
-  start_time: number; // Timestamp de inicio
-  end_time?: number;  // Timestamp de fin (opcional)
-  status: 'active' | 'completed' | 'deleted' | 'travel'; // 🚗 Agregamos 'travel'
+  id?: number;
+  start_time: number;
+  end_time?: number;
+  status: 'active' | 'completed' | 'travel' | 'deleted';
   latitude: number;
   longitude: number;
   address: string;
-  location_confirmed: 0 | 1; // SQLite usa 0/1 para booleanos
-  is_manual_edit: 0 | 1;
+  location_confirmed: number;
+  is_manual_edit: number;
   manual_note?: string;
-  lunch_taken: 0 | 1; // Indica si se tomó almuerzo
-  date_string: string; // Para agrupar por día (YYYY-MM-DD)
+  // ✅ CAMPOS ACTUALIZADOS
+  lunch_taken: number; // 0 o 1 (Retrocompatibilidad)
+  lunch_start?: number; // Timestamp inicio almuerzo
+  lunch_end?: number;   // Timestamp fin almuerzo
+  date_string: string;
 }
 
-// ✅ Estructura del log de auditoría
 export interface AuditLog {
   id?: number;
   session_id: number;
-  action_type: string; // Ej: 'CREATED', 'MODIFIED', 'DELETED'
-  details: string;     // Detalles de la acción
-  timestamp: number;   // Timestamp del evento
+  action_type: string;
+  details: string;
+  timestamp: number;
 }

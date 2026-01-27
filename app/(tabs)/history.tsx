@@ -1,21 +1,21 @@
+// app/(tabs)/history.tsx
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, TextInput } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../src/context/LanguageContext';
-import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings } from '../../src/database/db';
+import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 import { COLORS } from '../../src/constants/theme';
 import { GlassModalWrapper, LuxuryButton, LuxuryEmptyState } from '../../src/components/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
+import { formatTime, formatDate } from '../../src/utils/dateUtils';
 
 export default function HistoryScreen() {
   const { t } = useLanguage();
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
-  
-  // Header Dinámico
   const [totalHours, setTotalHours] = useState(0);
   const [estEarnings, setEstEarnings] = useState(0);
 
@@ -36,22 +36,18 @@ export default function HistoryScreen() {
       "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
     );
     setSessions(res);
-
-    // ✅ CÁLCULO REAL (SOLO SEMANA ACTUAL)
     calculateWeeklyTotals(res, rate);
   };
 
   const calculateWeeklyTotals = (allSessions: WorkSession[], rate: number) => {
     const now = new Date();
-    // Obtener el Lunes de esta semana
     const day = now.getDay(); 
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Ajustar si es domingo
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(now.setDate(diff));
     monday.setHours(0,0,0,0);
 
     let tMs = 0;
     allSessions.forEach(s => {
-      // Solo sumar si la fecha es >= Lunes
       if (s.start_time >= monday.getTime()) {
         const end = s.end_time || Date.now();
         let dur = end - s.start_time;
@@ -65,15 +61,9 @@ export default function HistoryScreen() {
     setEstEarnings(tHours * rate);
   }
 
-  // ✅ HELPER: FORMATEAR HORA (HH:MM)
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
-    // 1. Quitar todo lo que no sea número
     const cleaned = text.replace(/[^0-9]/g, '');
-    
-    // 2. Limitar longitud
     if (cleaned.length > 4) return;
-
-    // 3. Insertar dos puntos
     if (cleaned.length > 2) {
       setter(`${cleaned.slice(0,2)}:${cleaned.slice(2)}`);
     } else {
@@ -83,8 +73,8 @@ export default function HistoryScreen() {
 
   const handleDelete = (id: number) => {
     showDialog({
-      title: t.btn_delete || "ELIMINAR REGISTRO",
-      message: "¿Estás seguro de que deseas eliminar este registro permanentemente?",
+      title: t.btn_delete || "ELIMINAR",
+      message: "¿Eliminar registro permanentemente?",
       confirmText: "ELIMINAR",
       isDestructive: true,
       onConfirm: async () => {
@@ -109,12 +99,7 @@ export default function HistoryScreen() {
 
   const saveEdit = async () => {
     if (!selectedSession || !selectedSession.id) return;
-    
-    // Validar hora simple
-    if (editTimeIn.length < 5) {
-      showToast("Formato de hora incorrecto (HH:MM)", "error");
-      return;
-    }
+    if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
 
     const baseDate = new Date(selectedSession.start_time); 
     const [hIn, mIn] = editTimeIn.split(':').map(Number);
@@ -126,6 +111,18 @@ export default function HistoryScreen() {
       const [hOut, mOut] = editTimeOut.split(':').map(Number);
       newEnd = new Date(baseDate);
       newEnd.setHours(hOut || 0, mOut || 0);
+    }
+
+    // ✅ VALIDAR SUPERPOSICIÓN
+    const hasOverlap = await checkSessionOverlap(
+        newStart.getTime(), 
+        newEnd ? newEnd.getTime() : 0, 
+        selectedSession.id
+    );
+
+    if (hasOverlap) {
+        showToast("Error: Horario choca con otra sesión", "error");
+        return;
     }
     
     await updateWorkSessionManual(selectedSession.id, newStart.getTime(), newEnd ? newEnd.getTime() : null, editNote);
@@ -145,22 +142,17 @@ export default function HistoryScreen() {
     >
       <View style={styles.cardContent}>
         <View style={styles.row}>
-          <Text style={styles.date}>{new Date(item.start_time).toLocaleDateString()}</Text>
+          <Text style={styles.date}>{formatDate(item.start_time)}</Text>
           <View style={styles.statusBadge}>
-            {/* ✅ ICONO EN VEZ DE EMOJI */}
             {item.is_manual_edit === 1 && <Ionicons name="pencil" size={12} color={COLORS.gold} style={{marginRight: 6}} />}
             <View style={[styles.dot, { backgroundColor: item.status==='active' ? COLORS.success : '#666' }]} />
           </View>
         </View>
         <Text style={styles.address}>{item.address}</Text>
         <View style={styles.timeContainer}>
-           <Text style={styles.time}>
-             {new Date(item.start_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-           </Text>
+           <Text style={styles.time}>{formatTime(item.start_time)}</Text>
            <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
-           <Text style={styles.time}>
-             {item.end_time ? new Date(item.end_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}
-           </Text>
+           <Text style={styles.time}>{item.end_time ? formatTime(item.end_time) : '...'}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -175,7 +167,6 @@ export default function HistoryScreen() {
             ESTA SEMANA: <Text style={{color: '#FFF'}}>{totalHours.toFixed(1)}h</Text> • <Text style={{color: COLORS.gold}}>${estEarnings.toFixed(0)}</Text>
           </Text>
         </View>
-        {/* ✅ BOTÓN PDF MÁS LLAMATIVO Y REDONDO */}
         <TouchableOpacity style={styles.pdfBtn} onPress={() => generateWeeklyReport(true)}>
           <Ionicons name="document-text" size={16} color="#000" />
           <Text style={styles.pdfText}>PDF</Text>
@@ -199,7 +190,6 @@ export default function HistoryScreen() {
             </TouchableOpacity>
          </View>
          
-         {/* INPUTS MEJORADOS: TECLADO NUMÉRICO Y AUTO-FORMATO */}
          <View style={styles.inputGroup}>
             <Text style={styles.label}>ENTRADA (HH:MM)</Text>
             <TextInput 
@@ -231,7 +221,6 @@ export default function HistoryScreen() {
          
          <View style={{ gap: 4, marginTop: 10 }}>
             <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
-            {/* ✅ BOTÓN CANCELAR AHORA FUNCIONA (Outline) */}
             <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
          </View>
       </GlassModalWrapper>
@@ -245,11 +234,8 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-end', padding: 24, paddingBottom: 10 },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
   subHeader: { fontFamily: 'Montserrat_700Bold', fontSize: 11, color: COLORS.textSecondary, letterSpacing: 1, marginTop: 6 },
-  
-  // ✅ NUEVO ESTILO PDF
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, shadowColor: COLORS.gold, shadowOpacity: 0.4, shadowRadius: 8 },
   pdfText: { fontFamily: 'Montserrat_700Bold', color: '#000', fontSize: 10 },
-  
   card: { backgroundColor: COLORS.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   cardContent: { padding: 20 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
@@ -259,7 +245,6 @@ const styles = StyleSheet.create({
   address: { fontFamily: 'Montserrat_600SemiBold', color: '#FFF', fontSize: 16, marginBottom: 12 },
   timeContainer: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surfaceHighlight, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   time: { fontFamily: 'Montserrat_400Regular', color: '#DDD', fontSize: 13 },
-  empty: { fontFamily: 'Montserrat_400Regular', color: '#666', textAlign: 'center', marginTop: 50 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 18, letterSpacing: 1 },
   closeBtn: { padding: 5 },

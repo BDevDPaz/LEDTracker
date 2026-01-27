@@ -16,7 +16,6 @@ export const initDatabase = async () => {
   try {
     await db.execAsync('PRAGMA journal_mode = WAL;');
 
-    // ✅ Tabla de configuración (con nuevas columnas)
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS settings (
         id INTEGER PRIMARY KEY NOT NULL,
@@ -26,12 +25,11 @@ export const initDatabase = async () => {
         tolerance_radius INTEGER DEFAULT 50,
         hourly_rate REAL DEFAULT 0,
         language TEXT DEFAULT 'es',
-        start_time TEXT DEFAULT '06:00',            -- ⏰ Nueva columna
-        overtime_multiplier REAL DEFAULT 1.5        -- 💰 Nueva columna
+        start_time TEXT DEFAULT '06:00',
+        overtime_multiplier REAL DEFAULT 1.5
       );
     `);
 
-    // ✅ Tabla de sesiones (incluye lunch_taken)
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS work_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,11 +43,12 @@ export const initDatabase = async () => {
         is_manual_edit INTEGER DEFAULT 0,
         manual_note TEXT,
         lunch_taken INTEGER DEFAULT 0,
+        lunch_start INTEGER,
+        lunch_end INTEGER,
         date_string TEXT NOT NULL
       );
     `);
 
-    // ✅ Tabla de auditoría
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,20 +59,20 @@ export const initDatabase = async () => {
       );
     `);
 
-    // ✅ Migraciones para DB existente
     const migrations = [
       "ALTER TABLE settings ADD COLUMN company_email TEXT DEFAULT 'bdpaz_developer@outlook.com';",
       "ALTER TABLE settings ADD COLUMN tolerance_radius INTEGER DEFAULT 50;",
       "ALTER TABLE work_sessions ADD COLUMN lunch_taken INTEGER DEFAULT 0;",
       "ALTER TABLE settings ADD COLUMN start_time TEXT DEFAULT '06:00';",
-      "ALTER TABLE settings ADD COLUMN overtime_multiplier REAL DEFAULT 1.5;"
+      "ALTER TABLE settings ADD COLUMN overtime_multiplier REAL DEFAULT 1.5;",
+      "ALTER TABLE work_sessions ADD COLUMN lunch_start INTEGER;",
+      "ALTER TABLE work_sessions ADD COLUMN lunch_end INTEGER;"
     ];
 
     for (const query of migrations) {
       try { await db.runAsync(query); } catch (_) { /* Ignorar si ya existe */ }
     }
 
-    // ✅ Insertar configuración inicial si no existe
     const check = await db.getFirstAsync('SELECT * FROM settings WHERE id = 1');
     if (!check) {
       await db.runAsync(
@@ -81,7 +80,6 @@ export const initDatabase = async () => {
          VALUES (1, 'LEON''S ELECTRICAL DESIGN', 'bdpaz_developer@outlook.com', 50, 0, 'es', '06:00', 1.5)`
       );
     }
-
     console.log("✅ DB Inicializada Correctamente");
   } catch (error) {
     console.error("❌ Error FATAL en initDatabase:", error);
@@ -96,15 +94,38 @@ export const getSettings = async (): Promise<AppSettings | null> => {
   return await db.getFirstAsync<AppSettings>('SELECT * FROM settings WHERE id = 1');
 };
 
+// ✅ INSERT INTELIGENTE CON SANITIZACIÓN
 export const insertWorkSession = async (session: WorkSession) => {
   const db = getDB();
   const date_string = session.date_string || new Date(session.start_time).toISOString().split('T')[0];
 
-  // ✅ Cerrar cualquier sesión activa o en tránsito antes de crear una nueva
-  await db.runAsync(
-    "UPDATE work_sessions SET end_time = ?, status = 'completed' WHERE (status = 'active' OR status = 'travel') AND end_time IS NULL",
-    [Date.now()]
+  // Buscar sesiones huérfanas
+  const activeSession = await db.getFirstAsync<WorkSession>(
+    "SELECT * FROM work_sessions WHERE (status = 'active' OR status = 'travel') AND end_time IS NULL"
   );
+
+  if (activeSession) {
+    const now = Date.now();
+    const durationHours = (now - activeSession.start_time) / (1000 * 60 * 60);
+
+    // Si excede 12 horas, cortar y marcar
+    if (durationHours > 12) {
+      const maxEndTime = activeSession.start_time + (12 * 60 * 60 * 1000);
+      await db.runAsync(
+        `UPDATE work_sessions 
+         SET end_time = ?, status = 'completed', 
+             manual_note = manual_note || ' [AUTO-CERRADO: >12h - Verificar]', 
+             is_manual_edit = 1 
+         WHERE id = ?`,
+        [maxEndTime, activeSession.id]
+      );
+    } else {
+      await db.runAsync(
+        "UPDATE work_sessions SET end_time = ?, status = 'completed' WHERE id = ?",
+        [now, activeSession.id]
+      );
+    }
+  }
 
   const res = await db.runAsync(
     `INSERT INTO work_sessions (
@@ -124,7 +145,6 @@ export const insertWorkSession = async (session: WorkSession) => {
   return res;
 };
 
-// ✅ Auditoría
 const insertAuditLog = async (sessionId: number, action: string, details: string) => {
   const db = getDB();
   await db.runAsync(
@@ -140,6 +160,31 @@ export const updateSessionEndTime = async (id: number, end_time: number) => {
     [end_time, id]
   );
   await insertAuditLog(id, 'CLOCK_OUT', 'Normal Exit');
+};
+
+// ✅ GUARDAR ALMUERZO REAL
+export const updateSessionLunch = async (id: number, start: number, end: number) => {
+  const db = getDB();
+  await db.runAsync(
+    "UPDATE work_sessions SET lunch_taken = 1, lunch_start = ?, lunch_end = ? WHERE id = ?",
+    [start, end, id]
+  );
+};
+
+// ✅ VALIDAR SUPERPOSICIÓN
+export const checkSessionOverlap = async (startTime: number, endTime: number, excludeId?: number): Promise<boolean> => {
+  const db = getDB();
+  const effectiveEnd = endTime || Date.now() + 86400000; 
+
+  const res = await db.getFirstAsync<{count: number}>(
+    `SELECT COUNT(*) as count FROM work_sessions 
+     WHERE status != 'deleted' 
+     AND id != ? 
+     AND start_time < ? 
+     AND (end_time IS NULL OR end_time > ?)`,
+    [excludeId || -1, effectiveEnd, startTime]
+  );
+  return (res?.count || 0) > 0;
 };
 
 export const deleteWorkSession = async (id: number) => {

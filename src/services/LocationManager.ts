@@ -2,14 +2,16 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
-import { getDB, updateSessionEndTime, getSettings, insertWorkSession } from '../database/db'; // ✅ Importamos insertWorkSession
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDB, updateSessionEndTime, getSettings, insertWorkSession } from '../database/db';
 import { WorkSession } from '../types';
 import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
 import { translations } from '../utils/i18n';
 
 const LOCATION_TRACKING_TASK_NAME = 'WORK_LOCATION_TRACKING_TASK';
+const DRIFT_COUNTER_KEY = 'GPS_DRIFT_COUNTER';
+const MAX_DRIFT_STRIKES = 3;
 
-// ✅ Tarea en segundo plano (monitoreo continuo)
 TaskManager.defineTask(LOCATION_TRACKING_TASK_NAME, async ({ data, error }: any) => {
   if (error || !data) return;
   const { locations } = data;
@@ -17,66 +19,76 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK_NAME, async ({ data, error }: any)
 
   try {
     const db = getDB();
-    const location = locations[0];
+    // Filtro de precisión
+    const validLocations = locations.filter((l: any) => l.coords.accuracy && l.coords.accuracy < 60);
+    if (validLocations.length === 0) return;
 
-    // 1. Obtener sesión activa
+    const location = validLocations[0];
     const session = await db.getFirstAsync<WorkSession>(
       "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY id DESC LIMIT 1"
     );
 
     if (!session) {
-      // Si no hay sesión activa, detener tracking para ahorrar batería
       await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
+      await AsyncStorage.removeItem(DRIFT_COUNTER_KEY);
       return;
     }
 
-    // 2. Configuración (radio de tolerancia)
     const settings = await getSettings();
     const tolerance = settings?.tolerance_radius || 50;
-
-    // 3. Calcular distancia actual vs punto inicial
+    
     const dist = getDistanceFromLatLonInMeters(
       session.latitude, session.longitude,
       location.coords.latitude, location.coords.longitude
     );
 
-    // 4. Si sale del rango → AUTO-CHECKOUT + Notificación interactiva
+    console.log(`📡 GPS: ${dist.toFixed(0)}m / ${tolerance}m | Acc: ${location.coords.accuracy}m`);
+
     if (dist > tolerance) {
-      console.log(`📍 Salida detectada: ${dist.toFixed(0)}m > ${tolerance}m`);
+      const currentStrikes = parseInt(await AsyncStorage.getItem(DRIFT_COUNTER_KEY) || '0');
+      const newStrikes = currentStrikes + 1;
+      
+      if (newStrikes >= MAX_DRIFT_STRIKES) {
+        console.log("✅ Salida CONFIRMADA.");
+        await updateSessionEndTime(session.id!, Date.now());
+        await AsyncStorage.removeItem(DRIFT_COUNTER_KEY);
 
-      // ✅ Cerramos la sesión actual (Sitio A)
-      await updateSessionEndTime(session.id!, Date.now());
+        const lang = settings?.language || 'es';
+        const t = translations[lang];
 
-      const lang = settings?.language || 'es';
-      const t = translations[lang];
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: t.alert_exit_title || "Has salido del sitio 🛑",
+            body: "¿Terminaste tu día o vas a otro lugar?",
+            data: { action: 'CHECKOUT_DECISION', sessionId: session.id },
+            categoryIdentifier: 'CHECKOUT_ACTION',
+            sound: true,
+          },
+          trigger: null,
+        });
 
-      // ✅ Notificación interactiva para decidir acción
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: t.alert_exit_title || "Salida Detectada 🛑",
-          body: t.alert_exit_msg || "¿Terminaste tu día o vas a otro sitio?",
-          data: { action: 'CHECKOUT_DECISION' }, // Se usará para manejar respuesta
-        },
-        trigger: null,
-      });
-
-      // ✅ Detener tracking temporalmente
-      await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
+        await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
+      } else {
+        console.log(`⚠️ Advertencia ${newStrikes}/${MAX_DRIFT_STRIKES}`);
+        await AsyncStorage.setItem(DRIFT_COUNTER_KEY, newStrikes.toString());
+      }
+    } else {
+      await AsyncStorage.setItem(DRIFT_COUNTER_KEY, '0');
     }
   } catch (err) {
     console.error("❌ Background Task Error:", err);
   }
 });
 
-// ✅ Función para crear sesión de tránsito (cuando el usuario elige “Voy a otro sitio”)
 export const createTransitSession = async () => {
   const settings = await getSettings();
-  const userLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+  // Usar ubicación dummy temporal si no se puede obtener inmediata
+  const userLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
 
   await insertWorkSession({
     start_time: Date.now(),
-    status: 'travel', // 🚗 Estado especial
-    address: settings?.employer_name || 'Transito',
+    status: 'travel',
+    address: 'En Tránsito 🚗',
     latitude: userLoc.coords.latitude,
     longitude: userLoc.coords.longitude,
     location_confirmed: 1,
@@ -85,16 +97,13 @@ export const createTransitSession = async () => {
     date_string: new Date().toISOString().split('T')[0]
   });
 
-  // ✅ Reactivar tracking para monitorear llegada al nuevo sitio
   await LocationService.startActiveTracking();
 };
 
-// ✅ Servicio principal
 export const LocationService = {
   requestPermissions: async () => {
     const fg = await Location.requestForegroundPermissionsAsync();
     if (fg.status !== 'granted') return false;
-
     const bg = await Location.requestBackgroundPermissionsAsync();
     return bg.status === 'granted';
   },
@@ -102,15 +111,17 @@ export const LocationService = {
   startActiveTracking: async () => {
     const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
     if (hasStarted) return;
+    
+    await AsyncStorage.setItem(DRIFT_COUNTER_KEY, '0');
 
     await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 20, // Cada 20 metros
-      deferredUpdatesInterval: 60000, // Cada 1 minuto
+      accuracy: Location.Accuracy.High, // ALTA PRECISIÓN
+      distanceInterval: 10,
+      deferredUpdatesInterval: 5000,
       showsBackgroundLocationIndicator: true,
       foregroundService: {
         notificationTitle: "WorkTracker Activo",
-        notificationBody: "Monitoreando ubicación de trabajo..."
+        notificationBody: "Monitoreando ubicación..."
       }
     });
   },
