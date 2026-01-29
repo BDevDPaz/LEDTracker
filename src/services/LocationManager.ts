@@ -3,152 +3,155 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDB, updateSessionEndTime, getSettings, insertWorkSession } from '../database/db';
+import { getDB, insertAuditLog } from '../database/db';
 import { WorkSession } from '../types';
-import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
-import { translations } from '../utils/i18n';
 
-const LOCATION_TRACKING_TASK_NAME = 'WORK_LOCATION_TRACKING_TASK';
-const DRIFT_COUNTER_KEY = 'GPS_DRIFT_COUNTER';
-const MAX_DRIFT_STRIKES = 3;
+const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
+const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 
-TaskManager.defineTask(LOCATION_TRACKING_TASK_NAME, async ({ data, error }: any) => {
-  if (error || !data) return;
-  const { locations } = data;
-  if (!locations || !locations.length) return;
+// --- CONFIGURACIÓN DE LA TAREA EN SEGUNDO PLANO ---
+// Esta definición debe estar siempre en el scope global
+TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
+  if (error) return;
+
+  const { eventType } = data; // eventType: 1 (Enter), 2 (Exit)
+  const db = getDB();
 
   try {
-    const db = getDB();
-    const validLocations = locations.filter((l: any) => l.coords.accuracy && l.coords.accuracy < 60);
-    if (validLocations.length === 0) return;
-
-    const location = validLocations[0];
+    // Obtenemos la última sesión (incluso si está pendiente)
     const session = await db.getFirstAsync<WorkSession>(
-      "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY id DESC LIMIT 1"
+      "SELECT * FROM work_sessions ORDER BY id DESC LIMIT 1"
     );
 
-    if (!session) {
-      await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
-      await AsyncStorage.removeItem(DRIFT_COUNTER_KEY);
-      return;
-    }
+    if (!session) return;
 
-    const settings = await getSettings();
-    const tolerance = settings?.tolerance_radius || 50;
-    
-    const dist = getDistanceFromLatLonInMeters(
-      session.latitude, session.longitude,
-      location.coords.latitude, location.coords.longitude
-    );
-
-    console.log(`📡 GPS: ${dist.toFixed(0)}m / ${tolerance}m | Acc: ${location.coords.accuracy}m`);
-
-    if (dist > tolerance) {
-      const currentStrikes = parseInt(await AsyncStorage.getItem(DRIFT_COUNTER_KEY) || '0');
-      const newStrikes = currentStrikes + 1;
+    // 🟦 CASO 1: ENTRADA A LA GEOCERCA (Auto Check-in)
+    if (eventType === Location.GeofencingEventType.Enter) {
+      console.log("📍 Geocerca: ENTRADA detectada.");
       
-      if (newStrikes >= MAX_DRIFT_STRIKES) {
-        console.log("✅ Salida CONFIRMADA.");
-        await updateSessionEndTime(session.id!, Date.now());
-        await AsyncStorage.removeItem(DRIFT_COUNTER_KEY);
+      // Si estamos esperando llegar (Fase 1) o viajando (Fase 4A)
+      if (session.status === 'pending_arrival' || session.status === 'travel') {
+        const now = Date.now();
+        
+        // Actualizamos a ACTIVA
+        await db.runAsync(
+          "UPDATE work_sessions SET status = 'active', actual_start_time = ? WHERE id = ?",
+          [now, session.id]
+        );
 
-        const lang = settings?.language || 'es';
-        const t = translations[lang];
+        // Log de Auditoría
+        await insertAuditLog(session.id!, 'GEOFENCE_ENTRY', `Llegada al sitio: ${session.address}. Cambio a ACTIVE.`);
 
+        // Limpiamos timestamp de salida si existía
+        await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
+
+        // Notificación de confirmación
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: t.alert_exit_title || "Has salido del sitio 🛑",
-            body: "¿Terminaste tu día o vas a otro lugar?",
-            data: { action: 'CHECKOUT_DECISION', sessionId: session.id },
-            categoryIdentifier: 'CHECKOUT_ACTION',
+            title: "📍 Llegaste al sitio",
+            body: "Check-in automático realizado. ¡Buen trabajo!",
             sound: true,
           },
           trigger: null,
         });
-
-        await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
-      } else {
-        console.log(`⚠️ Advertencia ${newStrikes}/${MAX_DRIFT_STRIKES}`);
-        await AsyncStorage.setItem(DRIFT_COUNTER_KEY, newStrikes.toString());
       }
-    } else {
-      await AsyncStorage.setItem(DRIFT_COUNTER_KEY, '0');
+    } 
+    
+    // 🟥 CASO 2: SALIDA DE LA GEOCERCA (Inicio de Protocolo de Salida)
+    else if (eventType === Location.GeofencingEventType.Exit) {
+      console.log("📍 Geocerca: SALIDA detectada.");
+
+      if (session.status === 'active') {
+        const now = Date.now();
+
+        // 1. Guardamos la hora exacta de salida para el "Failsafe" (BackgroundTasks)
+        await AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString());
+
+        // 2. Log de Auditoría
+        await insertAuditLog(session.id!, 'GEOFENCE_EXIT', `Salida del radio de trabajo detectada.`);
+
+        // 3. Notificación de Decisión (Fase 3)
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "⚠️ Saliste del área de trabajo",
+            body: "¿Terminaste tu jornada o vas a otro sitio?",
+            data: { action: 'CHECKOUT_DECISION' }, // Esto lo escucha el _layout
+            sound: true,
+            priority: Notifications.AndroidNotificationPriority.MAX,
+            vibrate: [0, 500, 200, 500],
+          },
+          trigger: null,
+        });
+      }
     }
   } catch (err) {
-    console.error("❌ Background Task Error:", err);
+    console.error("Error en tarea de Geocerca:", err);
   }
 });
 
-export const createTransitSession = async () => {
-  const db = getDB();
-  const settings = await getSettings();
-  const userLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-
-  // ✅ MEJORA: Evitar huecos no pagados
-  // Buscamos la última sesión completada para encadenar tiempos
-  const lastSession = await db.getFirstAsync<WorkSession>(
-    "SELECT * FROM work_sessions WHERE status = 'completed' ORDER BY end_time DESC LIMIT 1"
-  );
-
-  // Si existe una sesión previa reciente (menos de 30 mins), usamos su final como inicio
-  // Si no, usamos Date.now()
-  let startTime = Date.now();
-  if (lastSession && lastSession.end_time) {
-      const gap = startTime - lastSession.end_time;
-      // Solo encadenamos si la brecha es razonable (< 30 min)
-      if (gap < 30 * 60 * 1000) {
-          startTime = lastSession.end_time;
-      }
-  }
-
-  const localDate = new Date(startTime);
-  const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
-
-  await insertWorkSession({
-    start_time: startTime, // Tiempo encadenado
-    status: 'travel',
-    address: 'En Tránsito 🚗',
-    latitude: userLoc.coords.latitude,
-    longitude: userLoc.coords.longitude,
-    location_confirmed: 1,
-    is_manual_edit: 0,
-    lunch_taken: 0,
-    date_string: dateStr
-  });
-
-  await LocationService.startActiveTracking();
-};
+// --- API PÚBLICA DEL SERVICIO ---
 
 export const LocationService = {
+  // Solicitud de Permisos
   requestPermissions: async () => {
-    const fg = await Location.requestForegroundPermissionsAsync();
-    if (fg.status !== 'granted') return false;
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    return bg.status === 'granted';
+    const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+    if (fgStatus !== 'granted') return false;
+    const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+    return bgStatus === 'granted';
   },
 
-  startActiveTracking: async () => {
-    const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
-    if (hasStarted) return;
-    
-    await AsyncStorage.setItem(DRIFT_COUNTER_KEY, '0');
-
-    await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME, {
-      accuracy: Location.Accuracy.High, // ALTA PRECISIÓN
-      distanceInterval: 10,
-      deferredUpdatesInterval: 5000,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: "WorkTracker Activo",
-        notificationBody: "Monitoreando ubicación..."
+  /**
+   * FASE 1 & 4A: Configurar Geocerca para esperar llegada.
+   */
+  startMonitoringArrival: async (lat: number, lng: number, radius: number = 200) => {
+    try {
+      // ✅ FIX: Verificamos si existe antes de intentar detenerla
+      // Esto evita el error "TaskNotFoundException"
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
+      
+      if (isRegistered) {
+        try {
+           await Location.stopGeofencingAsync(GEOFENCE_TASK);
+           console.log("🧹 Monitoreo previo limpiado.");
+        } catch (cleanError) {
+           // Si falla al limpiar, lo ignoramos, no es crítico.
+           console.log("Aviso: No se pudo limpiar geocerca previa (normal si no existía).");
+        }
       }
-    });
+      
+      // Iniciamos la nueva geocerca
+      await Location.startGeofencingAsync(GEOFENCE_TASK, [
+        {
+          identifier: 'WORK_ZONE',
+          latitude: lat,
+          longitude: lng,
+          radius: radius,
+          notifyOnEnter: true,
+          notifyOnExit: true,
+        },
+      ]);
+      console.log(`📡 Monitoreando llegada a: ${lat}, ${lng} (Radio: ${radius}m)`);
+      return true;
+    } catch (e) {
+      console.error("Error iniciando geocerca:", e);
+      return false;
+    }
   },
 
+  /**
+   * Detener todo (Al finalizar jornada)
+   */
   stopMonitoring: async () => {
-    const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
-    if (hasStarted) {
-      await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK_NAME);
+    try {
+      // ✅ Aquí ya tenías la verificación correcta
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
+      if (isRegistered) {
+        await Location.stopGeofencingAsync(GEOFENCE_TASK);
+      }
+      await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY); // Limpieza
+      console.log("🛑 Monitoreo detenido.");
+    } catch (e) {
+      console.error("Error deteniendo monitoreo:", e);
     }
   }
 };

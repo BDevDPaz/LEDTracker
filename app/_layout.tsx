@@ -1,99 +1,91 @@
-import React, { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, StyleSheet, LogBox } from 'react-native';
-import { useFonts, Montserrat_300Light, Montserrat_400Regular, Montserrat_600SemiBold, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
+import * as SplashScreen from 'expo-splash-screen';
 
+// 1. Imports de Servicios Globales
+import '../src/services/LocationManager'; 
+import '../src/services/BackgroundTasks';
+
+// 2. Imports de Contextos
 import { LanguageProvider } from '../src/context/LanguageContext';
 import { LuxuryUIProvider } from '../src/context/LuxuryUIContext';
-import { initDatabase } from '../src/database/db';
-import { setupNotifications } from '../src/services/Notifications';
-import { AutomatedReporting } from '../src/services/AutomatedReporting';
-import { COLORS } from '../src/constants/theme';
-import { LuxurySkeleton } from '../src/components/LuxuryUI'; // ✅ Importamos Skeleton
 
-LogBox.ignoreLogs(['Setting a timer', 'expo-background-fetch']);
+// 3. Inicializador de DB
+import { initDatabase } from '../src/database/db';
+
+// Configuración de Notificaciones
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [isDbReady, setIsDbReady] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [fontsLoaded] = useFonts({
-    Montserrat_300Light,
-    Montserrat_400Regular,
-    Montserrat_600SemiBold,
-    Montserrat_700Bold,
-  });
+  const router = useRouter();
+  const [appIsReady, setAppIsReady] = useState(false);
 
   useEffect(() => {
-    const prepareApp = async () => {
+    async function prepare() {
       try {
-        console.log("🚀 Booting LEDTracker (Luxury Edition)...");
-        await initDatabase();
-        console.log("✅ DB lista.");
-        try {
-          await setupNotifications();
-          await AutomatedReporting.register();
-        } catch (e) {
-          console.warn("⚠️ Servicios background limitados:", e);
-        }
-        setIsDbReady(true);
-      } catch (error) {
-        console.error("❌ Error FATAL:", error);
-        setErrorMsg("Error crítico de sistema.");
+        console.log("⏳ Iniciando Base de Datos...");
+        await initDatabase(); 
+        console.log("✅ Base de Datos Lista. Cargando UI...");
+      } catch (e) {
+        console.warn("Error crítico inicializando la app:", e);
+      } finally {
+        setAppIsReady(true);
       }
-    };
-    prepareApp();
+    }
+
+    prepare();
   }, []);
 
-  // ✅ PANTALLA DE CARGA CON SKELETON (Tarea 8)
-  if (!isDbReady || !fontsLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <StatusBar style="light" />
-        
-        {/* Skeleton Header */}
-        <View style={{width: '100%', marginBottom: 30, flexDirection:'row', justifyContent:'space-between'}}>
-            <LuxurySkeleton width={180} height={30} />
-            <LuxurySkeleton width={40} height={40} style={{borderRadius: 20}} />
-        </View>
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      // ✅ FIX: "|| {}" Previene el crash si la notificación no tiene datos
+      const data = response.notification.request.content.data || {}; 
+      
+      if (data.action === 'OPEN_DAILY_SETUP') {
+        router.push('/(tabs)');
+        setTimeout(() => router.setParams({ showSetup: 'true' }), 100);
+      } else if (data.action === 'GENERATE_REPORT_PROMPT') {
+        router.push('/(tabs)/report');
+      } else if (data.action === 'CHECKOUT_DECISION') {
+        router.push('/(tabs)');
+        setTimeout(() => router.setParams({ showCheckoutPrompt: 'true' }), 100);
+      }
+    });
 
-        {/* Skeleton Main Card */}
-        <LuxurySkeleton width="100%" height={220} style={{borderRadius: 36, marginBottom: 20}} />
+    return () => subscription.remove();
+  }, []);
 
-        {/* Skeleton Button */}
-        <LuxurySkeleton width="100%" height={60} style={{borderRadius: 28, marginBottom: 30}} />
+  const onLayoutRootView = useCallback(async () => {
+    if (appIsReady) {
+      await SplashScreen.hideAsync();
+    }
+  }, [appIsReady]);
 
-        {/* Skeleton Stats Grid */}
-        <View style={{flexDirection: 'row', gap: 15}}>
-             <LuxurySkeleton width="48%" height={120} style={{borderRadius: 26}} />
-             <LuxurySkeleton width="48%" height={120} style={{borderRadius: 26}} />
-        </View>
-
-        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-      </View>
-    );
+  if (!appIsReady) {
+    return null;
   }
 
   return (
-    <LanguageProvider>
-      <LuxuryUIProvider> 
-        <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-          <StatusBar style="light" backgroundColor={COLORS.background} />
-          <Stack screenOptions={{ 
-            headerShown: false, 
-            animation: 'fade',
-            contentStyle: { backgroundColor: COLORS.background }
-          }}>
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <LanguageProvider>
+        <LuxuryUIProvider>
+          <StatusBar style="light" />
+          <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
           </Stack>
-        </View>
-      </LuxuryUIProvider>
-    </LanguageProvider>
+        </LuxuryUIProvider>
+      </LanguageProvider>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, backgroundColor: COLORS.background, padding: 24, paddingTop: 80 },
-  errorText: { color: COLORS.danger, marginTop: 20, textAlign: 'center', fontWeight: 'bold' },
-});

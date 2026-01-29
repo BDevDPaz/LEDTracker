@@ -1,125 +1,143 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { COLORS } from '../constants/theme';
-import { Montserrat_400Regular, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
 
-// Tipos
+// --- TIPOS ---
 type ToastType = 'success' | 'error' | 'info';
+
 interface DialogOptions {
   title: string;
   message: string;
-  onConfirm: () => void;
-  onCancel?: () => void;
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
+  onConfirm: () => void;
+  onCancel?: () => void;
 }
 
-interface UIContextType {
+interface LuxuryContextProps {
   showToast: (msg: string, type?: ToastType) => void;
-  showDialog: (opts: DialogOptions) => void;
+  showDialog: (options: DialogOptions) => void; // ✅ FIX: Agregado
+  
+  // Controles de Reporte
+  isWeeklyReportVisible: boolean;
+  openWeeklyReport: () => void;
+  closeWeeklyReport: () => void;
 }
 
-const UIContext = createContext<UIContextType | undefined>(undefined);
+const LuxuryUIContext = createContext<LuxuryContextProps | undefined>(undefined);
 
 export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
   // Estado Toast
-  const [toast, setToast] = useState<{ msg: string; type: ToastType; visible: boolean }>({ msg: '', type: 'info', visible: false });
+  const [toast, setToast] = useState<{ msg: string; type: ToastType } | null>(null);
   
-  // Estado Dialog
-  const [dialog, setDialog] = useState<DialogOptions & { visible: boolean }>({ 
-    visible: false, title: '', message: '', onConfirm: () => {} 
-  });
+  // Estado Dialog (Modal de confirmación)
+  const [dialog, setDialog] = useState<DialogOptions | null>(null);
 
-  const showToast = (msg: string, type: ToastType = 'info') => {
-    setToast({ msg, type, visible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
+  // Estado Reporte
+  const [isWeeklyReportVisible, setIsWeeklyReportVisible] = useState(false);
+
+  // --- LÓGICA TOAST ---
+  const showToast = useCallback((msg: string, type: ToastType = 'info') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // --- LÓGICA REPORTE ---
+  const openWeeklyReport = useCallback(() => setIsWeeklyReportVisible(true), []);
+  const closeWeeklyReport = useCallback(() => setIsWeeklyReportVisible(false), []);
+
+  // --- LÓGICA DIALOG (FIX) ---
+  const showDialog = useCallback((options: DialogOptions) => {
+    setDialog(options);
+  }, []);
+
+  const handleDialogConfirm = () => {
+    if (dialog?.onConfirm) dialog.onConfirm();
+    setDialog(null);
   };
 
-  const showDialog = (opts: DialogOptions) => {
-    setDialog({ ...opts, visible: true });
-  };
-
-  const handleConfirm = () => {
-    dialog.onConfirm();
-    setDialog(prev => ({ ...prev, visible: false }));
+  const handleDialogCancel = () => {
+    if (dialog?.onCancel) dialog.onCancel();
+    setDialog(null);
   };
 
   return (
-    <UIContext.Provider value={{ showToast, showDialog }}>
+    <LuxuryUIContext.Provider value={{ 
+      showToast, 
+      showDialog, 
+      isWeeklyReportVisible, 
+      openWeeklyReport, 
+      closeWeeklyReport 
+    }}>
       {children}
-      
+
       {/* RENDER TOAST */}
-      {toast.visible && (
-        <View style={styles.toastContainer}>
-          <BlurView intensity={20} tint="dark" style={[styles.toast, toast.type === 'error' ? styles.borderError : styles.borderGold]}>
+      {toast && (
+        <Animated.View entering={FadeInUp} exiting={FadeOutUp} style={styles.toastContainer}>
+          <View style={[styles.toast, styles[`toast_${toast.type}` as keyof typeof styles]]}>
             <Ionicons 
-              name={toast.type === 'success' ? "checkmark-circle" : toast.type === 'error' ? "alert-circle" : "information-circle"} 
+              name={toast.type === 'success' ? 'checkmark-circle' : toast.type === 'error' ? 'alert-circle' : 'information-circle'} 
               size={24} 
-              color={toast.type === 'error' ? COLORS.danger : COLORS.gold} 
+              color="#FFF" 
             />
             <Text style={styles.toastText}>{toast.msg}</Text>
-          </BlurView>
-        </View>
+          </View>
+        </Animated.View>
       )}
 
-      {/* RENDER DIALOG (CONFIRMATION) */}
-      <Modal visible={dialog.visible} transparent animationType="fade">
-        <View style={styles.overlay}>
-          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.dialogCard}>
-            <Text style={styles.dialogTitle}>{dialog.title}</Text>
-            <Text style={styles.dialogMsg}>{dialog.message}</Text>
+      {/* RENDER DIALOG (Modal Personalizado) */}
+      <Modal visible={!!dialog} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.dialogBox}>
+            <Text style={styles.dialogTitle}>{dialog?.title}</Text>
+            <Text style={styles.dialogMessage}>{dialog?.message}</Text>
             
             <View style={styles.dialogButtons}>
-              <TouchableOpacity 
-                style={styles.btnCancel} 
-                onPress={() => {
-                  if(dialog.onCancel) dialog.onCancel();
-                  setDialog(prev => ({ ...prev, visible: false }));
-                }}
-              >
-                <Text style={styles.btnTextCancel}>{dialog.cancelText || "CANCELAR"}</Text>
+              <TouchableOpacity onPress={handleDialogCancel} style={[styles.btn, styles.btnCancel]}>
+                <Text style={styles.btnTextCancel}>{dialog?.cancelText || 'Cancelar'}</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity 
-                style={[styles.btnConfirm, dialog.isDestructive && { backgroundColor: COLORS.danger }]} 
-                onPress={handleConfirm}
-              >
-                <Text style={styles.btnTextConfirm}>{dialog.confirmText || "CONFIRMAR"}</Text>
+              <TouchableOpacity onPress={handleDialogConfirm} style={[styles.btn, styles.btnConfirm, dialog?.isDestructive && styles.btnDestructive]}>
+                <Text style={styles.btnTextConfirm}>{dialog?.confirmText || 'Confirmar'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </UIContext.Provider>
+
+    </LuxuryUIContext.Provider>
   );
 };
 
 export const useLuxuryUI = () => {
-  const context = useContext(UIContext);
-  if (!context) throw new Error("useLuxuryUI must be used within LuxuryUIProvider");
+  const context = useContext(LuxuryUIContext);
+  if (!context) throw new Error('useLuxuryUI must be used within a LuxuryUIProvider');
   return context;
 };
 
+// ESTILOS
 const styles = StyleSheet.create({
-  // Toast Styles
   toastContainer: { position: 'absolute', top: 60, left: 20, right: 20, alignItems: 'center', zIndex: 9999 },
-  toast: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 50, backgroundColor: 'rgba(0,0,0,0.9)', borderWidth: 1, width: '100%', maxWidth: 400, overflow: 'hidden' },
-  borderGold: { borderColor: COLORS.gold },
-  borderError: { borderColor: COLORS.danger },
+  toast: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, gap: 10, width: '100%', shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 5, elevation: 8 },
+  toast_success: { backgroundColor: COLORS.success || '#4CAF50' },
+  toast_error: { backgroundColor: COLORS.danger || '#F44336' },
+  toast_info: { backgroundColor: '#333' },
   toastText: { color: '#FFF', fontFamily: 'Montserrat_600SemiBold', fontSize: 13, flex: 1 },
-
-  // Dialog Styles
-  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30, backgroundColor: 'rgba(0,0,0,0.6)' },
-  dialogCard: { width: '100%', backgroundColor: '#111', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: COLORS.border },
-  dialogTitle: { color: '#FFF', fontFamily: 'Montserrat_700Bold', fontSize: 18, marginBottom: 10, textAlign: 'center', letterSpacing: 1 },
-  dialogMsg: { color: '#AAA', fontFamily: 'Montserrat_400Regular', fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' },
+  dialogBox: { width: '85%', backgroundColor: '#111', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: '#333' },
+  dialogTitle: { color: COLORS.gold, fontFamily: 'Montserrat_700Bold', fontSize: 18, marginBottom: 8, textAlign: 'center' },
+  dialogMessage: { color: '#CCC', fontFamily: 'Montserrat_400Regular', fontSize: 14, textAlign: 'center', marginBottom: 24 },
   dialogButtons: { flexDirection: 'row', gap: 12 },
-  btnCancel: { flex: 1, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#333', alignItems: 'center' },
-  btnConfirm: { flex: 1, padding: 14, borderRadius: 14, backgroundColor: COLORS.gold, alignItems: 'center' },
-  btnTextCancel: { color: '#888', fontFamily: 'Montserrat_700Bold', fontSize: 11 },
-  btnTextConfirm: { color: '#000', fontFamily: 'Montserrat_700Bold', fontSize: 11 },
+  btn: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
+  btnCancel: { backgroundColor: '#222' },
+  btnConfirm: { backgroundColor: COLORS.gold },
+  btnDestructive: { backgroundColor: '#EF4444' },
+  btnTextCancel: { color: '#FFF', fontFamily: 'Montserrat_600SemiBold' },
+  btnTextConfirm: { color: '#000', fontFamily: 'Montserrat_700Bold' }
 });

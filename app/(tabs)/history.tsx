@@ -1,6 +1,7 @@
-// app/(tabs)/history.tsx
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+// ✅ FIX 4: Import correcto de SafeAreaView
+import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../src/context/LanguageContext';
@@ -14,6 +15,7 @@ import { formatTime, formatDate } from '../../src/utils/dateUtils';
 
 export default function HistoryScreen() {
   const { t } = useLanguage();
+  // ✅ Ahora 'showDialog' funcionará perfectamente gracias al fix en Context
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
@@ -113,7 +115,6 @@ export default function HistoryScreen() {
       newEnd.setHours(hOut || 0, mOut || 0);
     }
 
-    // ✅ VALIDAR SUPERPOSICIÓN
     const hasOverlap = await checkSessionOverlap(
         newStart.getTime(), 
         newEnd ? newEnd.getTime() : 0, 
