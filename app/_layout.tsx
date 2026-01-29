@@ -5,18 +5,18 @@ import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 
-// 1. Imports de Servicios Globales
+// 1. Imports de Servicios
 import '../src/services/LocationManager'; 
-import '../src/services/BackgroundTasks';
+// Importamos la CLASE, no solo el efecto secundario
+import { BackgroundTasks } from '../src/services/BackgroundTasks'; 
 
-// 2. Imports de Contextos
+// 2. Contextos
 import { LanguageProvider } from '../src/context/LanguageContext';
 import { LuxuryUIProvider } from '../src/context/LuxuryUIContext';
 
-// 3. Inicializador de DB
+// 3. DB
 import { initDatabase } from '../src/database/db';
 
-// Configuración de Notificaciones
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -36,7 +36,13 @@ export default function RootLayout() {
       try {
         console.log("⏳ Iniciando Base de Datos...");
         await initDatabase(); 
-        console.log("✅ Base de Datos Lista. Cargando UI...");
+        
+        // 🛑 CORRECCIÓN CRÍTICA AQUÍ:
+        // Registramos explícitamente el servicio de fondo para que empiece a "tictaquear"
+        console.log("⏰ Registrando Servicios de Fondo (Auto-Checkout)...");
+        await BackgroundTasks.register(); 
+        
+        console.log("✅ Sistema Listo. Cargando UI...");
       } catch (e) {
         console.warn("Error crítico inicializando la app:", e);
       } finally {
@@ -47,9 +53,9 @@ export default function RootLayout() {
     prepare();
   }, []);
 
+  // ... (El resto del archivo sigue IGUAL, no cambies nada más abajo)
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      // ✅ FIX: "|| {}" Previene el crash si la notificación no tiene datos
       const data = response.notification.request.content.data || {}; 
       
       if (data.action === 'OPEN_DAILY_SETUP') {
@@ -67,14 +73,10 @@ export default function RootLayout() {
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
-    if (appIsReady) {
-      await SplashScreen.hideAsync();
-    }
+    if (appIsReady) await SplashScreen.hideAsync();
   }, [appIsReady]);
 
-  if (!appIsReady) {
-    return null;
-  }
+  if (!appIsReady) return null;
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
