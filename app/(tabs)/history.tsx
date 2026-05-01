@@ -15,7 +15,6 @@ import { formatTime, formatDate } from '../../src/utils/dateUtils';
 
 export default function HistoryScreen() {
   const { t } = useLanguage();
-  // ✅ Ahora 'showDialog' funcionará perfectamente gracias al fix en Context
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
