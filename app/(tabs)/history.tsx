@@ -178,7 +178,12 @@ export default function HistoryScreen() {
       <GlassModalWrapper visible={editModalVisible}>
          <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
-            <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
+            <TouchableOpacity
+              onPress={() => setEditModalVisible(false)}
+              style={styles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar modal de edición"
+            >
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
          </View>

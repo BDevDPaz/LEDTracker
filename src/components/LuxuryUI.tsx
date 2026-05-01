@@ -88,7 +88,15 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
   };
 
   return (
-    <TouchableOpacity onPress={handlePress} disabled={disabled} activeOpacity={0.7} style={{marginBottom: 16}}>
+    <TouchableOpacity
+      onPress={handlePress}
+      disabled={disabled}
+      activeOpacity={0.7}
+      style={{marginBottom: 16}}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      accessibilityLabel={text}
+    >
       <LinearGradient
         colors={disabled ? ['#333', '#111'] : bgColors}
         style={[styles.button, { borderColor, borderWidth }]}
