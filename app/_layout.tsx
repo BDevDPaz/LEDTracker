@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // 1. Imports de Servicios
 import '../src/services/LocationManager'; 
@@ -56,7 +57,7 @@ export default function RootLayout() {
   // ... (El resto del archivo sigue IGUAL, no cambies nada más abajo)
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data || {}; 
+      const data = response?.notification?.request?.content?.data || {};
       
       if (data.action === 'OPEN_DAILY_SETUP') {
         router.push('/(tabs)');
@@ -79,15 +80,17 @@ export default function RootLayout() {
   if (!appIsReady) return null;
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <LanguageProvider>
-        <LuxuryUIProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </LuxuryUIProvider>
-      </LanguageProvider>
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <LanguageProvider>
+          <LuxuryUIProvider>
+            <StatusBar style="light" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </LuxuryUIProvider>
+        </LanguageProvider>
+      </View>
+    </SafeAreaProvider>
   );
 }

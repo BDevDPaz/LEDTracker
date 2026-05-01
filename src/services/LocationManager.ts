@@ -6,8 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDB, insertAuditLog } from '../database/db';
 import { WorkSession } from '../types';
 
-const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
-const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
+export const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
+export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 
 // --- CONFIGURACIÓN DE LA TAREA EN SEGUNDO PLANO ---
 // Esta definición debe estar siempre en el scope global
@@ -105,16 +105,16 @@ export const LocationService = {
    */
   startMonitoringArrival: async (lat: number, lng: number, radius: number = 200) => {
     try {
-      // Verificamos si la tarea está registrada para evitar TaskNotFoundException
+
+  // Verificamos si la tarea está registrada para evitar TaskNotFoundException
       const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
-      
+
       if (isRegistered) {
         try {
-           await Location.stopGeofencingAsync(GEOFENCE_TASK);
-           console.log("🧹 Monitoreo previo limpiado.");
+          await Location.stopGeofencingAsync(GEOFENCE_TASK);
+          console.log("🧹 Monitoreo previo limpiado.");
         } catch (cleanError) {
-           // Si falla al limpiar, lo ignoramos.
-           console.log("Aviso: No se pudo limpiar geocerca previa.");
+          console.log("Aviso: No se pudo limpiar geocerca previa.");
         }
       }
       
@@ -142,18 +142,16 @@ export const LocationService = {
    */
   stopMonitoring: async () => {
     try {
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
 
-      if (isRegistered) {
-        try {
-          await Location.stopGeofencingAsync(GEOFENCE_TASK);
-        } catch (stopError) {
-          console.error("Error deteniendo geofencing:", stopError);
-        }
-      }
+// Ejecución concurrente para minimizar bridge overhead
+      await Promise.all([
+        Location.stopGeofencingAsync(GEOFENCE_TASK).catch(() => {}),
+        Location.stopLocationUpdatesAsync(GEOFENCE_TASK).catch(() => {}),
+        AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY)
+      ]);
 
-      await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY); // Limpieza de estado
-      console.log("🛑 Monitoreo detenido.");
+      console.log("🛑 Monitoreo y rastreo detenidos.");
+
     } catch (e) {
       console.error("Error general deteniendo monitoreo:", e);
     }

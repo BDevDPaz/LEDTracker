@@ -53,7 +53,7 @@ export default function HomeScreen() {
 
     const subscription = Notifications.addNotificationResponseReceivedListener(async response => {
       // ✅ FIX: "|| {}" Previene el crash aquí también
-      const data = response.notification.request.content.data || {};
+      const data = response?.notification?.request?.content?.data || {};
       
       if (data.action === 'OPEN_DAILY_SETUP') {
         setSetupMode('start');
@@ -85,11 +85,13 @@ export default function HomeScreen() {
   const loadData = async () => {
     try {
       const db = getDB();
-      const settings = await getSettings();
       
-      const session = await db.getFirstAsync<WorkSession>(
-        "SELECT * FROM work_sessions WHERE status IN ('active', 'travel', 'pending_arrival') ORDER BY id DESC"
-      );
+      const [settings, session] = await Promise.all([
+        getSettings(),
+        db.getFirstAsync<WorkSession>(
+          "SELECT * FROM work_sessions WHERE status IN ('active', 'travel', 'pending_arrival') ORDER BY id DESC"
+        )
+      ]);
 
       setActiveSession(session || null);
       

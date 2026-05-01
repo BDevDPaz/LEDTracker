@@ -1,11 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-// ✅ FIX 4: Import correcto de SafeAreaView
-import { SafeAreaView } from 'react-native-safe-area-context'; 
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../src/context/LanguageContext';
-import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap } from '../../src/database/db';
+import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap, getWeeklyStats } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 import { COLORS } from '../../src/constants/theme';
@@ -15,7 +14,6 @@ import { formatTime, formatDate } from '../../src/utils/dateUtils';
 
 export default function HistoryScreen() {
   const { t } = useLanguage();
-  // ✅ Ahora 'showDialog' funcionará perfectamente gracias al fix en Context
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
@@ -31,33 +29,28 @@ export default function HistoryScreen() {
 
   const loadHistory = async () => {
     const db = getDB();
-    const settings = await getSettings();
-    const rate = settings?.hourly_rate || 0;
+    const [settings, res] = await Promise.all([
+      getSettings(),
+      db.getAllAsync<WorkSession>(
+        "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
+      )
+    ]);
 
-    // Fetch up to 50 sessions for the UI
-    const res = await db.getAllAsync<WorkSession>(
-      "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
-    );
+  const rate = settings?.hourly_rate || 0;
+
+    // Usar los resultados del Promise.all
     setSessions(res);
 
-    // ✅ PERFORMANCE OPTIMIZATION: Calculate weekly totals in SQLite instead of JS iteration
-    // This avoids transferring 50+ large objects over the bridge and ensures accuracy
-    // even if there are more than 50 sessions in the current week.
+    // Cálculo optimizado de horas semanales usando función centralizada
     const now = new Date();
-    const day = now.getDay(); 
+    const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(now.setDate(diff));
     monday.setHours(0,0,0,0);
-    const mondayMs = monday.getTime();
 
-    const totals = await db.getFirstAsync<{ total_ms: number }>(
-      `SELECT SUM(MAX(0, COALESCE(end_time, ?) - start_time - (CASE WHEN lunch_taken = 1 THEN 3600000 ELSE 0 END))) as total_ms
-       FROM work_sessions
-       WHERE status != 'deleted' AND start_time >= ?`,
-      [Date.now(), mondayMs]
-    );
+    const tMs = await getWeeklyStats(monday.getTime(), Date.now());
+    const tHours = tMs / (1000 * 60 * 60);
 
-    const tHours = (totals?.total_ms || 0) / (1000 * 60 * 60);
     setTotalHours(tHours);
     setEstEarnings(tHours * rate);
   };
@@ -103,13 +96,15 @@ export default function HistoryScreen() {
     if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
 
     const baseDate = new Date(selectedSession.start_time); 
-    const [hIn, mIn] = editTimeIn.split(':').map(Number);
+    const hIn = Number(editTimeIn.substring(0, 2));
+    const mIn = Number(editTimeIn.substring(3, 5));
     const newStart = new Date(baseDate);
     newStart.setHours(hIn || 0, mIn || 0);
     
     let newEnd = null;
     if (editTimeOut && editTimeOut.length === 5) {
-      const [hOut, mOut] = editTimeOut.split(':').map(Number);
+      const hOut = Number(editTimeOut.substring(0, 2));
+      const mOut = Number(editTimeOut.substring(3, 5));
       newEnd = new Date(baseDate);
       newEnd.setHours(hOut || 0, mOut || 0);
     }

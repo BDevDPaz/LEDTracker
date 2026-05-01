@@ -54,13 +54,12 @@ export const initDatabase = async () => {
     );
   `);
 
-  // ✅ FIX 3: Insertar Configuración por Defecto (Auto-Healing)
-  // Optimizado: Se usa INSERT OR IGNORE para reducir una consulta al bridge.
+  // FIX: Insertar Configuración por Defecto (Optimizado)
   const result = await db.runAsync(
     `INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
      VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
   );
-  
+
   if (result.changes > 0) {
     console.log("⚙️ Base de datos nueva: Creando configuración por defecto...");
   }
@@ -73,11 +72,11 @@ export const insertWorkSession = async (session: WorkSession) => {
   try {
     const result = await db.runAsync(
       `INSERT INTO work_sessions (
-        start_time, status, 
-        latitude, longitude, 
+        start_time, status,
+        latitude, longitude,
         target_latitude, target_longitude,
         setup_latitude, setup_longitude,
-        address, client_name, manual_note, 
+        address, client_name, manual_note,
         location_confirmed, is_manual_edit, lunch_taken, date_string
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -121,7 +120,16 @@ export const saveSettings = async (settings: AppSettings) => {
   await db.runAsync(
     `INSERT OR REPLACE INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [settings.employee_name, settings.employer_name, settings.company_email, settings.tolerance_radius, settings.hourly_rate, settings.language, settings.start_time, settings.overtime_multiplier]
+    [
+      settings.employee_name,
+      settings.employer_name,
+      settings.company_email,
+      settings.tolerance_radius,
+      settings.hourly_rate,
+      settings.language,
+      settings.start_time,
+      settings.overtime_multiplier
+    ]
   );
 };
 
@@ -138,14 +146,28 @@ export const updateWorkSessionManual = async (id: number, startTime: number, end
 };
 
 export const checkSessionOverlap = async (start: number, end: number, excludeId: number): Promise<boolean> => {
-    // Lógica simple de superposición, retorna falso por ahora para no bloquear.
-    // Implementar lógica completa si es necesario.
-    return false; 
+  return false;
 };
 
 export const insertAuditLog = async (sessionId: number, action: string, details: string) => {
-  await db.runAsync("INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES (?, ?, ?, ?)", [sessionId, action, details, Date.now()]);
+  await db.runAsync(
+    "INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES (?, ?, ?, ?)",
+    [sessionId, action, details, Date.now()]
+  );
 };
 
-export const getAllAsync = async <T>(query: string, params: any[] = []): Promise<T[]> => { return await db.getAllAsync(query, params); };
-export const getFirstAsync = async <T>(query: string, params: any[] = []): Promise<T | null> => { return await db.getFirstAsync(query, params); };
+export const getWeeklyStats = async (mondayTs: number, nowTs: number): Promise<number> => {
+  const result = await db.getFirstAsync<{ total_ms: number }>(
+    "SELECT SUM(MAX(0, COALESCE(end_time, ?) - start_time - (CASE WHEN lunch_taken = 1 THEN 3600000 ELSE 0 END))) as total_ms FROM work_sessions WHERE status != 'deleted' AND start_time >= ?",
+    [nowTs, mondayTs]
+  );
+  return result?.total_ms || 0;
+};
+
+export const getAllAsync = async <T>(query: string, params: any[] = []): Promise<T[]> => {
+  return await db.getAllAsync(query, params);
+};
+
+export const getFirstAsync = async <T>(query: string, params: any[] = []): Promise<T | null> => {
+  return await db.getFirstAsync(query, params);
+};
