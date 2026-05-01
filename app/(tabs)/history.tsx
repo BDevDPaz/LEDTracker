@@ -31,12 +31,14 @@ export default function HistoryScreen() {
 
   const loadHistory = async () => {
     const db = getDB();
-    const settings = await getSettings();
-    const rate = settings?.hourly_rate || 0;
+    const [settings, res] = await Promise.all([
+      getSettings(),
+      db.getAllAsync<WorkSession>(
+        "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
+      )
+    ]);
 
-    const res = await db.getAllAsync<WorkSession>(
-      "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
-    );
+    const rate = settings?.hourly_rate || 0;
     setSessions(res);
     calculateWeeklyTotals(res, rate);
   };
