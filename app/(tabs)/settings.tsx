@@ -8,7 +8,7 @@ import { scheduleDailyMorningNotification } from '../../src/services/Notificatio
 import { COLORS } from '../../src/constants/theme';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 
-const ADMIN_PASSWORD = "admin123";
+const ADMIN_PASSWORD = process.env.EXPO_PUBLIC_ADMIN_PASSWORD;
 
 export default function SettingsScreen() {
   const { t, language, setLanguage } = useLanguage();
@@ -58,6 +58,10 @@ export default function SettingsScreen() {
   };
 
   const unlockAdmin = () => {
+    if (!ADMIN_PASSWORD) {
+      showToast("Admin password not configured", "error");
+      return;
+    }
     if (passInput === ADMIN_PASSWORD) { setIsAdmin(true); setShowPass(false); setPassInput(''); } 
     else { showToast(t.err_pass_wrong || "Contraseña incorrecta", "error"); }
   };
