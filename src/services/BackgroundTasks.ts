@@ -5,10 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDB, initDatabase, insertAuditLog, updateSessionEndTime } from '../database/db'; // ✅ Importamos initDatabase
 import { WorkSession } from '../types';
 import { generateWeeklyReport } from './ReportGenerator';
-import { LocationService } from './LocationManager'; 
+import { LocationService, EXIT_TIMESTAMP_KEY } from './LocationManager';
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
-const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 const FAILSAFE_THRESHOLD = 15 * 60 * 1000; // 15 Minutos
 
@@ -71,9 +70,7 @@ TaskManager.defineTask(TASK_NAME, async () => {
                   `Cierre automático por inactividad (>15min).`
                 );
 
-                await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
-                
-                // Intentamos detener monitoreo (Try/Catch interno por si LocationService falla)
+                // Intentamos detener monitoreo (incluye limpieza de EXIT_TIMESTAMP_KEY internamente)
                 try { await LocationService.stopMonitoring(); } catch (e) { console.warn("Error parando GPS:", e); }
 
                 await Notifications.scheduleNotificationAsync({
