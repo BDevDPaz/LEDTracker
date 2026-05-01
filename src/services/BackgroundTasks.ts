@@ -63,7 +63,6 @@ TaskManager.defineTask(TASK_NAME, async () => {
                 console.log(`⚠️ [Failsafe] Ejecutando Auto-Checkout para sesión #${session.id}`);
 
                 await updateSessionEndTime(session.id, exitTime); // Usar hora real de salida
-                await db.runAsync("UPDATE work_sessions SET status = 'completed' WHERE id = ?", [session.id]);
                 
                 await insertAuditLog(
                   session.id, 
