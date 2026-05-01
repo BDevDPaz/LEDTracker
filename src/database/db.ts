@@ -8,7 +8,7 @@ export const getDB = () => db;
 export const initDatabase = async () => {
   db = await SQLite.openDatabaseAsync('ledtracker_v2.db');
 
-  // Tabla Sesiones
+  // Inicialización de Tablas (Optimizado: Una sola llamada al bridge)
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS work_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,15 +16,12 @@ export const initDatabase = async () => {
       actual_start_time INTEGER,
       end_time INTEGER,
       status TEXT NOT NULL,
-      
       latitude REAL,
       longitude REAL,
-      
       target_latitude REAL,
       target_longitude REAL,
       setup_latitude REAL,
       setup_longitude REAL,
-      
       address TEXT,
       client_name TEXT,
       location_confirmed INTEGER DEFAULT 0,
@@ -35,10 +32,7 @@ export const initDatabase = async () => {
       lunch_end INTEGER,
       date_string TEXT
     );
-  `);
 
-  // Tabla Settings
-  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY NOT NULL,
       employee_name TEXT,
@@ -50,10 +44,7 @@ export const initDatabase = async () => {
       start_time TEXT DEFAULT '08:00',
       overtime_multiplier REAL DEFAULT 1.5
     );
-  `);
 
-  // Tabla Auditoría
-  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER,
@@ -64,15 +55,14 @@ export const initDatabase = async () => {
   `);
 
   // ✅ FIX 3: Insertar Configuración por Defecto (Auto-Healing)
-  // Si es la primera vez que se corre la app, crea un registro para evitar crash.
-  const existingSettings = await db.getFirstAsync("SELECT * FROM settings WHERE id = 1");
+  // Optimizado: Se usa INSERT OR IGNORE para reducir una consulta al bridge.
+  const result = await db.runAsync(
+    `INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
+     VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
+  );
   
-  if (!existingSettings) {
+  if (result.changes > 0) {
     console.log("⚙️ Base de datos nueva: Creando configuración por defecto...");
-    await db.runAsync(
-      `INSERT INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
-       VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
-    );
   }
 
   console.log("✅ DB Inicializada (V2.1 - Settings Verificado)");
