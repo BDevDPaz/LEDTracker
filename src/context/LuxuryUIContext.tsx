@@ -20,7 +20,7 @@ interface DialogOptions {
 
 interface LuxuryContextProps {
   showToast: (msg: string, type?: ToastType) => void;
-  showDialog: (options: DialogOptions) => void; // ✅ FIX: Agregado
+  showDialog: (options: DialogOptions) => void;
   
   // Controles de Reporte
   isWeeklyReportVisible: boolean;
