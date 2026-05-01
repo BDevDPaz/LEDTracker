@@ -65,15 +65,11 @@ export const initDatabase = async () => {
 
   // ✅ FIX 3: Insertar Configuración por Defecto (Auto-Healing)
   // Si es la primera vez que se corre la app, crea un registro para evitar crash.
-  const existingSettings = await db.getFirstAsync("SELECT * FROM settings WHERE id = 1");
-  
-  if (!existingSettings) {
-    console.log("⚙️ Base de datos nueva: Creando configuración por defecto...");
-    await db.runAsync(
-      `INSERT INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
-       VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
-    );
-  }
+  console.log("⚙️ Verificando/Creando configuración por defecto...");
+  await db.runAsync(
+    `INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
+     VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
+  );
 
   console.log("✅ DB Inicializada (V2.1 - Settings Verificado)");
 };
