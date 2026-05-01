@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../src/context/LanguageContext';
-import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap } from '../../src/database/db';
+import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap, getWeeklyStats } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 import { COLORS } from '../../src/constants/theme';
@@ -39,30 +39,20 @@ export default function HistoryScreen() {
 
     const rate = settings?.hourly_rate || 0;
     setSessions(res);
-    calculateWeeklyTotals(res, rate);
-  };
 
-  const calculateWeeklyTotals = (allSessions: WorkSession[], rate: number) => {
+    // ✅ OPTIMIZACIÓN: Cálculo de totales en base de datos (SQL SUM)
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(now.setDate(diff));
     monday.setHours(0,0,0,0);
 
-    let tMs = 0;
-    allSessions.forEach(s => {
-      if (s.start_time >= monday.getTime()) {
-        const end = s.end_time || Date.now();
-        let dur = end - s.start_time;
-        if (s.lunch_taken) dur -= 3600000;
-        tMs += Math.max(0, dur);
-      }
-    });
-
+    const tMs = await getWeeklyStats(monday.getTime(), Date.now());
     const tHours = tMs / (1000 * 60 * 60);
+
     setTotalHours(tHours);
     setEstEarnings(tHours * rate);
-  }
+  };
 
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
     const cleaned = text.replace(/[^0-9]/g, '');

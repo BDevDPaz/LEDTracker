@@ -153,5 +153,13 @@ export const insertAuditLog = async (sessionId: number, action: string, details:
   await db.runAsync("INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES (?, ?, ?, ?)", [sessionId, action, details, Date.now()]);
 };
 
+export const getWeeklyStats = async (mondayTs: number, nowTs: number): Promise<number> => {
+  const result = await db.getFirstAsync<{ total_ms: number }>(
+    "SELECT SUM(MAX(0, COALESCE(end_time, ?) - start_time - (CASE WHEN lunch_taken = 1 THEN 3600000 ELSE 0 END))) as total_ms FROM work_sessions WHERE status != 'deleted' AND start_time >= ?",
+    [nowTs, mondayTs]
+  );
+  return result?.total_ms || 0;
+};
+
 export const getAllAsync = async <T>(query: string, params: any[] = []): Promise<T[]> => { return await db.getAllAsync(query, params); };
 export const getFirstAsync = async <T>(query: string, params: any[] = []): Promise<T | null> => { return await db.getFirstAsync(query, params); };
