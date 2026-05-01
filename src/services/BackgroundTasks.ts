@@ -1,11 +1,18 @@
 import * as TaskManager from 'expo-task-manager';
-import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDB, initDatabase, insertAuditLog, updateSessionEndTime } from '../database/db'; // ✅ Importamos initDatabase
 import { WorkSession } from '../types';
 import { generateWeeklyReport } from './ReportGenerator';
 import { LocationService, EXIT_TIMESTAMP_KEY } from './LocationManager';
+
+// Optional import for BackgroundFetch to prevent crashes when native module is missing
+let BackgroundFetch: any = null;
+try {
+  BackgroundFetch = require('expo-background-fetch');
+} catch (e) {
+  console.warn("⚠️ expo-background-fetch native module not found.");
+}
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
@@ -20,7 +27,6 @@ TaskManager.defineTask(TASK_NAME, async () => {
 
   try {
     // 🛑 CRÍTICO: Auto-Inicialización en modo "Headless"
-    // Si la app está cerrada, _layout.tsx NO se ejecutó, así que 'db' es null.
     let db = getDB();
     if (!db) {
       console.log("🔌 [Background] DB no inicializada. Iniciando ahora...");
@@ -30,14 +36,13 @@ TaskManager.defineTask(TASK_NAME, async () => {
 
     if (!db) {
       console.error("❌ [Background] Fallo fatal: No se pudo conectar a la DB.");
-      return BackgroundFetch.BackgroundFetchResult.Failed;
+      return BackgroundFetch ? BackgroundFetch.BackgroundFetchResult.Failed : 3;
     }
 
     const now = Date.now();
 
     // =================================================================
     // 🛡️ BLOQUE 1: FAILSAFE DE AUTO-CHECKOUT
-    // (Envuelto en su propio try/catch para no bloquear el reporte)
     // =================================================================
     try {
       const lastExitStr = await AsyncStorage.getItem(EXIT_TIMESTAMP_KEY);
@@ -45,23 +50,20 @@ TaskManager.defineTask(TASK_NAME, async () => {
       if (lastExitStr) {
         const exitTime = parseInt(lastExitStr, 10);
         
-        // Validación de sanidad (si el timestamp es del futuro o muy viejo, borrarlo)
         if (isNaN(exitTime) || exitTime > now) {
            await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
         } else {
            const timeDiff = now - exitTime;
            
            if (timeDiff > FAILSAFE_THRESHOLD) {
-             // Verificamos sesión activa
              const session = await db.getFirstAsync<WorkSession>(
                "SELECT * FROM work_sessions ORDER BY id DESC LIMIT 1"
              );
 
-             // ✅ Validación extra de sesión
              if (session && session.id && session.status === 'active') {
                 console.log(`⚠️ [Failsafe] Ejecutando Auto-Checkout para sesión #${session.id}`);
 
-                await updateSessionEndTime(session.id, exitTime); // Usar hora real de salida
+                await updateSessionEndTime(session.id, exitTime);
                 
                 await insertAuditLog(
                   session.id, 
@@ -69,8 +71,6 @@ TaskManager.defineTask(TASK_NAME, async () => {
                   `Cierre automático por inactividad (>15min).`
                 );
 
-                // Intentamos detener monitoreo (Try/Catch interno por si LocationService falla)
-                // ✅ LocationService.stopMonitoring() ahora también limpia el EXIT_TIMESTAMP_KEY
                 try { await LocationService.stopMonitoring(); } catch (e) { console.warn("Error parando GPS:", e); }
 
                 await Notifications.scheduleNotificationAsync({
@@ -84,7 +84,6 @@ TaskManager.defineTask(TASK_NAME, async () => {
 
                 newDataProcessed = true;
              } else {
-                // Si ya no es activa, limpiamos la marca
                 await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
              }
            }
@@ -96,12 +95,10 @@ TaskManager.defineTask(TASK_NAME, async () => {
 
     // =================================================================
     // 📄 BLOQUE 2: REPORTE SEMANAL
-    // (Independiente del Failsafe)
     // =================================================================
     try {
       const dateObj = new Date();
       const day = dateObj.getDay(); 
-      // Ventana: Domingo (Noche) a Martes
       const isReportWindow = (day === 0 && dateObj.getHours() >= 20) || day === 1 || day === 2;
 
       if (isReportWindow) {
@@ -143,12 +140,12 @@ TaskManager.defineTask(TASK_NAME, async () => {
     }
 
     return newDataProcessed 
-      ? BackgroundFetch.BackgroundFetchResult.NewData 
-      : BackgroundFetch.BackgroundFetchResult.NoData;
+      ? (BackgroundFetch ? BackgroundFetch.BackgroundFetchResult.NewData : 2)
+      : (BackgroundFetch ? BackgroundFetch.BackgroundFetchResult.NoData : 1);
 
   } catch (criticalError) {
     console.error("❌ [Background] Error Crítico General:", criticalError);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
+    return BackgroundFetch ? BackgroundFetch.BackgroundFetchResult.Failed : 3;
   }
 });
 
@@ -158,6 +155,10 @@ TaskManager.defineTask(TASK_NAME, async () => {
 export const BackgroundTasks = {
   register: async () => {
     try {
+      if (!BackgroundFetch) {
+        console.warn("⚠️ Background Fetch no disponible.");
+        return;
+      }
       const status = await BackgroundFetch.getStatusAsync();
       if (status === BackgroundFetch.BackgroundFetchStatus.Restricted || status === BackgroundFetch.BackgroundFetchStatus.Denied) {
         console.warn("⚠️ Background Fetch restringido por el SO.");
@@ -183,7 +184,9 @@ export const BackgroundTasks = {
   unregister: async () => {
     try {
       const isRegistered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
-      if (isRegistered) await BackgroundFetch.unregisterTaskAsync(TASK_NAME);
+      if (isRegistered && BackgroundFetch) {
+        await BackgroundFetch.unregisterTaskAsync(TASK_NAME);
+      }
       console.log("🛑 Servicios de fondo detenidos.");
     } catch (e) {
       console.error("Error al desregistrar tarea:", e);
