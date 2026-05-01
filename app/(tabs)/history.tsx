@@ -15,7 +15,9 @@ import { formatTime, formatDate } from '../../src/utils/dateUtils';
 export default function HistoryScreen() {
   const { t } = useLanguage();
   const { showToast, showDialog } = useLuxuryUI();
+
   const [sessions, setSessions] = useState<WorkSession[]>([]);
+  const [rate, setRate] = useState(0);
   const [totalHours, setTotalHours] = useState(0);
   const [estEarnings, setEstEarnings] = useState(0);
 
@@ -29,6 +31,7 @@ export default function HistoryScreen() {
 
   const loadHistory = async () => {
     const db = getDB();
+
     const [settings, res] = await Promise.all([
       getSettings(),
       db.getAllAsync<WorkSession>(
@@ -36,23 +39,22 @@ export default function HistoryScreen() {
       )
     ]);
 
-  const rate = settings?.hourly_rate || 0;
-
-    // Usar los resultados del Promise.all
+    const hourlyRate = settings?.hourly_rate || 0;
+    setRate(hourlyRate);
     setSessions(res);
 
-    // Cálculo optimizado de horas semanales usando función centralizada
+    // Calcular semana actual (lunes 00:00)
     const now = new Date();
     const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(now.setDate(diff));
-    monday.setHours(0,0,0,0);
+    monday.setHours(0, 0, 0, 0);
 
     const tMs = await getWeeklyStats(monday.getTime(), Date.now());
     const tHours = tMs / (1000 * 60 * 60);
 
     setTotalHours(tHours);
-    setEstEarnings(tHours * rate);
+    setEstEarnings(tHours * hourlyRate);
   };
 
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
@@ -84,10 +86,14 @@ export default function HistoryScreen() {
     setEditNote(item.manual_note || '');
     const dIn = new Date(item.start_time);
     setEditTimeIn(`${pad(dIn.getHours())}:${pad(dIn.getMinutes())}`);
+
     if (item.end_time) {
       const dOut = new Date(item.end_time);
       setEditTimeOut(`${pad(dOut.getHours())}:${pad(dOut.getMinutes())}`);
-    } else { setEditTimeOut(''); }
+    } else {
+      setEditTimeOut('');
+    }
+
     setEditModalVisible(true);
   };
 
@@ -95,12 +101,12 @@ export default function HistoryScreen() {
     if (!selectedSession || !selectedSession.id) return;
     if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
 
-    const baseDate = new Date(selectedSession.start_time); 
+    const baseDate = new Date(selectedSession.start_time);
     const hIn = Number(editTimeIn.substring(0, 2));
     const mIn = Number(editTimeIn.substring(3, 5));
     const newStart = new Date(baseDate);
     newStart.setHours(hIn || 0, mIn || 0);
-    
+
     let newEnd = null;
     if (editTimeOut && editTimeOut.length === 5) {
       const hOut = Number(editTimeOut.substring(0, 2));
@@ -110,27 +116,33 @@ export default function HistoryScreen() {
     }
 
     const hasOverlap = await checkSessionOverlap(
-        newStart.getTime(), 
-        newEnd ? newEnd.getTime() : 0, 
-        selectedSession.id
+      newStart.getTime(),
+      newEnd ? newEnd.getTime() : 0,
+      selectedSession.id
     );
 
     if (hasOverlap) {
-        showToast("Error: Horario choca con otra sesión", "error");
-        return;
+      showToast("Error: Horario choca con otra sesión", "error");
+      return;
     }
-    
-    await updateWorkSessionManual(selectedSession.id, newStart.getTime(), newEnd ? newEnd.getTime() : null, editNote);
+
+    await updateWorkSessionManual(
+      selectedSession.id,
+      newStart.getTime(),
+      newEnd ? newEnd.getTime() : null,
+      editNote
+    );
+
     setEditModalVisible(false);
     showToast("Cambios guardados", "success");
     loadHistory();
   };
 
-  const pad = (n: number) => n < 10 ? '0'+n : n;
+  const pad = (n: number) => n < 10 ? '0' + n : n;
 
   const renderItem = ({ item }: { item: WorkSession }) => (
-    <TouchableOpacity 
-      style={styles.card} 
+    <TouchableOpacity
+      style={styles.card}
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
       activeOpacity={0.7}
@@ -139,15 +151,19 @@ export default function HistoryScreen() {
         <View style={styles.row}>
           <Text style={styles.date}>{formatDate(item.start_time)}</Text>
           <View style={styles.statusBadge}>
-            {item.is_manual_edit === 1 && <Ionicons name="pencil" size={12} color={COLORS.gold} style={{marginRight: 6}} />}
-            <View style={[styles.dot, { backgroundColor: item.status==='active' ? COLORS.success : '#666' }]} />
+            {item.is_manual_edit === 1 && (
+              <Ionicons name="pencil" size={12} color={COLORS.gold} style={{ marginRight: 6 }} />
+            )}
+            <View style={[styles.dot, { backgroundColor: item.status === 'active' ? COLORS.success : '#666' }]} />
           </View>
         </View>
+
         <Text style={styles.address}>{item.address}</Text>
+
         <View style={styles.timeContainer}>
-           <Text style={styles.time}>{formatTime(item.start_time)}</Text>
-           <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
-           <Text style={styles.time}>{item.end_time ? formatTime(item.end_time) : '...'}</Text>
+          <Text style={styles.time}>{formatTime(item.start_time)}</Text>
+          <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
+          <Text style={styles.time}>{item.end_time ? formatTime(item.end_time) : '...'}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -159,9 +175,11 @@ export default function HistoryScreen() {
         <View>
           <Text style={styles.header}>{t.history_title}</Text>
           <Text style={styles.subHeader}>
-            ESTA SEMANA: <Text style={{color: '#FFF'}}>{totalHours.toFixed(1)}h</Text> • <Text style={{color: COLORS.gold}}>${estEarnings.toFixed(0)}</Text>
+            ESTA SEMANA: <Text style={{ color: '#FFF' }}>{totalHours.toFixed(1)}h</Text> •{' '}
+            <Text style={{ color: COLORS.gold }}>${estEarnings.toFixed(0)}</Text>
           </Text>
         </View>
+
         <TouchableOpacity style={styles.pdfBtn} onPress={() => generateWeeklyReport(true)}>
           <Ionicons name="document-text" size={16} color="#000" />
           <Text style={styles.pdfText}>PDF</Text>
@@ -178,55 +196,62 @@ export default function HistoryScreen() {
       />
 
       <GlassModalWrapper visible={editModalVisible}>
-         <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
-            <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-         </View>
-         
-         <View style={styles.inputGroup}>
-            <Text style={styles.label}>ENTRADA (HH:MM)</Text>
-            <TextInput 
-              style={styles.input} 
-              value={editTimeIn} 
-              onChangeText={(t) => formatTimeInput(t, setEditTimeIn)} 
-              keyboardType="number-pad"
-              maxLength={5}
-              placeholder="00:00"
-              placeholderTextColor="#333"
-            />
-         </View>
-         <View style={styles.inputGroup}>
-            <Text style={styles.label}>SALIDA (HH:MM)</Text>
-            <TextInput 
-              style={styles.input} 
-              value={editTimeOut} 
-              onChangeText={(t) => formatTimeInput(t, setEditTimeOut)} 
-              placeholder="En progreso..." 
-              placeholderTextColor="#333" 
-              keyboardType="number-pad"
-              maxLength={5}
-            />
-         </View>
-         <View style={styles.inputGroup}>
-            <Text style={styles.label}>NOTA AUDITORÍA</Text>
-            <TextInput style={styles.input} value={editNote} onChangeText={setEditNote} placeholder="Razón del cambio..." placeholderTextColor="#333"/>
-         </View>
-         
-         <View style={{ gap: 4, marginTop: 10 }}>
-            <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
-            <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
-         </View>
-      </GlassModalWrapper>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
+          <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
+            <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>ENTRADA (HH:MM)</Text>
+          <TextInput
+            style={styles.input}
+            value={editTimeIn}
+            onChangeText={(t) => formatTimeInput(t, setEditTimeIn)}
+            keyboardType="number-pad"
+            maxLength={5}
+            placeholder="00:00"
+            placeholderTextColor="#333"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>SALIDA (HH:MM)</Text>
+          <TextInput
+            style={styles.input}
+            value={editTimeOut}
+            onChangeText={(t) => formatTimeInput(t, setEditTimeOut)}
+            placeholder="En progreso..."
+            placeholderTextColor="#333"
+            keyboardType="number-pad"
+            maxLength={5}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>NOTA AUDITORÍA</Text>
+          <TextInput
+            style={styles.input}
+            value={editNote}
+            onChangeText={setEditNote}
+            placeholder="Razón del cambio..."
+            placeholderTextColor="#333"
+          />
+        </View>
+
+        <View style={{ gap: 4, marginTop: 10 }}>
+          <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
+          <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
+        </View>
+      </GlassModalWrapper>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  headerRow: { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-end', padding: 24, paddingBottom: 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', padding: 24, paddingBottom: 10 },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
   subHeader: { fontFamily: 'Montserrat_700Bold', fontSize: 11, color: COLORS.textSecondary, letterSpacing: 1, marginTop: 6 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, shadowColor: COLORS.gold, shadowOpacity: 0.4, shadowRadius: 8 },
