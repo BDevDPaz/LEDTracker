@@ -105,8 +105,7 @@ export const LocationService = {
    */
   startMonitoringArrival: async (lat: number, lng: number, radius: number = 200) => {
     try {
-      // ✅ FIX: Verificamos si existe antes de intentar detenerla
-      // Esto evita el error "TaskNotFoundException"
+      // Verificamos si la tarea está registrada para evitar TaskNotFoundException
       const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
       
       if (isRegistered) {
@@ -114,8 +113,8 @@ export const LocationService = {
            await Location.stopGeofencingAsync(GEOFENCE_TASK);
            console.log("🧹 Monitoreo previo limpiado.");
         } catch (cleanError) {
-           // Si falla al limpiar, lo ignoramos, no es crítico.
-           console.log("Aviso: No se pudo limpiar geocerca previa (normal si no existía).");
+           // Si falla al limpiar, lo ignoramos.
+           console.log("Aviso: No se pudo limpiar geocerca previa.");
         }
       }
       
@@ -143,15 +142,20 @@ export const LocationService = {
    */
   stopMonitoring: async () => {
     try {
-      // ✅ Aquí ya tenías la verificación correcta
       const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
+
       if (isRegistered) {
-        await Location.stopGeofencingAsync(GEOFENCE_TASK);
+        try {
+          await Location.stopGeofencingAsync(GEOFENCE_TASK);
+        } catch (stopError) {
+          console.error("Error deteniendo geofencing:", stopError);
+        }
       }
-      await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY); // Limpieza
+
+      await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY); // Limpieza de estado
       console.log("🛑 Monitoreo detenido.");
     } catch (e) {
-      console.error("Error deteniendo monitoreo:", e);
+      console.error("Error general deteniendo monitoreo:", e);
     }
   }
 };
