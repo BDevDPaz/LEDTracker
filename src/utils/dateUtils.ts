@@ -13,19 +13,20 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   day: 'numeric'
 };
 
-const timeFormatter = new Intl.DateTimeFormat([], TIME_OPTIONS);
-const dateFormatter = new Intl.DateTimeFormat([], DATE_OPTIONS);
+// Pre-crear los formateadores para mejorar el rendimiento (caching)
+const TIME_FORMATTER = new Intl.DateTimeFormat([], TIME_OPTIONS);
+const DATE_FORMATTER = new Intl.DateTimeFormat([], DATE_OPTIONS);
 
 // Helper para mostrar hora
 export const formatTime = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '--:--';
-  return timeFormatter.format(timestamp);
+  return TIME_FORMATTER.format(timestamp);
 };
 
 // Helper para mostrar fecha
 export const formatDate = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '---';
-  return dateFormatter.format(timestamp);
+  return DATE_FORMATTER.format(timestamp);
 };
 
 // Helper para formatear duración (ms -> HH:mm)
