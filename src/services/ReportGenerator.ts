@@ -5,12 +5,15 @@ import { getDB, getSettings, getAllAsync } from '../database/db';
 import { WorkSession, AppSettings, AuditLog } from '../types';
 
 // Helper para fechas y monedas
+const dateFormatter = new Intl.DateTimeFormat('es-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const timeFormatter = new Intl.DateTimeFormat('es-US', { hour: '2-digit', minute: '2-digit' });
+
 const formatDate = (timestamp: number) => {
-  return new Date(timestamp).toLocaleDateString('es-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return dateFormatter.format(timestamp);
 };
 
 const formatTime = (timestamp: number) => {
-  return new Date(timestamp).toLocaleTimeString('es-US', { hour: '2-digit', minute: '2-digit' });
+  return timeFormatter.format(timestamp);
 };
 
 const formatCurrency = (amount: number) => {
