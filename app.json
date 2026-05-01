@@ -7,15 +7,12 @@
     "icon": "./assets/images/icon.png",
     "scheme": "ledtracker",
     "userInterfaceStyle": "dark",
-
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
-
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.bdevdpaz.ledtracker",
@@ -26,7 +23,6 @@
         ]
       }
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -46,12 +42,10 @@
         "POST_NOTIFICATIONS"
       ]
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-
     "plugins": [
       "expo-router",
       "expo-sqlite",
@@ -65,24 +59,22 @@
         }
       ],
       "expo-task-manager",
-      "expo-background-fetch",
+
       "expo-notifications",
       "expo-mail-composer",
-      "expo-font"
+      "expo-font",
+      "expo-background-task"
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-
     "extra": {
       "router": {},
       "eas": {
         "projectId": "806cc651-5078-4d0f-bea4-c96e24ee7f6a"
       }
     },
-
     "owner": "bdevdpaz"
   }
 }

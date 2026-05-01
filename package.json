@@ -21,6 +21,7 @@
     "async-storage": "^0.1.0",
     "expo": "~54.0.32",
     "expo-background-fetch": "~14.0.9",
+    "expo-background-task": "^55.0.17",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.20",
