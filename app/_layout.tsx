@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // 1. Imports de Servicios
 import '../src/services/LocationManager'; 
@@ -79,15 +80,17 @@ export default function RootLayout() {
   if (!appIsReady) return null;
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <LanguageProvider>
-        <LuxuryUIProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </LuxuryUIProvider>
-      </LanguageProvider>
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <LanguageProvider>
+          <LuxuryUIProvider>
+            <StatusBar style="light" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </LuxuryUIProvider>
+        </LanguageProvider>
+      </View>
+    </SafeAreaProvider>
   );
 }
