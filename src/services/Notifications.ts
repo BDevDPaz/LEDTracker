@@ -93,4 +93,5 @@ export async function scheduleDailyReminder(timeString: string) {
 // Función auxiliar para cancelar todo (Logout, etc.)
 export async function cancelNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
+  await Notifications.dismissAllNotificationsAsync();
 }
