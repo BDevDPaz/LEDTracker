@@ -59,7 +59,6 @@
         }
       ],
       "expo-task-manager",
-      "expo-background-fetch",
       "expo-notifications",
       "expo-mail-composer",
       "expo-font",
