@@ -50,7 +50,7 @@ export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
   const openWeeklyReport = useCallback(() => setIsWeeklyReportVisible(true), []);
   const closeWeeklyReport = useCallback(() => setIsWeeklyReportVisible(false), []);
 
-  // --- LÓGICA DIALOG (FIX) ---
+  // --- LÓGICA DIALOG ---
   const showDialog = useCallback((options: DialogOptions) => {
     setDialog(options);
   }, []);
