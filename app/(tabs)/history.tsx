@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 // ✅ FIX 4: Import correcto de SafeAreaView
 import { SafeAreaView } from 'react-native-safe-area-context'; 
@@ -18,8 +18,7 @@ export default function HistoryScreen() {
   // ✅ Ahora 'showDialog' funcionará perfectamente gracias al fix en Context
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
-  const [totalHours, setTotalHours] = useState(0);
-  const [estEarnings, setEstEarnings] = useState(0);
+  const [rate, setRate] = useState(0);
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSession, setSelectedSession] = useState<WorkSession | null>(null);
@@ -32,16 +31,15 @@ export default function HistoryScreen() {
   const loadHistory = async () => {
     const db = getDB();
     const settings = await getSettings();
-    const rate = settings?.hourly_rate || 0;
+    setRate(settings?.hourly_rate || 0);
 
     const res = await db.getAllAsync<WorkSession>(
       "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
     );
     setSessions(res);
-    calculateWeeklyTotals(res, rate);
   };
 
-  const calculateWeeklyTotals = (allSessions: WorkSession[], rate: number) => {
+  const { totalHours, estEarnings } = useMemo(() => {
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -49,7 +47,7 @@ export default function HistoryScreen() {
     monday.setHours(0,0,0,0);
 
     let tMs = 0;
-    allSessions.forEach(s => {
+    sessions.forEach(s => {
       if (s.start_time >= monday.getTime()) {
         const end = s.end_time || Date.now();
         let dur = end - s.start_time;
@@ -59,9 +57,11 @@ export default function HistoryScreen() {
     });
 
     const tHours = tMs / (1000 * 60 * 60);
-    setTotalHours(tHours);
-    setEstEarnings(tHours * rate);
-  }
+    return {
+      totalHours: tHours,
+      estEarnings: tHours * rate
+    };
+  }, [sessions, rate]);
 
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
     const cleaned = text.replace(/[^0-9]/g, '');
