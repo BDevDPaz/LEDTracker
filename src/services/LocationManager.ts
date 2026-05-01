@@ -33,27 +33,23 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
       if (session.status === 'pending_arrival' || session.status === 'travel') {
         const now = Date.now();
         
-        // Actualizamos a ACTIVA
-        await db.runAsync(
-          "UPDATE work_sessions SET status = 'active', actual_start_time = ? WHERE id = ?",
-          [now, session.id]
-        );
-
-        // Log de Auditoría
-        await insertAuditLog(session.id!, 'GEOFENCE_ENTRY', `Llegada al sitio: ${session.address}. Cambio a ACTIVE.`);
-
-        // Limpiamos timestamp de salida si existía
-        await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
-
-        // Notificación de confirmación
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "📍 Llegaste al sitio",
-            body: "Check-in automático realizado. ¡Buen trabajo!",
-            sound: true,
-          },
-          trigger: null,
-        });
+        // Optimizamos ejecutando actualizaciones de DB, logs y notificaciones en paralelo
+        await Promise.all([
+          db.runAsync(
+            "UPDATE work_sessions SET status = 'active', actual_start_time = ? WHERE id = ?",
+            [now, session.id]
+          ),
+          insertAuditLog(session.id!, 'GEOFENCE_ENTRY', `Llegada al sitio: ${session.address}. Cambio a ACTIVE.`),
+          AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "📍 Llegaste al sitio",
+              body: "Check-in automático realizado. ¡Buen trabajo!",
+              sound: true,
+            },
+            trigger: null,
+          })
+        ]);
       }
     } 
     
@@ -64,24 +60,22 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
       if (session.status === 'active') {
         const now = Date.now();
 
-        // 1. Guardamos la hora exacta de salida para el "Failsafe" (BackgroundTasks)
-        await AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString());
-
-        // 2. Log de Auditoría
-        await insertAuditLog(session.id!, 'GEOFENCE_EXIT', `Salida del radio de trabajo detectada.`);
-
-        // 3. Notificación de Decisión (Fase 3)
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "⚠️ Saliste del área de trabajo",
-            body: "¿Terminaste tu jornada o vas a otro sitio?",
-            data: { action: 'CHECKOUT_DECISION' }, // Esto lo escucha el _layout
-            sound: true,
-            priority: Notifications.AndroidNotificationPriority.MAX,
-            vibrate: [0, 500, 200, 500],
-          },
-          trigger: null,
-        });
+        // Optimizamos ejecutando almacenamiento, logs y notificaciones en paralelo
+        await Promise.all([
+          AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString()),
+          insertAuditLog(session.id!, 'GEOFENCE_EXIT', `Salida del radio de trabajo detectada.`),
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "⚠️ Saliste del área de trabajo",
+              body: "¿Terminaste tu jornada o vas a otro sitio?",
+              data: { action: 'CHECKOUT_DECISION' }, // Esto lo escucha el _layout
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX,
+              vibrate: [0, 500, 200, 500],
+            },
+            trigger: null,
+          })
+        ]);
       }
     }
   } catch (err) {
@@ -105,21 +99,8 @@ export const LocationService = {
    */
   startMonitoringArrival: async (lat: number, lng: number, radius: number = 200) => {
     try {
-      // ✅ FIX: Verificamos si existe antes de intentar detenerla
-      // Esto evita el error "TaskNotFoundException"
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
-      
-      if (isRegistered) {
-        try {
-           await Location.stopGeofencingAsync(GEOFENCE_TASK);
-           console.log("🧹 Monitoreo previo limpiado.");
-        } catch (cleanError) {
-           // Si falla al limpiar, lo ignoramos, no es crítico.
-           console.log("Aviso: No se pudo limpiar geocerca previa (normal si no existía).");
-        }
-      }
-      
-      // Iniciamos la nueva geocerca
+      // Iniciamos la nueva geocerca directamente.
+      // Expo Location reemplaza automáticamente cualquier tarea de geocerca existente con el mismo nombre.
       await Location.startGeofencingAsync(GEOFENCE_TASK, [
         {
           identifier: 'WORK_ZONE',
@@ -143,12 +124,19 @@ export const LocationService = {
    */
   stopMonitoring: async () => {
     try {
-      // ✅ Aquí ya tenías la verificación correcta
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
-      if (isRegistered) {
-        await Location.stopGeofencingAsync(GEOFENCE_TASK);
-      }
-      await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY); // Limpieza
+      // Ejecutamos la detención de geocerca y limpieza de almacenamiento en paralelo.
+      // Usamos un bloque try/catch interno para stopGeofencingAsync para ignorar errores
+      // si la tarea no está registrada, evitando la necesidad de un check previo.
+      await Promise.all([
+        (async () => {
+          try {
+            await Location.stopGeofencingAsync(GEOFENCE_TASK);
+          } catch (e) {
+            // Ignoramos error si la tarea no existía
+          }
+        })(),
+        AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY)
+      ]);
       console.log("🛑 Monitoreo detenido.");
     } catch (e) {
       console.error("Error deteniendo monitoreo:", e);
