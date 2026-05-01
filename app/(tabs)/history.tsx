@@ -34,34 +34,33 @@ export default function HistoryScreen() {
     const settings = await getSettings();
     const rate = settings?.hourly_rate || 0;
 
+    // Fetch up to 50 sessions for the UI
     const res = await db.getAllAsync<WorkSession>(
       "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
     );
     setSessions(res);
-    calculateWeeklyTotals(res, rate);
-  };
 
-  const calculateWeeklyTotals = (allSessions: WorkSession[], rate: number) => {
+    // ✅ PERFORMANCE OPTIMIZATION: Calculate weekly totals in SQLite instead of JS iteration
+    // This avoids transferring 50+ large objects over the bridge and ensures accuracy
+    // even if there are more than 50 sessions in the current week.
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(now.setDate(diff));
     monday.setHours(0,0,0,0);
+    const mondayMs = monday.getTime();
 
-    let tMs = 0;
-    allSessions.forEach(s => {
-      if (s.start_time >= monday.getTime()) {
-        const end = s.end_time || Date.now();
-        let dur = end - s.start_time;
-        if (s.lunch_taken) dur -= 3600000;
-        tMs += Math.max(0, dur);
-      }
-    });
+    const totals = await db.getFirstAsync<{ total_ms: number }>(
+      `SELECT SUM(MAX(0, COALESCE(end_time, ?) - start_time - (CASE WHEN lunch_taken = 1 THEN 3600000 ELSE 0 END))) as total_ms
+       FROM work_sessions
+       WHERE status != 'deleted' AND start_time >= ?`,
+      [Date.now(), mondayMs]
+    );
 
-    const tHours = tMs / (1000 * 60 * 60);
+    const tHours = (totals?.total_ms || 0) / (1000 * 60 * 60);
     setTotalHours(tHours);
     setEstEarnings(tHours * rate);
-  }
+  };
 
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
     const cleaned = text.replace(/[^0-9]/g, '');
