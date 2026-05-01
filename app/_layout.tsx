@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Slot, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -85,9 +85,7 @@ export default function RootLayout() {
         <LanguageProvider>
           <LuxuryUIProvider>
             <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-            </Stack>
+            <Slot />
           </LuxuryUIProvider>
         </LanguageProvider>
       </View>
