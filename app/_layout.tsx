@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -80,14 +81,16 @@ export default function RootLayout() {
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <LanguageProvider>
-        <LuxuryUIProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </LuxuryUIProvider>
-      </LanguageProvider>
+      <SafeAreaProvider>
+        <LanguageProvider>
+          <LuxuryUIProvider>
+            <StatusBar style="light" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </LuxuryUIProvider>
+        </LanguageProvider>
+      </SafeAreaProvider>
     </View>
   );
 }
