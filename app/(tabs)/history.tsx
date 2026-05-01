@@ -1,11 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-// ✅ FIX 4: Import correcto de SafeAreaView
-import { SafeAreaView } from 'react-native-safe-area-context'; 
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../src/context/LanguageContext';
-import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap } from '../../src/database/db';
+import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap, getWeeklyStats } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 import { COLORS } from '../../src/constants/theme';
@@ -15,7 +14,6 @@ import { formatTime, formatDate } from '../../src/utils/dateUtils';
 
 export default function HistoryScreen() {
   const { t } = useLanguage();
-  // ✅ Ahora 'showDialog' funcionará perfectamente gracias al fix en Context
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
@@ -31,37 +29,29 @@ export default function HistoryScreen() {
 
   const loadHistory = async () => {
     const db = getDB();
-    const settings = await getSettings();
+    const [settings, res] = await Promise.all([
+      getSettings(),
+      db.getAllAsync<WorkSession>(
+        "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
+      )
+    ]);
+
     const rate = settings?.hourly_rate || 0;
-
-    const res = await db.getAllAsync<WorkSession>(
-      "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
-    );
     setSessions(res);
-    calculateWeeklyTotals(res, rate);
-  };
 
-  const calculateWeeklyTotals = (allSessions: WorkSession[], rate: number) => {
+    // ✅ OPTIMIZACIÓN: Cálculo de totales en base de datos (SQL SUM)
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(now.setDate(diff));
     monday.setHours(0,0,0,0);
 
-    let tMs = 0;
-    allSessions.forEach(s => {
-      if (s.start_time >= monday.getTime()) {
-        const end = s.end_time || Date.now();
-        let dur = end - s.start_time;
-        if (s.lunch_taken) dur -= 3600000;
-        tMs += Math.max(0, dur);
-      }
-    });
-
+    const tMs = await getWeeklyStats(monday.getTime(), Date.now());
     const tHours = tMs / (1000 * 60 * 60);
+
     setTotalHours(tHours);
     setEstEarnings(tHours * rate);
-  }
+  };
 
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
     const cleaned = text.replace(/[^0-9]/g, '');
@@ -104,13 +94,15 @@ export default function HistoryScreen() {
     if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
 
     const baseDate = new Date(selectedSession.start_time); 
-    const [hIn, mIn] = editTimeIn.split(':').map(Number);
+    const hIn = Number(editTimeIn.substring(0, 2));
+    const mIn = Number(editTimeIn.substring(3, 5));
     const newStart = new Date(baseDate);
     newStart.setHours(hIn || 0, mIn || 0);
     
     let newEnd = null;
     if (editTimeOut && editTimeOut.length === 5) {
-      const [hOut, mOut] = editTimeOut.split(':').map(Number);
+      const hOut = Number(editTimeOut.substring(0, 2));
+      const mOut = Number(editTimeOut.substring(3, 5));
       newEnd = new Date(baseDate);
       newEnd.setHours(hOut || 0, mOut || 0);
     }

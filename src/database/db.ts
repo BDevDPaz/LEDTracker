@@ -65,15 +65,11 @@ export const initDatabase = async () => {
 
   // ✅ FIX 3: Insertar Configuración por Defecto (Auto-Healing)
   // Si es la primera vez que se corre la app, crea un registro para evitar crash.
-  const existingSettings = await db.getFirstAsync("SELECT * FROM settings WHERE id = 1");
-  
-  if (!existingSettings) {
-    console.log("⚙️ Base de datos nueva: Creando configuración por defecto...");
-    await db.runAsync(
-      `INSERT INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
-       VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
-    );
-  }
+  console.log("⚙️ Verificando/Creando configuración por defecto...");
+  await db.runAsync(
+    `INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, tolerance_radius, hourly_rate, language, start_time, overtime_multiplier)
+     VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
+  );
 
   console.log("✅ DB Inicializada (V2.1 - Settings Verificado)");
 };
@@ -155,6 +151,14 @@ export const checkSessionOverlap = async (start: number, end: number, excludeId:
 
 export const insertAuditLog = async (sessionId: number, action: string, details: string) => {
   await db.runAsync("INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES (?, ?, ?, ?)", [sessionId, action, details, Date.now()]);
+};
+
+export const getWeeklyStats = async (mondayTs: number, nowTs: number): Promise<number> => {
+  const result = await db.getFirstAsync<{ total_ms: number }>(
+    "SELECT SUM(MAX(0, COALESCE(end_time, ?) - start_time - (CASE WHEN lunch_taken = 1 THEN 3600000 ELSE 0 END))) as total_ms FROM work_sessions WHERE status != 'deleted' AND start_time >= ?",
+    [nowTs, mondayTs]
+  );
+  return result?.total_ms || 0;
 };
 
 export const getAllAsync = async <T>(query: string, params: any[] = []): Promise<T[]> => { return await db.getAllAsync(query, params); };

@@ -5,10 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDB, initDatabase, insertAuditLog, updateSessionEndTime } from '../database/db'; // ✅ Importamos initDatabase
 import { WorkSession } from '../types';
 import { generateWeeklyReport } from './ReportGenerator';
-import { LocationService } from './LocationManager'; 
+import { LocationService, EXIT_TIMESTAMP_KEY } from './LocationManager';
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
-const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 const FAILSAFE_THRESHOLD = 15 * 60 * 1000; // 15 Minutos
 
@@ -63,7 +62,6 @@ TaskManager.defineTask(TASK_NAME, async () => {
                 console.log(`⚠️ [Failsafe] Ejecutando Auto-Checkout para sesión #${session.id}`);
 
                 await updateSessionEndTime(session.id, exitTime); // Usar hora real de salida
-                await db.runAsync("UPDATE work_sessions SET status = 'completed' WHERE id = ?", [session.id]);
                 
                 await insertAuditLog(
                   session.id, 
@@ -71,9 +69,8 @@ TaskManager.defineTask(TASK_NAME, async () => {
                   `Cierre automático por inactividad (>15min).`
                 );
 
-                await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
-                
                 // Intentamos detener monitoreo (Try/Catch interno por si LocationService falla)
+                // ✅ LocationService.stopMonitoring() ahora también limpia el EXIT_TIMESTAMP_KEY
                 try { await LocationService.stopMonitoring(); } catch (e) { console.warn("Error parando GPS:", e); }
 
                 await Notifications.scheduleNotificationAsync({
