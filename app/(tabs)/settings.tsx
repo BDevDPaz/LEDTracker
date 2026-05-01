@@ -143,7 +143,14 @@ export default function SettingsScreen() {
                     onChangeText={setPassInput} 
                     autoFocus
                   />
-                  <TouchableOpacity onPress={unlockAdmin} style={styles.okBtn}><Ionicons name="arrow-forward" color="#000" size={20} /></TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={unlockAdmin}
+                    style={styles.okBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Desbloquear zona administrativa"
+                  >
+                    <Ionicons name="arrow-forward" color="#000" size={20} />
+                  </TouchableOpacity>
                 </View>
               ) : <Text style={styles.lockedMsg}>{t.admin_locked_msg}</Text>
             ) : (
