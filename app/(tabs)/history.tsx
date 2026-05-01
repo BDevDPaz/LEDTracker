@@ -104,13 +104,15 @@ export default function HistoryScreen() {
     if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
 
     const baseDate = new Date(selectedSession.start_time); 
-    const [hIn, mIn] = editTimeIn.split(':').map(Number);
+    const hIn = Number(editTimeIn.substring(0, 2));
+    const mIn = Number(editTimeIn.substring(3, 5));
     const newStart = new Date(baseDate);
     newStart.setHours(hIn || 0, mIn || 0);
     
     let newEnd = null;
     if (editTimeOut && editTimeOut.length === 5) {
-      const [hOut, mOut] = editTimeOut.split(':').map(Number);
+      const hOut = Number(editTimeOut.substring(0, 2));
+      const mOut = Number(editTimeOut.substring(3, 5));
       newEnd = new Date(baseDate);
       newEnd.setHours(hOut || 0, mOut || 0);
     }
