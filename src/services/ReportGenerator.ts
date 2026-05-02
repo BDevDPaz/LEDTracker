@@ -2,6 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as MailComposer from 'expo-mail-composer';
 import { getDB, getSettings, getAllAsync } from '../database/db';
+import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
 
 // Helper para fechas y monedas
@@ -120,9 +121,9 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
 
       return {
         date: formatDate(startTime),
-        client: session.client_name || 'General', // ✅ Mostrar Cliente
-        address: session.address,
-        notes: session.manual_note || '',         // ✅ Mostrar Notas
+        client: escapeHtml(session.client_name || 'General'), // ✅ Mostrar Cliente
+        address: escapeHtml(session.address || ''),
+        notes: escapeHtml(session.manual_note || ''),         // ✅ Mostrar Notas
         start: formatTime(startTime),
         end: session.end_time ? formatTime(session.end_time) : 'En curso',
         lunch: session.lunch_taken ? 'Sí' : 'No',
@@ -183,13 +184,13 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
           <div class="info-grid">
             <div class="info-col">
               <div class="info-label">Empleado</div>
-              <div class="info-value">${settings.employee_name || 'No especificado'}</div>
+              <div class="info-value">${escapeHtml(settings.employee_name || 'No especificado')}</div>
               <div class="info-label">ID Sistema</div>
               <div class="info-value">EMP-#${settings.id.toString().padStart(4, '0')}</div>
             </div>
             <div class="info-col" style="text-align: right;">
               <div class="info-label">Empresa</div>
-              <div class="info-value">${settings.employer_name || 'LEON\'S ELECTRICAL DESIGN'}</div>
+              <div class="info-value">${escapeHtml(settings.employer_name || 'LEON\'S ELECTRICAL DESIGN')}</div>
               <div class="info-label">Rango del Reporte</div>
               <div class="info-value">${rangeTitle}</div>
             </div>
@@ -248,7 +249,7 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
             ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' : 
               logs.map(log => `
                 <div class="log-item ${log.action_type.includes('AUTO') || log.action_type.includes('EXIT') ? 'log-alert' : ''}">
-                  <strong>${formatTime(log.timestamp)}</strong> — <span style="font-weight:bold">[${log.action_type}]</span> ${log.details}
+                  <strong>${formatTime(log.timestamp)}</strong> — <span style="font-weight:bold">[${log.action_type}]</span> ${escapeHtml(log.details)}
                 </div>
               `).join('')
             }
