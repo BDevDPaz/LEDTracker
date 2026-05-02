@@ -29,23 +29,23 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
       if (session.status === 'pending_arrival' || session.status === 'travel') {
         const now = Date.now();
 
-        await db.runAsync(
-          "UPDATE work_sessions SET status = 'active', actual_start_time = ? WHERE id = ?",
-          [now, session.id]
-        );
-
-        await insertAuditLog(session.id!, 'GEOFENCE_ENTRY', `Llegada al sitio: ${session.address}. Cambio a ACTIVE.`);
-
-        await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
-
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "📍 Llegaste al sitio",
-            body: "Check-in automático realizado. ¡Buen trabajo!",
-            sound: true,
-          },
-          trigger: null,
-        });
+        // ✔️ Integración final: paralelismo seguro
+        await Promise.all([
+          db.runAsync(
+            "UPDATE work_sessions SET status = 'active', actual_start_time = ? WHERE id = ?",
+            [now, session.id]
+          ),
+          insertAuditLog(session.id!, 'GEOFENCE_ENTRY', `Llegada al sitio: ${session.address}. Cambio a ACTIVE.`),
+          AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "📍 Llegaste al sitio",
+              body: "Check-in automático realizado. ¡Buen trabajo!",
+              sound: true,
+            },
+            trigger: null,
+          })
+        ]);
       }
     }
 
@@ -56,21 +56,22 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
       if (session.status === 'active') {
         const now = Date.now();
 
-        await AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString());
-
-        await insertAuditLog(session.id!, 'GEOFENCE_EXIT', `Salida del radio de trabajo detectada.`);
-
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "⚠️ Saliste del área de trabajo",
-            body: "¿Terminaste tu jornada o vas a otro sitio?",
-            data: { action: 'CHECKOUT_DECISION' },
-            sound: true,
-            priority: Notifications.AndroidNotificationPriority.MAX,
-            vibrate: [0, 500, 200, 500],
-          },
-          trigger: null,
-        });
+        // ✔️ Integración final: paralelismo seguro
+        await Promise.all([
+          AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString()),
+          insertAuditLog(session.id!, 'GEOFENCE_EXIT', `Salida del radio de trabajo detectada.`),
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "⚠️ Saliste del área de trabajo",
+              body: "¿Terminaste tu jornada o vas a otro sitio?",
+              data: { action: 'CHECKOUT_DECISION' },
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX,
+              vibrate: [0, 500, 200, 500],
+            },
+            trigger: null,
+          })
+        ]);
       }
     }
   } catch (err) {
@@ -92,7 +93,7 @@ export const LocationService = {
    */
   startMonitoringArrival: async (lat: number, lng: number, radius: number = 200) => {
     try {
-      // Verificar si ya existe una tarea previa
+      // ✔️ Mantener limpieza previa (HEAD)
       const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
 
       if (isRegistered) {
@@ -104,6 +105,7 @@ export const LocationService = {
         }
       }
 
+      // ✔️ Iniciar geocerca (ambas ramas coinciden)
       await Location.startGeofencingAsync(GEOFENCE_TASK, [
         {
           identifier: 'WORK_ZONE',
@@ -128,6 +130,7 @@ export const LocationService = {
    */
   stopMonitoring: async () => {
     try {
+      // ✔️ Mantener versión HEAD (más completa)
       await Promise.all([
         Location.stopGeofencingAsync(GEOFENCE_TASK).catch(() => {}),
         Location.stopLocationUpdatesAsync(GEOFENCE_TASK).catch(() => {}),
