@@ -1,22 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// 1. Imports de Servicios
+// Servicios
 import '../src/services/LocationManager';
-// Importamos la CLASE, no solo el efecto secundario
 import { BackgroundTasks } from '../src/services/BackgroundTasks';
 
-// 2. Contextos
+// Contextos
 import { LanguageProvider } from '../src/context/LanguageContext';
 import { LuxuryUIProvider } from '../src/context/LuxuryUIContext';
 
-// 3. DB
+// DB
 import { initDatabase } from '../src/database/db';
 
 Notifications.setNotificationHandler({
@@ -39,8 +37,6 @@ export default function RootLayout() {
         console.log("⏳ Iniciando Base de Datos...");
         await initDatabase();
 
-        // 🛑 CORRECCIÓN CRÍTICA AQUÍ:
-        // Registramos explícitamente el servicio de fondo para que empiece a "tictaquear"
         console.log("⏰ Registrando Servicios de Fondo (Auto-Checkout)...");
         await BackgroundTasks.register();
 
@@ -55,7 +51,6 @@ export default function RootLayout() {
     prepare();
   }, []);
 
-  // ... (El resto del archivo sigue IGUAL, no cambies nada más abajo)
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response?.notification?.request?.content?.data || {};
@@ -80,17 +75,18 @@ export default function RootLayout() {
 
   if (!appIsReady) return null;
 
- return (
-  <SafeAreaProvider>
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <LanguageProvider>
-        <LuxuryUIProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </LuxuryUIProvider>
-      </LanguageProvider>
-    </View>
-  </SafeAreaProvider>
-);
+  return (
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <LanguageProvider>
+          <LuxuryUIProvider>
+            <StatusBar style="light" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </LuxuryUIProvider>
+        </LanguageProvider>
+      </View>
+    </SafeAreaProvider>
+  );
+}
