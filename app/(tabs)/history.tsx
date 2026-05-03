@@ -146,6 +146,9 @@ export default function HistoryScreen() {
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Sesión del ${formatDate(item.start_time)} en ${item.address}`}
+      accessibilityHint="Toca para editar, mantén presionado para eliminar"
     >
       <View style={styles.cardContent}>
         <View style={styles.row}>
@@ -180,7 +183,12 @@ export default function HistoryScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.pdfBtn} onPress={() => generateWeeklyReport(true)}>
+        <TouchableOpacity
+          style={styles.pdfBtn}
+          onPress={() => generateWeeklyReport(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Generar reporte PDF"
+        >
           <Ionicons name="document-text" size={16} color="#000" />
           <Text style={styles.pdfText}>PDF</Text>
         </TouchableOpacity>
@@ -198,7 +206,12 @@ export default function HistoryScreen() {
       <GlassModalWrapper visible={editModalVisible}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
-          <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
+          <TouchableOpacity
+            onPress={() => setEditModalVisible(false)}
+            style={styles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar modal de edición"
+          >
             <Ionicons name="close" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>

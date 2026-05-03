@@ -1,0 +1,3 @@
+## 2024-05-03 - Complex Interactive Elements & Icon-Only Buttons Accessibility
+**Learning:** In React Native, custom interactive elements (like `TouchableOpacity` acting as cards with long-press actions) and icon-only buttons require explicit `accessibilityRole="button"`, `accessibilityLabel`, and optionally `accessibilityHint` to ensure screen readers correctly interpret their function and provide actionable feedback to users.
+**Action:** Always ensure that any custom pressable element, especially those without explicit text content (like icon buttons) or complex structures (like session cards), has appropriate ARIA-equivalent props (`accessibilityRole`, `accessibilityLabel`, `accessibilityHint`).
