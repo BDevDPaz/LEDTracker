@@ -146,6 +146,9 @@ export default function HistoryScreen() {
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Sesión del ${formatDate(item.start_time)} en ${item.address}, inicio a las ${formatTime(item.start_time)}`}
+      accessibilityHint="Toca para editar la sesión, o mantén presionado para eliminarla"
     >
       <View style={styles.cardContent}>
         <View style={styles.row}>
