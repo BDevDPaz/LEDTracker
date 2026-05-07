@@ -314,7 +314,13 @@ export default function HomeScreen() {
           <View>
              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                 <Text style={styles.appTitle}>{t.header_title || "LED Tracker"}</Text>
-                <TouchableOpacity onPress={handleEasterEggTap} activeOpacity={0.8}>
+                <TouchableOpacity
+                   onPress={handleEasterEggTap}
+                   activeOpacity={0.8}
+                   accessibilityRole="button"
+                   accessibilityLabel="Animación secreta"
+                   accessibilityHint="Toca varias veces para una sorpresa"
+                >
                    <Animated.View style={animatedIconStyle}>
                       <Ionicons name="flash" size={18} color={COLORS.gold} />
                    </Animated.View>
@@ -410,7 +416,12 @@ export default function HomeScreen() {
                 <Text style={{color: '#FFF'}}>Alex León</Text>{"\n"}
                 CEO de LEON'S ELECTRICAL DESIGN
               </Text>
-              <TouchableOpacity onPress={() => setShowSpecialCard(false)} style={{marginTop: 30}}>
+              <TouchableOpacity
+                 onPress={() => setShowSpecialCard(false)}
+                 style={{marginTop: 30}}
+                 accessibilityRole="button"
+                 accessibilityLabel="Cerrar tarjeta especial"
+              >
                  <Text style={{color: COLORS.gold, fontSize: 12, fontFamily: 'Montserrat_700Bold'}}>CERRAR</Text>
               </TouchableOpacity>
            </View>
