@@ -21,7 +21,6 @@
     "async-storage": "^0.1.0",
     "escape-html": "^1.0.3",
     "expo": "~54.0.34",
-    "expo-background-fetch": "~14.0.9",
     "expo-background-task": "~1.0.10",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",

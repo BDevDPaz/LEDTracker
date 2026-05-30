@@ -1,15 +1,20 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { getSettings } from '../database/db'; // ✅ Necesario para leer la hora guardada
+import { getSettings } from '../database/db';
 
-// Configuración del manejador
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+const DEFAULT_CHANNEL_ID = 'default';
+const DEFAULT_START_TIME = '06:30';
+
+async function ensureAndroidDefaultChannel() {
+  if (Platform.OS !== 'android') return;
+
+  await Notifications.setNotificationChannelAsync(DEFAULT_CHANNEL_ID, {
+    name: DEFAULT_CHANNEL_ID,
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#FF231F7C',
+  });
+}
 
 // Solicitar permisos
 export async function setupNotifications() {
@@ -26,14 +31,7 @@ export async function setupNotifications() {
     return false;
   }
 
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
-  }
+  await ensureAndroidDefaultChannel();
   return true;
 }
 
@@ -46,19 +44,19 @@ export async function setupNotifications() {
 export async function scheduleDailyMorningNotification() {
   try {
     const settings = await getSettings();
-    // Si hay settings, usamos esa hora. Si no, un default.
-    const timeToSet = settings?.start_time || "06:30";
-    
+    const timeToSet = settings?.start_time || DEFAULT_START_TIME;
+
     await scheduleDailyReminder(timeToSet);
   } catch (error) {
-    console.error("❌ Error al obtener configuración para notificaciones:", error);
+    console.error('❌ Error al obtener configuración para notificaciones:', error);
   }
 }
 
 // ✅ FUNCIÓN 2: La lógica real que recibe la hora (string)
-// Aquí está la corrección del 'trigger' que hicimos antes.
 export async function scheduleDailyReminder(timeString: string) {
   try {
+    await ensureAndroidDefaultChannel();
+
     // 1. Limpiamos anteriores
     await Notifications.cancelAllScheduledNotificationsAsync();
 
@@ -67,26 +65,36 @@ export async function scheduleDailyReminder(timeString: string) {
     const hour = parseInt(hourStr, 10);
     const minute = parseInt(minuteStr, 10);
 
+    if (
+      Number.isNaN(hour) ||
+      Number.isNaN(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      throw new Error(`Hora inválida para notificación diaria: "${timeString}"`);
+    }
+
     // 3. Programamos con el TIPO EXPLÍCITO (Daily)
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "¡Buenos días! ☀️",
-        body: "Es hora de iniciar tu jornada en LEDTracker.",
+        title: '¡Buenos días! ☀️',
+        body: 'Es hora de iniciar tu jornada en LEDTracker.',
         sound: true,
-        data: { action: 'OPEN_DAILY_SETUP' }, // Para que abra el modal al tocarla
+        data: { action: 'OPEN_DAILY_SETUP' },
       },
       trigger: {
-        // 🔥 ESTA LÍNEA ES LA QUE EVITA EL ERROR 'INVALID TRIGGER'
-        type: Notifications.SchedulableTriggerInputTypes.DAILY, 
-        hour: hour,
-        minute: minute,
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour,
+        minute,
+        channelId: Platform.OS === 'android' ? DEFAULT_CHANNEL_ID : undefined,
       },
     });
 
     console.log(`✅ Notificación diaria reprogramada a las ${timeString}`);
-
   } catch (error) {
-    console.error("❌ Error crítico agendando notificación:", error);
+    console.error('❌ Error crítico agendando notificación:', error);
   }
 }
 
@@ -95,3 +103,4 @@ export async function cancelNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
   await Notifications.dismissAllNotificationsAsync();
 }
+

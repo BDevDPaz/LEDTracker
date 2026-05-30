@@ -19,13 +19,35 @@ import { initDatabase } from '../src/database/db';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
+
+function handleNotificationAction(
+  router: ReturnType<typeof useRouter>,
+  data: Record<string, unknown>
+) {
+  if (data.action === 'OPEN_DAILY_SETUP') {
+    router.push('/(tabs)');
+    setTimeout(() => router.setParams({ showSetup: 'true' }), 100);
+    return;
+  }
+
+  if (data.action === 'GENERATE_REPORT_PROMPT') {
+    router.push('/(tabs)/report');
+    return;
+  }
+
+  if (data.action === 'CHECKOUT_DECISION') {
+    router.push('/(tabs)');
+    setTimeout(() => router.setParams({ showCheckoutPrompt: 'true' }), 100);
+  }
+}
 
 export default function RootLayout() {
   const router = useRouter();
@@ -34,15 +56,15 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        console.log("⏳ Iniciando Base de Datos...");
+        console.log('⏳ Iniciando Base de Datos...');
         await initDatabase();
 
-        console.log("⏰ Registrando Servicios de Fondo (Auto-Checkout)...");
+        console.log('⏰ Registrando Servicios de Fondo (Auto-Checkout)...');
         await BackgroundTasks.register();
 
-        console.log("✅ Sistema Listo. Cargando UI...");
+        console.log('✅ Sistema Listo. Cargando UI...');
       } catch (e) {
-        console.warn("Error crítico inicializando la app:", e);
+        console.warn('⚠️ Error crítico inicializando la app:', e);
       } finally {
         setAppIsReady(true);
       }
@@ -52,25 +74,33 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response?.notification?.request?.content?.data || {};
+    const lastResponse = Notifications.getLastNotificationResponse();
 
-      if (data.action === 'OPEN_DAILY_SETUP') {
-        router.push('/(tabs)');
-        setTimeout(() => router.setParams({ showSetup: 'true' }), 100);
-      } else if (data.action === 'GENERATE_REPORT_PROMPT') {
-        router.push('/(tabs)/report');
-      } else if (data.action === 'CHECKOUT_DECISION') {
-        router.push('/(tabs)');
-        setTimeout(() => router.setParams({ showCheckoutPrompt: 'true' }), 100);
-      }
-    });
+    if (lastResponse?.notification?.request?.content?.data) {
+      handleNotificationAction(
+        router,
+        lastResponse.notification.request.content.data as Record<string, unknown>
+      );
+    }
+
+    const subscription =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data =
+          (response?.notification?.request?.content?.data as Record<
+            string,
+            unknown
+          >) || {};
+
+        handleNotificationAction(router, data);
+      });
 
     return () => subscription.remove();
-  }, []);
+  }, [router]);
 
   const onLayoutRootView = useCallback(async () => {
-    if (appIsReady) await SplashScreen.hideAsync();
+    if (appIsReady) {
+      await SplashScreen.hideAsync();
+    }
   }, [appIsReady]);
 
   if (!appIsReady) return null;
@@ -90,3 +120,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
