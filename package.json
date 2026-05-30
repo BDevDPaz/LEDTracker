@@ -19,6 +19,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "async-storage": "^0.1.0",
+    "babel-preset-expo": "~54.0.10",
     "escape-html": "^1.0.3",
     "expo": "~54.0.34",
     "expo-background-task": "~1.0.10",
