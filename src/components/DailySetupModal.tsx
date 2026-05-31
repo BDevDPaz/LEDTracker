@@ -26,9 +26,9 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
       } else {
         log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Travel Mode (Trayecto) iniciado hacia: ${address}`);
       }
-      
+
       onStart(address, client, notes);
-      
+
       // Limpieza
       setAddress('');
       setClient('');

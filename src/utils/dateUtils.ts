@@ -1,37 +1,36 @@
-// src/utils/dateUtils.ts
+// --- src/utils/dateUtils.ts ---
+import dayjs from './dayjsSetup';
 
-const TIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: true
-};
-
-const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
-  weekday: 'short',
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric'
-};
-
-// Pre-crear los formateadores para mejorar el rendimiento (caching)
-const TIME_FORMATTER = new Intl.DateTimeFormat([], TIME_OPTIONS);
-const DATE_FORMATTER = new Intl.DateTimeFormat([], DATE_OPTIONS);
-
-// Helper para mostrar hora
+/**
+ * Formatea un timestamp a hora local corporativa (Ej: 08:30 AM)
+ */
 export const formatTime = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '--:--';
-  return TIME_FORMATTER.format(timestamp);
+  // ✅ FIX: Eliminado .tz() forzado que causaba UTC leakage en Hermes.
+  // dayjs ya hereda la zona de Los Ángeles directamente desde dayjsSetup.ts
+  return dayjs(timestamp).format('hh:mm A');
 };
 
-// Helper para mostrar fecha
+/**
+ * Formatea un timestamp a fecha legible (Ej: dom., 31 may. 2026)
+ */
 export const formatDate = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '---';
-  return DATE_FORMATTER.format(timestamp);
+  // ✅ FIX: Eliminado .tz() forzado
+  return dayjs(timestamp).format('ddd, D MMM YYYY');
 };
 
-// Helper para formatear duración (ms -> HH:mm)
+/**
+ * Convierte milisegundos a una cadena de duración (Ej: 8h 30m)
+ * Utiliza el plugin de duración de dayjs para mayor precisión.
+ */
 export const formatDuration = (ms: number): string => {
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
+  if (!ms || ms < 0) return '0h 0m';
+
+  const d = dayjs.duration(ms);
+  const h = Math.floor(d.asHours());
+  const m = d.minutes();
+
   return `${h}h ${m}m`;
 };
+

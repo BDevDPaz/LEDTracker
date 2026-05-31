@@ -1,6 +1,7 @@
 // --- src/utils/logger.ts ---
 import * as SQLite from 'expo-sqlite';
 import { LogColor, LogCategory, LogSeverity, SystemLogEntry } from '../types';
+import dayjs from './dayjsSetup'; // ✅ Integración del motor de fechas
 
 // Cola de logs temporal para cuando la DB aún no está inicializada
 const logQueue: SystemLogEntry[] = [];
@@ -40,9 +41,11 @@ export const log = (
   mensaje: string,
   metadata?: any
 ) => {
-  const now = new Date();
-  const timestamp = now.getTime();
-  const timestamp_str = now.toISOString();
+  // ✅ Usando dayjs para garantizar que los logs de sistema respeten el Timezone de la empresa
+  const now = dayjs();
+  const timestamp = now.valueOf();
+  // Genera un string ISO-like pero anclado a la zona horaria corporativa (America/Los_Angeles)
+  const timestamp_str = now.format('YYYY-MM-DDTHH:mm:ss.SSSZ');
 
   const entry: SystemLogEntry = {
     timestamp,
@@ -65,7 +68,7 @@ export const log = (
     case 'ROJO': icon = '🔴'; break;
   }
 
-  // Imprimir en consola con la marca de tiempo (timestamp)
+  // Imprimir en consola con la marca de tiempo (timestamp corporativo)
   const consoleMsg = `[${timestamp_str}] ${icon} [${categoria}] ${mensaje}`;
 
   // ✅ CORRECCIÓN: Evita la Pantalla Roja de Expo para eventos de auditoría (como borrar un registro).
@@ -75,7 +78,7 @@ export const log = (
   } else if (severidad === 'WARN') {
     console.warn(consoleMsg, metadata || '');
   } else {
-    // Usamos console.log para todo lo demás, preservando tus colores e iconos, 
+    // Usamos console.log para todo lo demás, preservando tus colores e iconos,
     // pero sin interrumpir el uso de la aplicación.
     console.log(consoleMsg, metadata || '');
   }

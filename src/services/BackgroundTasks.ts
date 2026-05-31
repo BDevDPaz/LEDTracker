@@ -3,32 +3,45 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundTask from 'expo-background-task';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { log } from '../utils/logger';
-import { getDB, initDatabase, insertAuditLog, updateSessionEndTime } from '../database/db';
+import {
+  getDB,
+  initDatabase,
+  insertAuditLog,
+  updateSessionEndTime,
+} from '../database/db';
 import { WorkSession } from '../types';
 import { generateWeeklyReport } from './ReportGenerator';
 import { LocationService, EXIT_TIMESTAMP_KEY } from './LocationManager';
+import dayjs from '../utils/dayjsSetup';
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 const FAILSAFE_THRESHOLD_MS = 15 * 60 * 1000;
 
-// Mutex para evitar concurrencia del OS o re-renders nativos
+// Mutex para evitar concurrencia del SO
 let isTaskRunning = false;
 
 TaskManager.defineTask(TASK_NAME, async () => {
   if (isTaskRunning) {
-    log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Mutex bloqueado: Tarea omitida por ejecución concurrente.');
-    // Corrección de Tipo: Retornamos Success para la API de expo-background-task
+    log(
+      'BLANCO',
+      'SIN_CAMBIOS',
+      'DEBUG',
+      'Mutex bloqueado: Tarea omitida por ejecución concurrente.'
+    );
     return BackgroundTask.BackgroundTaskResult.Success;
   }
 
   isTaskRunning = true;
   log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Tarea iniciada por el sistema...');
+
   let newDataProcessed = false;
 
   try {
     let db = getDB();
+
     if (!db) {
       log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'DB no inicializada. Iniciando ahora...');
       await initDatabase();
@@ -36,38 +49,63 @@ TaskManager.defineTask(TASK_NAME, async () => {
     }
 
     if (!db) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo fatal: No se pudo conectar a la DB en background.');
+      log(
+        'ROJO',
+        'ERROR_CRITICO',
+        'ERROR',
+        'Fallo fatal: No se pudo conectar a la DB en background.'
+      );
       return BackgroundTask.BackgroundTaskResult.Failed;
     }
 
-    const now = Date.now();
+    const now = dayjs().valueOf();
 
+    // -----------------------------
+    // FAILSAFE AUTO CHECK-OUT GPS
+    // -----------------------------
     try {
       const lastExitStr = await AsyncStorage.getItem(EXIT_TIMESTAMP_KEY);
+
       if (lastExitStr) {
         const exitTime = parseInt(lastExitStr, 10);
+
         if (Number.isNaN(exitTime) || exitTime > now) {
           await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
         } else {
           const timeDiff = now - exitTime;
+
           if (timeDiff > FAILSAFE_THRESHOLD_MS) {
             const session = await db.getFirstAsync<WorkSession>(
               'SELECT * FROM work_sessions ORDER BY id DESC LIMIT 1'
             );
 
             if (session?.id && session.status === 'active') {
-              // ✅ LOG PARA LA CONSOLA: Auto Check-out exacto
-              log('AMARILLO', 'ADVERTENCIA', 'WARN', `Auto Check-out (GPS) ejecutado para sesión #${session.id} por inactividad`);
+              log(
+                'AMARILLO',
+                'ADVERTENCIA',
+                'WARN',
+                `Auto Check-out (GPS) ejecutado para sesión #${session.id} por inactividad`
+              );
 
+              // Se usa exitTime para preservar la hora real de salida detectada
               await updateSessionEndTime(session.id, exitTime);
 
-              // ✅ LOG PARA EL REPORTE PDF
-              await insertAuditLog(session.id, 'AUTO_CHECKOUT_GPS', 'Auto Check-out (GPS) por inactividad prolongada fuera del área.');
+              await insertAuditLog(
+                session.id,
+                'AUTO_CHECKOUT_GPS',
+                'Auto Check-out (GPS) por inactividad prolongada fuera del área.'
+              );
 
               try {
                 await LocationService.stopMonitoring();
               } catch (e) {
-                log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error parando GPS tras Failsafe', e);
+                log(
+                  'ROJO',
+                  'ERROR_CRITICO',
+                  'ERROR',
+                  'Error parando GPS tras Failsafe',
+                  e
+                );
               }
 
               await Notifications.scheduleNotificationAsync({
@@ -90,28 +128,32 @@ TaskManager.defineTask(TASK_NAME, async () => {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error en Failsafe', failsafeError);
     }
 
+    // -----------------------------
+    // REPORTE SEMANAL
+    // -----------------------------
     try {
-      const dateObj = new Date();
-      const day = dateObj.getDay();
-      const isReportWindow = (day === 0 && dateObj.getHours() >= 20) || day === 1 || day === 2;
+      const currentDate = dayjs();
+      const day = currentDate.day(); // 0 = Domingo, 1 = Lunes, 2 = Martes
+
+      const isReportWindow =
+        (day === 0 && currentDate.hour() >= 20) || day === 1 || day === 2;
 
       if (isReportWindow) {
-        const lastWeekMonday = new Date(dateObj);
-        const diff = dateObj.getDate() - 7 - (day === 0 ? 6 : day - 1);
-        lastWeekMonday.setDate(diff);
-        lastWeekMonday.setHours(0, 0, 0, 0);
+        // Si es domingo reporta la semana actual que termina hoy.
+        // Si es lunes/martes reporta la semana pasada.
+        const targetWeek = day === 0 ? currentDate : currentDate.subtract(1, 'week');
 
-        const currentWeekId = lastWeekMonday.toISOString().split('T')[0];
+        const startTs = targetWeek.startOf('isoWeek').valueOf();
+        const endTs = targetWeek.endOf('isoWeek').valueOf();
+
+        const currentWeekId = targetWeek.startOf('isoWeek').format('YYYY-MM-DD');
         const lastReported = await AsyncStorage.getItem(REPORT_STORAGE_KEY);
 
         if (lastReported !== currentWeekId) {
-          const startTs = lastWeekMonday.getTime();
-          const lastWeekSunday = new Date(startTs);
-          lastWeekSunday.setDate(lastWeekSunday.getDate() + 6);
-          lastWeekSunday.setHours(23, 59, 59, 999);
-          const endTs = lastWeekSunday.getTime();
-
-          const pdfUri = await generateWeeklyReport(false, { start: startTs, end: endTs });
+          const pdfUri = await generateWeeklyReport(false, {
+            start: startTs,
+            end: endTs,
+          });
 
           if (pdfUri) {
             await Notifications.scheduleNotificationAsync({
@@ -141,10 +183,15 @@ TaskManager.defineTask(TASK_NAME, async () => {
 
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch (criticalError) {
-    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error Crítico General en BackgroundTasks', criticalError);
+    log(
+      'ROJO',
+      'ERROR_CRITICO',
+      'ERROR',
+      'Error Crítico General en BackgroundTasks',
+      criticalError
+    );
     return BackgroundTask.BackgroundTaskResult.Failed;
   } finally {
-    // Liberamos el Mutex sin importar si la tarea fue exitosa o falló
     isTaskRunning = false;
   }
 });
@@ -153,17 +200,29 @@ export const BackgroundTasks = {
   register: async () => {
     try {
       const status = await BackgroundTask.getStatusAsync();
+
       if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
         log('AMARILLO', 'ADVERTENCIA', 'WARN', 'Background Task restringido por el SO.');
         return;
       }
 
       const isRegistered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
+
       if (!isRegistered) {
         await BackgroundTask.registerTaskAsync(TASK_NAME, { minimumInterval: 15 });
-        log('VERDE', 'SERVICIOS_ACTIVOS', 'INFO', 'Servicios de fondo (Failsafe + Reportes) registrados.');
+        log(
+          'VERDE',
+          'SERVICIOS_ACTIVOS',
+          'INFO',
+          'Servicios de fondo (Failsafe + Reportes) registrados.'
+        );
       } else {
-        log('VERDE', 'SERVICIOS_ACTIVOS', 'INFO', 'Servicios de fondo ya estaban registrados.');
+        log(
+          'VERDE',
+          'SERVICIOS_ACTIVOS',
+          'INFO',
+          'Servicios de fondo ya estaban registrados.'
+        );
       }
     } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error registrando background tasks', e);
@@ -173,9 +232,11 @@ export const BackgroundTasks = {
   unregister: async () => {
     try {
       const isRegistered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
+
       if (isRegistered) {
         await BackgroundTask.unregisterTaskAsync(TASK_NAME);
       }
+
       log('ROJO', 'MONITOREO_DETENIDO', 'ERROR', 'Servicios de fondo detenidos.');
     } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al desregistrar tarea', e);
@@ -184,14 +245,31 @@ export const BackgroundTasks = {
 
   triggerForTesting: async () => {
     if (!__DEV__) {
-      log('AMARILLO', 'ADVERTENCIA', 'WARN', 'triggerForTesting solo está disponible en builds de desarrollo.');
+      log(
+        'AMARILLO',
+        'ADVERTENCIA',
+        'WARN',
+        'triggerForTesting solo está disponible en builds de desarrollo.'
+      );
       return;
     }
+
     try {
       await BackgroundTask.triggerTaskWorkerForTestingAsync();
-      log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Background task disparado manualmente para pruebas.');
+      log(
+        'BLANCO',
+        'BACKGROUND_TASK',
+        'DEBUG',
+        'Background task disparado manualmente para pruebas.'
+      );
     } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error disparando background task de prueba', e);
+      log(
+        'ROJO',
+        'ERROR_CRITICO',
+        'ERROR',
+        'Error disparando background task de prueba',
+        e
+      );
     }
   },
 };

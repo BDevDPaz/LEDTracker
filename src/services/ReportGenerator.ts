@@ -6,12 +6,10 @@ import { getSettings, getAllAsync } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
 import { log } from '../utils/logger';
+import dayjs from '../utils/dayjsSetup';
+import { formatDate, formatTime } from '../utils/dateUtils';
+import { calculateSessionDuration, calculatePay } from '../utils/payrollUtils';
 
-const dateFormatter = new Intl.DateTimeFormat('es-US', { weekday: 'short', month: 'short', day: 'numeric' });
-const timeFormatter = new Intl.DateTimeFormat('es-US', { hour: '2-digit', minute: '2-digit' });
-
-const formatDate = (timestamp: number) => { return dateFormatter.format(timestamp); };
-const formatTime = (timestamp: number) => { return timeFormatter.format(timestamp); };
 const formatCurrency = (amount: number) => { return `$${amount.toFixed(2)}`; };
 
 export const generateWeeklyReport = async (shouldShare: boolean = true, customRange?: { start: number, end: number }): Promise<string | null> => {
@@ -31,19 +29,12 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
       endTs = customRange.end;
       rangeTitle = `${formatDate(startTs)} - ${formatDate(endTs)}`;
     } else {
-      const now = new Date();
-      const day = now.getDay();
-      const diff = now.getDate() - day;
-      const start = new Date(now);
-      start.setDate(diff);
-      start.setHours(0,0,0,0);
+      // Cálculo preciso e inmutable del inicio y fin de semana usando dayjs
+      const start = dayjs().startOf('week');
+      const end = dayjs().endOf('week');
 
-      const end = new Date(start);
-      end.setDate(end.getDate() + 6);
-      end.setHours(23,59,59,999);
-
-      startTs = start.getTime();
-      endTs = end.getTime();
+      startTs = start.valueOf();
+      endTs = end.valueOf();
       rangeTitle = "Semana Actual";
     }
 
@@ -68,26 +59,24 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
     const rows = sessions.map(session => {
       const startTime = session.actual_start_time || session.start_time;
       const endTime = session.end_time || Date.now();
-      let durationMs = endTime - startTime;
+      
+      // Delegamos el cálculo a nuestra utilidad centralizada
+      const durationMs = calculateSessionDuration(
+        startTime,
+        endTime,
+        session.lunch_taken || 0,
+        session.lunch_start,
+        session.lunch_end
+      );
 
-      if (session.lunch_taken && session.lunch_end && session.lunch_start) {
-         durationMs -= (session.lunch_end - session.lunch_start);
-      } else if (session.lunch_taken) {
-         durationMs -= 3600000;
-      }
-
-      durationMs = Math.max(0, durationMs);
       const hours = durationMs / (1000 * 60 * 60);
 
-      let regHours = hours;
-      let otHours = 0;
-
-      if (hours > 8) {
-        regHours = 8;
-        otHours = hours - 8;
-      }
-
-      const pay = (regHours * settings.hourly_rate) + (otHours * settings.hourly_rate * settings.overtime_multiplier);
+      // Calculamos nómina exacta incluyendo horas extra (OT)
+      const { totalPay: pay, overtimeHours: otHours } = calculatePay(
+        hours,
+        settings.hourly_rate,
+        settings.overtime_multiplier
+      );
 
       totalHours += hours;
       totalOvertime += otHours;
@@ -235,7 +224,7 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
 
           <div class="footer">
             Documento generado electrónicamente por LED Tracker App.<br>
-            Certificado digitalmente: ${new Date().toISOString()}
+            Certificado digitalmente: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss Z')}
           </div>
         </body>
       </html>

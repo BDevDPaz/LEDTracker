@@ -1,39 +1,47 @@
+// --- src/utils/payrollUtils.ts ---
+import dayjs from './dayjsSetup';
+
 /**
  * Calcula la duración efectiva de una sesión en milisegundos.
- * Descuenta el almuerzo si aplica.
+ * Utiliza dayjs para garantizar precisión ante saltos de DST o timezone cruzados.
  */
 export const calculateSessionDuration = (
-  startTime: number, 
-  endTime: number, 
+  startTime: number,
+  endTime: number,
   lunchTaken: number, // 1 o 0
-  lunchStart?: number, 
+  lunchStart?: number,
   lunchEnd?: number
 ): number => {
-  let duration = endTime - startTime;
+  const start = dayjs(startTime);
+  const end = dayjs(endTime);
+  
+  let durationMs = end.diff(start, 'millisecond');
 
   if (lunchTaken) {
     if (lunchStart && lunchEnd) {
-      // Si tenemos tiempos exactos de almuerzo
-      duration -= (lunchEnd - lunchStart);
+      // Diferencia exacta si hay registros de almuerzo
+      const lStart = dayjs(lunchStart);
+      const lEnd = dayjs(lunchEnd);
+      durationMs -= lEnd.diff(lStart, 'millisecond');
     } else {
-      // Si solo marcó "Sí" sin tiempos (por defecto 1 hora = 3600000ms)
-      duration -= 3600000;
+      // Restar 1 hora por defecto si solo se marcó "Sí"
+      durationMs -= dayjs.duration(1, 'hour').asMilliseconds();
     }
   }
 
-  return Math.max(0, duration);
+  return Math.max(0, durationMs);
 };
 
 /**
  * Calcula el pago total basado en horas y horas extra.
- * Regla: > 8 horas diarias cuentan como Overtime.
+ * Regla de California: > 8 horas diarias cuentan como Overtime.
  */
 export const calculatePay = (
-  totalHours: number, 
-  hourlyRate: number, 
+  totalHours: number,
+  hourlyRate: number,
   overtimeMultiplier: number = 1.5
 ): { totalPay: number, regularHours: number, overtimeHours: number } => {
-  
+
   let regularHours = totalHours;
   let overtimeHours = 0;
 
@@ -51,3 +59,4 @@ export const calculatePay = (
     overtimeHours
   };
 };
+

@@ -7,10 +7,11 @@ describe('payrollUtils', () => {
   // PRUEBAS DE DURACIÓN DE SESIÓN
   // ==========================================
   describe('calculateSessionDuration', () => {
-    
+
     it('debe calcular la duración correctamente sin almuerzo', () => {
-      const start = new Date('2026-05-30T08:00:00Z').getTime();
-      const end = new Date('2026-05-30T12:00:00Z').getTime(); // 4 horas exactas
+      // Date.UTC usa el mes en base 0 (4 = Mayo)
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0); // 08:00 UTC
+      const end = Date.UTC(2026, 4, 30, 12, 0, 0);  // 12:00 UTC (4 horas exactas)
 
       const duration = calculateSessionDuration(start, end, 0);
 
@@ -19,8 +20,8 @@ describe('payrollUtils', () => {
     });
 
     it('debe descontar 1 hora por defecto si tomó almuerzo pero no hay tiempos exactos', () => {
-      const start = new Date('2026-05-30T08:00:00Z').getTime();
-      const end = new Date('2026-05-30T16:00:00Z').getTime(); // 8 horas totales
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 16, 0, 0); // 8 horas totales
 
       const duration = calculateSessionDuration(start, end, 1);
 
@@ -29,11 +30,11 @@ describe('payrollUtils', () => {
     });
 
     it('debe descontar el tiempo exacto si se proporcionan inicio y fin de almuerzo', () => {
-      const start = new Date('2026-05-30T08:00:00Z').getTime();
-      const end = new Date('2026-05-30T17:00:00Z').getTime(); // 9 horas totales
-      
-      const lunchStart = new Date('2026-05-30T12:00:00Z').getTime();
-      const lunchEnd = new Date('2026-05-30T12:30:00Z').getTime(); // 30 min de almuerzo
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 17, 0, 0); // 9 horas totales
+
+      const lunchStart = Date.UTC(2026, 4, 30, 12, 0, 0);
+      const lunchEnd = Date.UTC(2026, 4, 30, 12, 30, 0); // 30 min de almuerzo
 
       const duration = calculateSessionDuration(start, end, 1, lunchStart, lunchEnd);
 
@@ -42,8 +43,8 @@ describe('payrollUtils', () => {
     });
 
     it('no debe retornar tiempos negativos si el almuerzo es mayor que la sesión (failsafe)', () => {
-      const start = new Date('2026-05-30T08:00:00Z').getTime();
-      const end = new Date('2026-05-30T08:30:00Z').getTime(); // 30 min totales
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 8, 30, 0); // 30 min totales
 
       // Intentamos descontar la hora por defecto (1h) de una sesión de media hora
       const duration = calculateSessionDuration(start, end, 1);
@@ -70,7 +71,7 @@ describe('payrollUtils', () => {
 
       expect(result.regularHours).toBe(8); // 8 horas base
       expect(result.overtimeHours).toBe(2); // 2 horas extra
-      
+
       // Regular: 8 * 20 = 160
       // Overtime: 2 * (20 * 1.5) = 60
       // Total: 220
@@ -82,7 +83,7 @@ describe('payrollUtils', () => {
 
       expect(result.regularHours).toBe(8);
       expect(result.overtimeHours).toBe(2);
-      
+
       // Regular: 8 * 20 = 160
       // Overtime: 2 * (20 * 2.0) = 80
       // Total: 240

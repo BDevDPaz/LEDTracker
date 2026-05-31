@@ -4,7 +4,6 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../../src/context/LanguageContext';
 import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap, getWeeklyStats } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
@@ -12,10 +11,10 @@ import { COLORS } from '../../src/constants/theme';
 import { GlassModalWrapper, LuxuryButton, LuxuryEmptyState } from '../../src/components/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { formatTime, formatDate } from '../../src/utils/dateUtils';
-import { log } from '../../src/utils/logger'; // ✅ Importando logger
+import { log } from '../../src/utils/logger';
+import dayjs from '../../src/utils/dayjsSetup'; // ✅ Integración del motor de fechas
 
 export default function HistoryScreen() {
-  const { t } = useLanguage();
   const { showToast, showDialog } = useLuxuryUI();
 
   const [sessions, setSessions] = useState<WorkSession[]>([]);
@@ -44,13 +43,9 @@ export default function HistoryScreen() {
       const hourlyRate = settings?.hourly_rate || 0;
       setSessions(res);
 
-      const now = new Date();
-      const day = now.getDay();
-      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(now.setDate(diff));
-      monday.setHours(0, 0, 0, 0);
-
-      const tMs = await getWeeklyStats(monday.getTime(), Date.now());
+      // ✅ Cálculo determinista e inmutable usando dayjs (Lunes a las 00:00:00)
+      const mondayTs = dayjs().startOf('isoWeek').valueOf();
+      const tMs = await getWeeklyStats(mondayTs, Date.now());
       const tHours = tMs / (1000 * 60 * 60);
 
       setTotalHours(tHours);
@@ -72,7 +67,7 @@ export default function HistoryScreen() {
 
   const handleDelete = (id: number) => {
     showDialog({
-      title: t.btn_delete || "ELIMINAR",
+      title: "ELIMINAR",
       message: "¿Eliminar registro permanentemente?",
       confirmText: "ELIMINAR",
       isDestructive: true,
@@ -92,15 +87,10 @@ export default function HistoryScreen() {
   const openEdit = (item: WorkSession) => {
     setSelectedSession(item);
     setEditNote(item.manual_note || '');
-    const dIn = new Date(item.start_time);
-    setEditTimeIn(`${pad(dIn.getHours())}:${pad(dIn.getMinutes())}`);
-
-    if (item.end_time) {
-      const dOut = new Date(item.end_time);
-      setEditTimeOut(`${pad(dOut.getHours())}:${pad(dOut.getMinutes())}`);
-    } else {
-      setEditTimeOut('');
-    }
+    
+    // ✅ Formateo seguro de tiempos extraídos
+    setEditTimeIn(dayjs(item.start_time).format('HH:mm'));
+    setEditTimeOut(item.end_time ? dayjs(item.end_time).format('HH:mm') : '');
 
     setEditModalVisible(true);
   };
@@ -109,23 +99,21 @@ export default function HistoryScreen() {
     if (!selectedSession || !selectedSession.id) return;
     if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
 
-    const baseDate = new Date(selectedSession.start_time);
+    // ✅ Inyección de horas de forma inmutable, preservando la fecha real de la sesión
     const hIn = Number(editTimeIn.substring(0, 2));
     const mIn = Number(editTimeIn.substring(3, 5));
-    const newStart = new Date(baseDate);
-    newStart.setHours(hIn || 0, mIn || 0);
+    const newStart = dayjs(selectedSession.start_time).hour(hIn).minute(mIn).second(0).millisecond(0);
 
     let newEnd = null;
     if (editTimeOut && editTimeOut.length === 5) {
       const hOut = Number(editTimeOut.substring(0, 2));
       const mOut = Number(editTimeOut.substring(3, 5));
-      newEnd = new Date(baseDate);
-      newEnd.setHours(hOut || 0, mOut || 0);
+      newEnd = dayjs(selectedSession.start_time).hour(hOut).minute(mOut).second(0).millisecond(0);
     }
 
     const hasOverlap = await checkSessionOverlap(
-      newStart.getTime(),
-      newEnd ? newEnd.getTime() : 0,
+      newStart.valueOf(),
+      newEnd ? newEnd.valueOf() : 0,
       selectedSession.id
     );
 
@@ -138,8 +126,8 @@ export default function HistoryScreen() {
     try {
       await updateWorkSessionManual(
         selectedSession.id,
-        newStart.getTime(),
-        newEnd ? newEnd.getTime() : null,
+        newStart.valueOf(),
+        newEnd ? newEnd.valueOf() : null,
         editNote
       );
 
@@ -151,8 +139,6 @@ export default function HistoryScreen() {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', e);
     }
   };
-
-  const pad = (n: number) => n < 10 ? '0' + n : n;
 
   const renderItem = ({ item }: { item: WorkSession }) => (
     <TouchableOpacity
@@ -187,7 +173,7 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.header}>{t.history_title}</Text>
+          <Text style={styles.header}>HISTORIAL</Text>
           <Text style={styles.subHeader}>
             ESTA SEMANA: <Text style={{ color: '#FFF' }}>{totalHours.toFixed(1)}h</Text> •{' '}
             <Text style={{ color: COLORS.gold }}>${estEarnings.toFixed(0)}</Text>
@@ -211,7 +197,7 @@ export default function HistoryScreen() {
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
-        ListEmptyComponent={<LuxuryEmptyState text={t.no_activity || "No hay actividad reciente"} icon="time-outline" />}
+        ListEmptyComponent={<LuxuryEmptyState text={"No hay actividad reciente"} icon="time-outline" />}
         showsVerticalScrollIndicator={false}
       />
 
