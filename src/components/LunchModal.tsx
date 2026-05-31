@@ -1,15 +1,16 @@
-// src/components/LunchModal.tsx
+// --- src/components/LunchModal.tsx ---
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
 import { GlassModalWrapper, LuxuryButton } from './LuxuryUI';
 import { COLORS } from '../constants/theme';
+import { log } from '../utils/logger'; // ✅ Importando logger
 
-interface Props { 
-    visible: boolean; 
-    onConfirm: (minutes: number) => void; 
-    onCancel: () => void; 
+interface Props {
+    visible: boolean;
+    onConfirm: (minutes: number) => void;
+    onCancel: () => void;
 }
 
 export function LunchModal({ visible, onConfirm, onCancel }: Props) {
@@ -18,7 +19,18 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
 
   const handleConfirm = () => {
       const minutes = parseInt(durationStr) || 0;
+      log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Descanso de almuerzo confirmado: ${minutes} min`);
       onConfirm(minutes);
+  };
+
+  const handleNoLunch = () => {
+      log('BLANCO', 'SIN_CAMBIOS', 'INFO', 'Jornada a punto de finalizar. Usuario indicó que no tomó almuerzo.');
+      onConfirm(0);
+  };
+
+  const handleCancel = () => {
+      log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Lunch Modal cancelado por el usuario.');
+      onCancel();
   };
 
   return (
@@ -27,9 +39,9 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
         <Ionicons name="restaurant-outline" size={40} color={COLORS.gold} style={{marginBottom:10}} />
         <Text style={styles.title}>{t.lunch_title || "Registro de Almuerzo"}</Text>
         <Text style={styles.msg}>Ingresa duración (minutos):</Text>
-        
+
         <View style={styles.inputContainer}>
-            <TextInput 
+            <TextInput
                 style={styles.input}
                 value={durationStr}
                 onChangeText={setDurationStr}
@@ -43,8 +55,8 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
 
       <View style={{ gap: 8 }}>
         <LuxuryButton text="CONFIRMAR" onPress={handleConfirm} variant="success" />
-        <LuxuryButton text="NO TOMÉ ALMUERZO" onPress={() => onConfirm(0)} variant="secondary" />
-        <LuxuryButton text="CANCELAR" onPress={onCancel} variant="outline" />
+        <LuxuryButton text="NO TOMÉ ALMUERZO" onPress={handleNoLunch} variant="secondary" />
+        <LuxuryButton text="CANCELAR" onPress={handleCancel} variant="outline" />
       </View>
     </GlassModalWrapper>
   );
@@ -57,3 +69,4 @@ const styles = StyleSheet.create({
   input: { color: '#FFF', fontSize: 24, fontFamily: 'Montserrat_700Bold', width: 60, textAlign: 'center' },
   suffix: { color: COLORS.gold, fontSize: 14, fontFamily: 'Montserrat_600SemiBold' }
 });
+

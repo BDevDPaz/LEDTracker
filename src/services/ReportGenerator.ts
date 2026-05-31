@@ -1,42 +1,29 @@
+// --- src/services/ReportGenerator.ts ---
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as MailComposer from 'expo-mail-composer';
 import { getDB, getSettings, getAllAsync } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
+import { log } from '../utils/logger';
 
-// Helper para fechas y monedas
 const dateFormatter = new Intl.DateTimeFormat('es-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const timeFormatter = new Intl.DateTimeFormat('es-US', { hour: '2-digit', minute: '2-digit' });
 
-const formatDate = (timestamp: number) => {
-  return dateFormatter.format(timestamp);
-};
+const formatDate = (timestamp: number) => { return dateFormatter.format(timestamp); };
+const formatTime = (timestamp: number) => { return timeFormatter.format(timestamp); };
+const formatCurrency = (amount: number) => { return `$${amount.toFixed(2)}`; };
 
-const formatTime = (timestamp: number) => {
-  return timeFormatter.format(timestamp);
-};
-
-const formatCurrency = (amount: number) => {
-  return `$${amount.toFixed(2)}`;
-};
-
-/**
- * Genera el reporte semanal en PDF con auditoría completa.
- * @param shouldShare Si es true, abre el diálogo de compartir inmediatamente.
- * @param customRange (Opcional) Rango de fechas específico.
- */
 export const generateWeeklyReport = async (shouldShare: boolean = true, customRange?: { start: number, end: number }): Promise<string | null> => {
   try {
     const db = getDB();
     const settings = await getSettings();
-    
+
     if (!settings) {
-      console.error("No settings found");
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'No se encontró la configuración (Settings) al generar reporte');
       return null;
     }
 
-    // 1. Determinar Rango de Fechas
     let startTs: number, endTs: number;
     let rangeTitle = "";
 
@@ -45,97 +32,87 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
       endTs = customRange.end;
       rangeTitle = `${formatDate(startTs)} - ${formatDate(endTs)}`;
     } else {
-      // Por defecto: Semana actual (Ajuste a Domingo)
       const now = new Date();
-      const day = now.getDay(); 
-      const diff = now.getDate() - day; 
+      const day = now.getDay();
+      const diff = now.getDate() - day;
       const start = new Date(now);
       start.setDate(diff);
       start.setHours(0,0,0,0);
-      
+
       const end = new Date(start);
       end.setDate(end.getDate() + 6);
       end.setHours(23,59,59,999);
-      
+
       startTs = start.getTime();
       endTs = end.getTime();
       rangeTitle = "Semana Actual";
     }
 
-    // 2. Obtener Datos (Sesiones y Logs)
-    // ✅ Seleccionamos los nuevos campos: client_name, manual_note, actual_start_time
     const sessions = await getAllAsync<WorkSession>(
-      `SELECT * FROM work_sessions 
-       WHERE start_time >= ? AND start_time <= ? 
+      `SELECT * FROM work_sessions
+       WHERE start_time >= ? AND start_time <= ?
        ORDER BY start_time ASC`,
       [startTs, endTs]
     );
 
-    // ✅ Logs de auditoría para validar eventos automáticos
     const logs = await getAllAsync<AuditLog>(
-      `SELECT * FROM audit_logs 
-       WHERE timestamp >= ? AND timestamp <= ? 
+      `SELECT * FROM audit_logs
+       WHERE timestamp >= ? AND timestamp <= ?
        ORDER BY timestamp DESC`,
       [startTs, endTs]
     );
 
-    // 3. Cálculos Financieros
     let totalHours = 0;
     let totalOvertime = 0;
     let totalEarnings = 0;
 
     const rows = sessions.map(session => {
-      // Lógica de Auditoría: Usamos la hora GPS (actual_start_time) si existe.
-      // Si no, usamos la de configuración (start_time).
       const startTime = session.actual_start_time || session.start_time;
       const endTime = session.end_time || Date.now();
-      
-      // Cálculo de Duración
       let durationMs = endTime - startTime;
-      
-      // Descuento de Almuerzo
+
       if (session.lunch_taken && session.lunch_end && session.lunch_start) {
          durationMs -= (session.lunch_end - session.lunch_start);
       } else if (session.lunch_taken) {
-         durationMs -= 3600000; // 1h default si no hay registro exacto
+         durationMs -= 3600000;
       }
 
-      // Evitar negativos (por si acaso)
       durationMs = Math.max(0, durationMs);
       const hours = durationMs / (1000 * 60 * 60);
-      
-      // Cálculo Overtime (Simplificado: >8h diario)
+
       let regHours = hours;
       let otHours = 0;
-      
+
       if (hours > 8) {
         regHours = 8;
         otHours = hours - 8;
       }
 
       const pay = (regHours * settings.hourly_rate) + (otHours * settings.hourly_rate * settings.overtime_multiplier);
-      
+
       totalHours += hours;
       totalOvertime += otHours;
       totalEarnings += pay;
 
+      // ✅ Buscamos en la auditoría si el sistema hizo un auto-checkout para esta sesión
+      const fueAutoCheckout = logs.some(l => l.session_id === session.id && l.action_type === 'AUTO_CHECKOUT_GPS');
+
       return {
         date: formatDate(startTime),
-        client: escapeHtml(session.client_name || 'General'), // ✅ Mostrar Cliente
+        client: escapeHtml(session.client_name || 'General'),
         address: escapeHtml(session.address || ''),
-        notes: escapeHtml(session.manual_note || ''),         // ✅ Mostrar Notas
+        notes: escapeHtml(session.manual_note || ''),
         start: formatTime(startTime),
         end: session.end_time ? formatTime(session.end_time) : 'En curso',
         lunch: session.lunch_taken ? 'Sí' : 'No',
         total: hours.toFixed(2),
         pay: formatCurrency(pay),
         status: session.status,
-        // ✅ Indicador de confianza: ¿Fue check-in automático?
-        isGeofence: session.actual_start_time ? true : false 
+        isGeofenceIn: session.actual_start_time ? true : false,
+        isGeofenceOut: fueAutoCheckout // ✅ Nueva bandera
       };
     });
 
-    // 4. Construcción del HTML (Diseño Luxury)
     const html = `
       <html>
         <head>
@@ -145,7 +122,7 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #D4AF37; padding-bottom: 15px; }
             .title { font-size: 26px; font-weight: 800; color: #000; letter-spacing: 2px; text-transform: uppercase; }
             .subtitle { font-size: 11px; color: #D4AF37; text-transform: uppercase; margin-top: 5px; letter-spacing: 1px; }
-            
+
             .info-grid { display: flex; justify-content: space-between; margin-bottom: 30px; background: #f8f8f8; padding: 15px; border-radius: 8px; }
             .info-col { width: 48%; }
             .info-label { font-size: 9px; color: #999; text-transform: uppercase; font-weight: bold; margin-bottom: 2px; }
@@ -161,17 +138,18 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
             th { text-align: left; border-bottom: 2px solid #000; padding: 10px; text-transform: uppercase; font-size: 9px; color: #666; }
             td { border-bottom: 1px solid #eee; padding: 12px 10px; vertical-align: top; }
             .row-active { background-color: #fff8e1; }
-            
+
             .client-badge { background: #000; color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; }
             .notes { font-style: italic; color: #666; font-size: 10px; display: block; margin-top: 4px; }
-            .geo-badge { color: #2ecc71; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
+            .geo-badge-in { color: #2ecc71; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
+            .geo-badge-out { color: #e67e22; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
             .lunch-badge { color: #e67e22; font-size: 9px; }
 
             .audit-section { margin-top: 20px; border-top: 3px solid #eee; padding-top: 20px; page-break-inside: avoid; }
             .audit-title { font-size: 12px; font-weight: bold; color: #000; text-transform: uppercase; margin-bottom: 15px; }
             .log-item { font-size: 9px; color: #555; margin-bottom: 6px; border-left: 2px solid #ddd; padding-left: 10px; }
             .log-alert { border-left-color: #D4AF37; color: #000; background: #fffcf0; padding: 5px 10px; }
-            
+
             .footer { margin-top: 50px; text-align: center; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
           </style>
         </head>
@@ -235,7 +213,8 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
                   </td>
                   <td>
                     ${row.start} - ${row.end}
-                    ${row.isGeofence ? '<span class="geo-badge">✓ Auto Check-in (GPS)</span>' : ''}
+                    ${row.isGeofenceIn ? '<span class="geo-badge-in">✓ Auto Check-in (GPS)</span>' : ''}
+                    ${row.isGeofenceOut ? '<span class="geo-badge-out">⚠ Auto Check-out (GPS)</span>' : ''}
                   </td>
                   <td><strong>${row.total}</strong></td>
                   <td>${row.pay}</td>
@@ -246,7 +225,7 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
 
           <div class="audit-section">
             <div class="audit-title">Registro de Eventos Críticos (GPS & Sistema)</div>
-            ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' : 
+            ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' :
               logs.map(log => `
                 <div class="log-item ${log.action_type.includes('AUTO') || log.action_type.includes('EXIT') ? 'log-alert' : ''}">
                   <strong>${formatTime(log.timestamp)}</strong> — <span style="font-weight:bold">[${log.action_type}]</span> ${escapeHtml(log.details)}
@@ -263,30 +242,24 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
       </html>
     `;
 
-    // 5. Generar y Compartir
-    const { uri } = await Print.printToFileAsync({
-      html,
-      base64: false
-    });
+    const { uri } = await Print.printToFileAsync({ html, base64: false });
 
     if (shouldShare) {
+      log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Reporte PDF compartido con éxito');
       await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
     }
 
     return uri;
 
   } catch (error) {
-    console.error("Error generating report:", error);
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo al generar el reporte PDF semanal', error);
     return null;
   }
 };
 
-/**
- * Prepara el correo con el PDF adjunto.
- */
 export const sendReportByEmail = async (pdfUri: string, settings: AppSettings) => {
   const isAvailable = await MailComposer.isAvailableAsync();
-  
+
   if (isAvailable) {
     await MailComposer.composeAsync({
       recipients: [settings.company_email],
@@ -298,3 +271,4 @@ export const sendReportByEmail = async (pdfUri: string, settings: AppSettings) =
     await Sharing.shareAsync(pdfUri);
   }
 };
+

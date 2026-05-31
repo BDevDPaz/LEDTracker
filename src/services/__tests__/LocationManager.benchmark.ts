@@ -1,3 +1,5 @@
+// --- src/services/__tests__/LocationManager.benchmark.ts ---
+import { log } from '../../utils/logger';
 
 const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
 const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
@@ -45,7 +47,7 @@ async function optimizedImplementation() {
 }
 
 async function runBenchmark() {
-  console.log("Starting Benchmark...");
+  log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Starting Benchmark...');
 
   // Warmup
   await currentImplementation();
@@ -60,9 +62,10 @@ async function runBenchmark() {
     totalOptimized += await optimizedImplementation();
   }
 
-  console.log(`Average Current: ${(totalCurrent / iterations).toFixed(2)}ms`);
-  console.log(`Average Optimized: ${(totalOptimized / iterations).toFixed(2)}ms`);
-  console.log(`Improvement: ${(((totalCurrent - totalOptimized) / totalCurrent) * 100).toFixed(2)}%`);
+  log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', `Average Current: ${(totalCurrent / iterations).toFixed(2)}ms`);
+  log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', `Average Optimized: ${(totalOptimized / iterations).toFixed(2)}ms`);
+  log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', `Improvement: ${(((totalCurrent - totalOptimized) / totalCurrent) * 100).toFixed(2)}%`);
 }
 
 runBenchmark();
+

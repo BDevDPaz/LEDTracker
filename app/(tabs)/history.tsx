@@ -1,3 +1,4 @@
+// --- app/(tabs)/history.tsx ---
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { COLORS } from '../../src/constants/theme';
 import { GlassModalWrapper, LuxuryButton, LuxuryEmptyState } from '../../src/components/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { formatTime, formatDate } from '../../src/utils/dateUtils';
+import { log } from '../../src/utils/logger'; // ✅ Importando logger
 
 export default function HistoryScreen() {
   const { t } = useLanguage();
@@ -30,31 +32,34 @@ export default function HistoryScreen() {
   useFocusEffect(useCallback(() => { loadHistory(); }, []));
 
   const loadHistory = async () => {
-    const db = getDB();
+    try {
+      const db = getDB();
 
-    const [settings, res] = await Promise.all([
-      getSettings(),
-      db.getAllAsync<WorkSession>(
-        "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
-      )
-    ]);
+      const [settings, res] = await Promise.all([
+        getSettings(),
+        db.getAllAsync<WorkSession>(
+          "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
+        )
+      ]);
 
-    const hourlyRate = settings?.hourly_rate || 0;
-    setRate(hourlyRate);
-    setSessions(res);
+      const hourlyRate = settings?.hourly_rate || 0;
+      setRate(hourlyRate);
+      setSessions(res);
 
-    // Calcular semana actual (lunes 00:00)
-    const now = new Date();
-    const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(now.setDate(diff));
-    monday.setHours(0, 0, 0, 0);
+      const now = new Date();
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      monday.setHours(0, 0, 0, 0);
 
-    const tMs = await getWeeklyStats(monday.getTime(), Date.now());
-    const tHours = tMs / (1000 * 60 * 60);
+      const tMs = await getWeeklyStats(monday.getTime(), Date.now());
+      const tHours = tMs / (1000 * 60 * 60);
 
-    setTotalHours(tHours);
-    setEstEarnings(tHours * hourlyRate);
+      setTotalHours(tHours);
+      setEstEarnings(tHours * hourlyRate);
+    } catch(e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al cargar el historial', e);
+    }
   };
 
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
@@ -74,9 +79,14 @@ export default function HistoryScreen() {
       confirmText: "ELIMINAR",
       isDestructive: true,
       onConfirm: async () => {
-        await deleteWorkSession(id);
-        showToast("Registro eliminado", "success");
-        loadHistory();
+        try {
+          await deleteWorkSession(id);
+          log('ROJO', 'ACCION_DESTRUCTIVA', 'ERROR', `Registro eliminado manualmente ID: ${id}`);
+          showToast("Registro eliminado", "success");
+          loadHistory();
+        } catch(e) {
+          log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', e);
+        }
       }
     });
   };
@@ -122,20 +132,26 @@ export default function HistoryScreen() {
     );
 
     if (hasOverlap) {
+      log('AMARILLO', 'ADVERTENCIA', 'WARN', 'El usuario intentó guardar un horario solapado');
       showToast("Error: Horario choca con otra sesión", "error");
       return;
     }
 
-    await updateWorkSessionManual(
-      selectedSession.id,
-      newStart.getTime(),
-      newEnd ? newEnd.getTime() : null,
-      editNote
-    );
+    try {
+      await updateWorkSessionManual(
+        selectedSession.id,
+        newStart.getTime(),
+        newEnd ? newEnd.getTime() : null,
+        editNote
+      );
 
-    setEditModalVisible(false);
-    showToast("Cambios guardados", "success");
-    loadHistory();
+      log('AMARILLO', 'CONFIG_MODIFICADA', 'WARN', `Registro modificado manualmente ID: ${selectedSession.id}`);
+      setEditModalVisible(false);
+      showToast("Cambios guardados", "success");
+      loadHistory();
+    } catch(e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', e);
+    }
   };
 
   const pad = (n: number) => n < 10 ? '0' + n : n;
@@ -146,9 +162,6 @@ export default function HistoryScreen() {
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
       activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={`Sesión del ${formatDate(item.start_time)} en ${item.address}, inicio a las ${formatTime(item.start_time)}`}
-      accessibilityHint="Toca para editar la sesión, o mantén presionado para eliminarla"
     >
       <View style={styles.cardContent}>
         <View style={styles.row}>
@@ -183,7 +196,13 @@ export default function HistoryScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.pdfBtn} onPress={() => generateWeeklyReport(true)}>
+        <TouchableOpacity 
+          style={styles.pdfBtn} 
+          onPress={() => {
+            log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
+            generateWeeklyReport(true);
+          }}
+        >
           <Ionicons name="document-text" size={16} color="#000" />
           <Text style={styles.pdfText}>PDF</Text>
         </TouchableOpacity>
@@ -201,12 +220,7 @@ export default function HistoryScreen() {
       <GlassModalWrapper visible={editModalVisible}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
-          <TouchableOpacity
-            onPress={() => setEditModalVisible(false)}
-            style={styles.closeBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar modal de edición"
-          >
+          <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -262,7 +276,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', padding: 24, paddingBottom: 10 },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
   subHeader: { fontFamily: 'Montserrat_700Bold', fontSize: 11, color: COLORS.textSecondary, letterSpacing: 1, marginTop: 6 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, shadowColor: COLORS.gold, shadowOpacity: 0.4, shadowRadius: 8 },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25 },
   pdfText: { fontFamily: 'Montserrat_700Bold', color: '#000', fontSize: 10 },
   card: { backgroundColor: COLORS.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   cardContent: { padding: 20 },
@@ -280,3 +294,4 @@ const styles = StyleSheet.create({
   label: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 8 },
   input: { fontFamily: 'Montserrat_400Regular', backgroundColor: '#000', color: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: COLORS.border },
 });
+

@@ -1,3 +1,4 @@
+// --- src/components/LuxuryUI.tsx ---
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { COLORS } from '../constants/theme';
+import { log } from '../utils/logger'; // ✅ Importando logger para trazabilidad de UI
 
 // --- TARJETA ---
 export const LuxuryCard = ({ children, active, style }: any) => (
@@ -52,7 +54,7 @@ export const LuxurySkeleton = ({ width, height, style }: any) => {
       -1,
       true
     );
-  }, []);
+  }, [opacity]);
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
     <Animated.View style={[{ width, height, backgroundColor: '#333', borderRadius: 12 }, style, animatedStyle]} />
@@ -61,8 +63,7 @@ export const LuxurySkeleton = ({ width, height, style }: any) => {
 
 // --- BOTÓN ---
 export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled }: any) => {
-  // Definir colores según variante
-  let bgColors = ['#D4AF37', '#8a7224']; // Gold (Primary)
+  let bgColors: readonly [string, string, ...string[]] = ['#D4AF37', '#8a7224']; // Gold (Primary)
   let textColor = '#000';
   let borderColor = 'transparent';
   let borderWidth = 0;
@@ -71,17 +72,22 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
     bgColors = ['#FF3B30', '#991B1B'];
     textColor = '#FFF';
   } else if (variant === 'outline') {
-    bgColors = ['transparent', 'transparent']; // Transparente
+    bgColors = ['transparent', 'transparent'];
     textColor = '#AAA';
     borderColor = '#333';
     borderWidth = 1;
   } else if (variant === 'success') {
     bgColors = ['#22c55e', '#14532d'];
     textColor = '#000';
+  } else if (variant === 'secondary') {
+    bgColors = ['#333333', '#1A1A1A'];
+    textColor = '#FFF';
   }
 
   const handlePress = (e: any) => {
     if (!disabled) {
+      // ✅ Auditoría silenciosa: Ideal para rastrear bloqueos de interfaz o quejas del usuario.
+      log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', `UI: Botón presionado [${text}]`);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onPress(e);
     }
@@ -113,15 +119,14 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
 const styles = StyleSheet.create({
   cardContainer: { borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 20 },
   cardActive: { borderColor: COLORS.gold, shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
-  cardGradient: { padding: 24 }, // Padding interno aumentado
+  cardGradient: { padding: 24 },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)', padding: 20 },
   modalContent: { width: '100%', backgroundColor: '#111', borderRadius: 32, borderWidth: 1, borderColor: COLORS.border, padding: 30 },
   button: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   buttonText: { fontFamily: 'Montserrat_700Bold', fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' },
   iconBubble: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, padding: 4 },
-  
-  // Empty State
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.7 },
   emptyIconBubble: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#333' },
   emptyText: { fontFamily: 'Montserrat_400Regular', color: '#666', fontSize: 14, letterSpacing: 1 },
 });
+

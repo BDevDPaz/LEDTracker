@@ -1,14 +1,15 @@
+// --- src/components/DailySetupModal.tsx ---
 import React, { useState } from 'react';
 import { Modal, View, Text, TextInput, StyleSheet, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { LuxuryButton } from './LuxuryUI';
+import { log } from '../utils/logger'; // ✅ Importando logger
 
 interface DailySetupModalProps {
   visible: boolean;
   onClose: () => void;
-  // ✅ Actualizamos la firma de la función para recibir 3 datos
   onStart: (address: string, client: string, notes: string) => void;
   mode?: 'start' | 'transit';
 }
@@ -17,15 +18,27 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
   const [address, setAddress] = useState('');
   const [client, setClient] = useState('');
   const [notes, setNotes] = useState('');
-  
+
   const handleStart = () => {
     if (address.trim()) {
+      if (mode === 'start') {
+        log('VERDE', 'OPERACION_EXITOSA', 'INFO', `Nueva jornada configurada. Destino: ${address}`);
+      } else {
+        log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Travel Mode (Trayecto) iniciado hacia: ${address}`);
+      }
+      
       onStart(address, client, notes);
+      
       // Limpieza
       setAddress('');
       setClient('');
       setNotes('');
     }
+  };
+
+  const handleCancel = () => {
+    log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', `Setup Modal cancelado (Modo: ${mode})`);
+    onClose();
   };
 
   const title = mode === 'start' ? "INICIAR JORNADA" : "NUEVO DESTINO";
@@ -38,7 +51,7 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <BlurView intensity={40} tint="dark" style={styles.container}>
           <View style={styles.content}>
-            
+
             <View style={styles.iconHeader}>
                <Ionicons name={icon} size={40} color={COLORS.gold} />
             </View>
@@ -84,18 +97,18 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
             </View>
 
             <View style={styles.buttonRow}>
-               <LuxuryButton 
-                  text="CANCELAR" 
-                  variant="secondary" 
-                  onPress={onClose} 
-                  style={{flex: 1, marginRight: 10}} 
+               <LuxuryButton
+                  text="CANCELAR"
+                  variant="secondary"
+                  onPress={handleCancel}
+                  style={{flex: 1, marginRight: 10}}
                />
-               <LuxuryButton 
-                  text={btnText} 
-                  variant="primary" 
-                  onPress={handleStart} 
+               <LuxuryButton
+                  text={btnText}
+                  variant="primary"
+                  onPress={handleStart}
                   disabled={!address.trim()}
-                  style={{flex: 1}} 
+                  style={{flex: 1}}
                />
             </View>
 
@@ -112,9 +125,8 @@ const styles = StyleSheet.create({
   iconHeader: { marginBottom: 16, padding: 10, backgroundColor: 'rgba(212,175,55,0.1)', borderRadius: 50 },
   title: { fontFamily: 'Montserrat_700Bold', fontSize: 20, color: '#FFF', letterSpacing: 1, marginBottom: 4 },
   subtitle: { fontFamily: 'Montserrat_400Regular', fontSize: 12, color: '#AAA', marginBottom: 24 },
-  
-  // inputContainer genérico para todos
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', borderRadius: 12, paddingHorizontal: 16, height: 50, marginBottom: 12, borderWidth: 1, borderColor: '#333', width: '100%' },
   input: { flex: 1, color: '#FFF', fontFamily: 'Montserrat_400Regular' },
   buttonRow: { flexDirection: 'row', width: '100%', marginTop: 10 }
 });
+

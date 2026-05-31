@@ -1,7 +1,13 @@
+// --- metro.config.js ---
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-config.resolver.assetExts.push('wasm');
+config.watchFolders = [
+  __dirname,
+];
+
+// Aquí le decimos a Metro que ignore carpetas pesadas que no cambian
+config.resolver.blacklistRE = /node_modules\/.*\/node_modules/;
 
 module.exports = config;

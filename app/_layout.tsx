@@ -1,3 +1,4 @@
+// --- app/_layout.tsx ---
 import React, { useEffect, useState, useCallback } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -9,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Servicios
 import '../src/services/LocationManager';
 import { BackgroundTasks } from '../src/services/BackgroundTasks';
+import { log } from '../src/utils/logger'; // ✅ Estándar de auditoría
 
 // Contextos
 import { LanguageProvider } from '../src/context/LanguageContext';
@@ -56,15 +58,15 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        console.log('⏳ Iniciando Base de Datos...');
+        log('AZUL', 'ESTADO_SISTEMA', 'INFO', 'Iniciando Base de Datos...');
         await initDatabase();
 
-        console.log('⏰ Registrando Servicios de Fondo (Auto-Checkout)...');
+        log('AZUL', 'ESTADO_SISTEMA', 'INFO', 'Registrando Servicios de Fondo (Auto-Checkout)...');
         await BackgroundTasks.register();
 
-        console.log('✅ Sistema Listo. Cargando UI...');
+        log('AZUL', 'ESTADO_SISTEMA', 'INFO', 'Sistema Listo. Cargando UI...');
       } catch (e) {
-        console.warn('⚠️ Error crítico inicializando la app:', e);
+        log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error crítico inicializando la app', e);
       } finally {
         setAppIsReady(true);
       }

@@ -78,7 +78,7 @@ export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
       {/* RENDER TOAST */}
       {toast && (
         <Animated.View entering={FadeInUp} exiting={FadeOutUp} style={styles.toastContainer}>
-          <View style={[styles.toast, styles[`toast_${toast.type}` as keyof typeof styles]]}>
+          <View style={[styles.toast, styles[`toast_${toast.type}` as keyof typeof styles] as any]}>
             <Ionicons 
               name={toast.type === 'success' ? 'checkmark-circle' : toast.type === 'error' ? 'alert-circle' : 'information-circle'} 
               size={24} 
