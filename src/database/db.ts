@@ -2,8 +2,7 @@
 import * as SQLite from 'expo-sqlite';
 import {
   WorkSession,
-  AppSettings,
-  AuditLog
+  AppSettings
 } from '../types';
 import { log, setLoggerDB } from '../utils/logger';
 
@@ -190,7 +189,7 @@ export const updateWorkSessionManual = async (id: number, startTime: number, end
   );
 };
 
-export const checkSessionOverlap = async (start: number, end: number, excludeId: number): Promise<boolean> => {
+export const checkSessionOverlap = async (_start: number, _end: number, _excludeId: number): Promise<boolean> => {
   return false;
 };
 

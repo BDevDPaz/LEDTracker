@@ -19,7 +19,6 @@ export default function HistoryScreen() {
   const { showToast, showDialog } = useLuxuryUI();
 
   const [sessions, setSessions] = useState<WorkSession[]>([]);
-  const [rate, setRate] = useState(0);
   const [totalHours, setTotalHours] = useState(0);
   const [estEarnings, setEstEarnings] = useState(0);
 
@@ -43,7 +42,6 @@ export default function HistoryScreen() {
       ]);
 
       const hourlyRate = settings?.hourly_rate || 0;
-      setRate(hourlyRate);
       setSessions(res);
 
       const now = new Date();
@@ -196,8 +194,8 @@ export default function HistoryScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity 
-          style={styles.pdfBtn} 
+        <TouchableOpacity
+          style={styles.pdfBtn}
           onPress={() => {
             log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
             generateWeeklyReport(true);

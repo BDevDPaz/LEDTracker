@@ -1,6 +1,6 @@
 // --- app/(tabs)/index.tsx ---
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'; 
+import { View, Text, StyleSheet, RefreshControl, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,7 +36,7 @@ export default function HomeScreen() {
   const [stats, setStats] = useState({ hours: 0, earnings: 0 });
 
   const [showSetupModal, setShowSetupModal] = useState(false);
-  const [setupMode, setSetupMode] = useState<'start' | 'transit'>('start'); 
+  const [setupMode, setSetupMode] = useState<'start' | 'transit'>('start');
   const [showLunchModal, setShowLunchModal] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -96,10 +96,10 @@ export default function HomeScreen() {
     let totalHoursToday = 0;
 
     sessions.forEach(s => {
-      if (s.status === 'pending_arrival') return; 
+      if (s.status === 'pending_arrival') return;
 
       const end = s.end_time ? s.end_time : Date.now();
-      const startPoint = s.actual_start_time || s.start_time; 
+      const startPoint = s.actual_start_time || s.start_time;
 
       const durationMs = calculateSessionDuration(
         startPoint,
@@ -118,9 +118,9 @@ export default function HomeScreen() {
       currentSettings.overtime_multiplier
     );
 
-    setStats({ 
-      hours: parseFloat(totalHoursToday.toFixed(2)), 
-      earnings: parseFloat(totalPay.toFixed(2)) 
+    setStats({
+      hours: parseFloat(totalHoursToday.toFixed(2)),
+      earnings: parseFloat(totalPay.toFixed(2))
     });
   };
 
@@ -170,17 +170,17 @@ export default function HomeScreen() {
       "📍 Saliste del Área de Trabajo",
       "¿Terminaste tu jornada o vas a otro sitio?",
       [
-        { 
-          text: "Otro Trabajo", 
+        {
+          text: "Otro Trabajo",
           onPress: () => {
              log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', 'Usuario seleccionó ir a otro trabajo (Travel Mode)');
              setSetupMode('transit');
              setShowSetupModal(true);
           }
         },
-        { 
-          text: "Terminar Jornada", 
-          style: 'destructive', 
+        {
+          text: "Terminar Jornada",
+          style: 'destructive',
           onPress: () => {
              log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Usuario seleccionó terminar la jornada');
              handleClockOut();
@@ -194,9 +194,9 @@ export default function HomeScreen() {
     setIsProcessing(true);
     try {
       const perm = await LocationService.requestPermissions();
-      if (!perm) { 
+      if (!perm) {
         log('AMARILLO', 'ADVERTENCIA', 'WARN', 'Permisos de ubicación denegados al configurar jornada');
-        showToast("Se requiere ubicación", "error"); setIsProcessing(false); return; 
+        showToast("Se requiere ubicación", "error"); setIsProcessing(false); return;
       }
 
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -218,16 +218,16 @@ export default function HomeScreen() {
       if (setupMode === 'start') {
         await insertWorkSession({
           start_time: Date.now(),
-          status: 'pending_arrival', 
-          latitude: 0, 
+          status: 'pending_arrival',
+          latitude: 0,
           longitude: 0,
           target_latitude: target.latitude,
           target_longitude: target.longitude,
           setup_latitude: loc.coords.latitude,
           setup_longitude: loc.coords.longitude,
           address: addrInput,
-          client_name: clientInput, 
-          manual_note: notesInput,  
+          client_name: clientInput,
+          manual_note: notesInput,
           location_confirmed: 0,
           is_manual_edit: 0,
           lunch_taken: 0,
@@ -254,11 +254,11 @@ export default function HomeScreen() {
       await loadData();
       showToast(setupMode === 'start' ? "Geocerca Activada" : "Tránsito iniciado", "success");
 
-    } catch (error) { 
+    } catch (error) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo general configurando la jornada/tránsito', error);
-      showToast("Error al configurar", "error"); 
-    } finally { 
-      setIsProcessing(false); 
+      showToast("Error al configurar", "error");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -285,23 +285,23 @@ export default function HomeScreen() {
        setShowLunchModal(false);
        await loadData();
        showToast("Jornada finalizada", "success");
-     } catch (e) { 
+     } catch (e) {
        log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al cerrar la sesión en la base de datos', e);
-       showToast("Error al finalizar", "error"); 
+       showToast("Error al finalizar", "error");
      } finally { setIsProcessing(false); }
   };
 
   const getStatusIcon = () => {
     if (!activeSession) return "moon";
-    if (activeSession.status === 'pending_arrival') return "navigate"; 
-    if (activeSession.status === 'travel') return "car-sport";       
-    return "location";                                               
+    if (activeSession.status === 'pending_arrival') return "navigate";
+    if (activeSession.status === 'travel') return "car-sport";
+    return "location";
   };
 
   const getStatusColor = () => {
     if (!activeSession) return COLORS.textSecondary;
-    if (activeSession.status === 'pending_arrival') return '#f59e0b'; 
-    if (activeSession.status === 'travel') return '#3b82f6'; 
+    if (activeSession.status === 'pending_arrival') return '#f59e0b';
+    if (activeSession.status === 'travel') return '#3b82f6';
     return COLORS.gold;
   };
 
@@ -314,10 +314,10 @@ export default function HomeScreen() {
   const handleEasterEggTap = () => {
     const newCount = easterEggCount + 1;
     setEasterEggCount(newCount);
-    if (newCount === 3) { 
+    if (newCount === 3) {
       log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Easter Egg del CEO activado en la UI');
-      setShowSpecialCard(true); 
-      setEasterEggCount(0); 
+      setShowSpecialCard(true);
+      setEasterEggCount(0);
     }
   };
 
@@ -343,9 +343,9 @@ export default function HomeScreen() {
              <View style={styles.statusBadge}>
                 <View style={[styles.statusDot, { backgroundColor: activeSession ? (activeSession.status === 'active' ? COLORS.success : '#f59e0b') : '#666' }]} />
                 <Text style={styles.statusText}>
-                    {!activeSession ? t.status_inactive : 
-                     activeSession.status === 'pending_arrival' ? "ESPERANDO LLEGADA" : 
-                     activeSession.status === 'travel' ? "EN TRÁNSITO" : 
+                    {!activeSession ? t.status_inactive :
+                     activeSession.status === 'pending_arrival' ? "ESPERANDO LLEGADA" :
+                     activeSession.status === 'travel' ? "EN TRÁNSITO" :
                      t.status_active}
                 </Text>
              </View>
@@ -409,7 +409,7 @@ export default function HomeScreen() {
         <DailySetupModal
           visible={showSetupModal}
           onClose={() => { setShowSetupModal(false); router.setParams({ showSetup: undefined }); }}
-          onStart={handleSetupSubmit} 
+          onStart={handleSetupSubmit}
           mode={setupMode}
         />
 
@@ -428,7 +428,7 @@ export default function HomeScreen() {
               <Text style={styles.eggText}>
                 Para uso restringido de{"\n"}
                 <Text style={{color: '#FFF'}}>Alex León</Text>{"\n"}
-                CEO de LEON'S ELECTRICAL DESIGN
+                CEO de LEON&apos;S ELECTRICAL DESIGN
               </Text>
               <TouchableOpacity
                  onPress={() => setShowSpecialCard(false)}

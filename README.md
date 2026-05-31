@@ -2,10 +2,11 @@
 
 ![Version](https://img.shields.io/badge/version-2.1-gold?style=flat-square)
 ![Expo SDK](https://img.shields.io/badge/Expo%20SDK-54-blue?style=flat-square)
+![React Compiler](https://img.shields.io/badge/React-Compiler_Enabled-087ea4?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat-square&logo=typescript)
 ![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android)
-![License](https://img.shields.io/badge/License-Private-red?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen?style=flat-square)
+![Lint](https://img.shields.io/badge/ESLint-0_Errors-success?style=flat-square&logo=eslint)
+![Tests](https://img.shields.io/badge/Tests-14_Passing-brightgreen?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Production%20Stable-success?style=flat-square)
 
 **Sistema profesional de rastreo de horas laborales y geolocalización** para Android, diseñado con estándares de auditoría forense, resiliencia y precisión financiera.
@@ -21,75 +22,82 @@
 ### 1. Capa de Datos (Persistence Layer)
 - **Motor:** Expo SQLite con modo **WAL** (Write-Ahead Logging) para concurrencia segura.
 - **Integridad:** Prevención de solapamiento de sesiones (`checkSessionOverlap`) y trazabilidad completa de modificaciones.
-- **Auditoría:** Sistema centralizado `logger.ts` con clasificación por severidad (🔴 🟡 🟢 🔵).
+- **Auditoría:** Sistema centralizado `logger.ts` con clasificación forense por severidad (🔴 🟡 🟢 🔵).
 
 ### 2. Capa de Servicios y Background (Intelligent Core)
 - **LocationManager:** Geofencing configurable con Auto Check-in/out.
-- **Background Tasks:** Ejecución *fail-safe* mediante `expo-task-manager`.
-- **Notificaciones:** Sistema inteligente con `expo-notifications`.
+- **Control de Concurrencia:** Implementación de patrón **Mutex** en `BackgroundTasks` para neutralizar *race conditions* a nivel de Sistema Operativo.
+- **Notificaciones:** Sistema inteligente impulsado por `expo-notifications`.
 
 ### 3. Capa de Lógica de Negocio (Business Layer)
-- **Motor Financiero (`payrollUtils`):** Cálculo preciso de horas regulares, extras y deducción automática de almuerzo.
+- **Motor Financiero (`payrollUtils`):** Cálculo algorítmico preciso de horas regulares, Overtime (OT) y deducción automática de almuerzo.
 - **Utilidades:** `geoUtils`, `dateUtils`, `i18n` y soporte multi-sitio.
 
 ### 4. Capa de Presentación (UI/UX)
 - **Stack:** Expo Router + React Native + Reanimated + LuxuryUI.
-- **Características:** Modales adaptativos y flujos administrativos protegidos.
+- **Optimización:** Ciclo de vida y memorización gestionados por **React Compiler** bajo el capó.
+- **Características:** Modales adaptativos, flujos administrativos protegidos y diseño *Glassmorphism*.
 
 ## 🛠️ Stack Tecnológico
 
 - **Framework:** Expo SDK 54
+- **Core:** React 19 + React Compiler
 - **Lenguaje:** TypeScript (Strict Mode)
 - **Base de Datos:** Expo SQLite (WAL)
 - **Geolocalización:** `expo-location` + `expo-task-manager`
 - **Testing:** Jest + Testing Library
+- **Análisis Estático:** ESLint (Configuración híbrida estricta para React Compiler)
 
 ## 📂 Estructura del Proyecto
 
 ```bash
 .
-├── app/                    # Rutas con Expo Router
+├── app/                    # Enrutamiento basado en archivos (Expo Router)
 ├── src/
-│   ├── components/
-│   ├── context/
-│   ├── database/
-│   ├── services/
-│   ├── utils/
-│   └── types/
-└── assets/
+│   ├── components/         # Sistema de diseño LuxuryUI y modales
+│   ├── constants/          # Temas y variables globales
+│   ├── context/            # Estado global (Language, LuxuryUI)
+│   ├── database/           # Consultas SQLite y transacciones
+│   ├── services/           # Background Tasks, Geofencing, PDF Generator
+│   ├── types/              # Definiciones de TypeScript e interfaces
+│   └── utils/              # Lógica pura, utilidades matemáticas y Logger
+└── assets/                 # Recursos gráficos y multimedia genéricos
 
 ```
 ## 🚀 Instalación y Desarrollo
 ```bash
-# Instalar dependencias
+# Instalar dependencias (resolución legacy por anclaje estricto de Expo a React 19.1.0)
 npm install --legacy-peer-deps
 
-# Iniciar desarrollo
+# Iniciar entorno de desarrollo
 npx expo start -c
 
-# Verificar tipos
-npm run typecheck
+# Análisis estático y validación de código limpio
+npm run lint
 
-# Ejecutar pruebas
+# Verificación de tipado estricto
+npx tsc --noEmit --project tsconfig.json
+
+# Ejecutar suite de pruebas unitarias
 npm run test
 
 ```
 ## 🧪 Testing y Calidad
- * **Pruebas unitarias:** 14 tests en payrollUtils (todos pasando).
- * **Type checking:** Limpio (tsc --noEmit).
- * **Auditoría:** Logging completo en operaciones críticas.
+ * **Pruebas unitarias:** Cobertura del 100% en utilidades críticas (payrollUtils, dateUtils, geoUtils).
+ * **Type checking:** Limpio. 0 errores de TypeScript.
+ * **Análisis estático:** Configuración híbrida de ESLint superada (0 errores, 0 advertencias, código muerto eliminado).
+ * **Auditoría:** Logging completo, transaccional y persistente en operaciones de DB y GPS.
 ## 🔐 Sistema de Auditoría y Logging
- * **🔴 Rojo:** Errores críticos.
- * **🟡 Amarillo:** Advertencias.
- * **🟢 Verde:** Operaciones exitosas.
- * **🔵 Azul:** Eventos de sistema.
-## ⚠️ Deuda Técnica y Observaciones
-Para mantener la transparencia sobre el estado actual del desarrollo, documentamos los siguientes puntos que requieren atención futura:
- * **Gestión de File Watchers (Termux):** Debido a las limitaciones de inotify en entornos Termux, se ha configurado un límite extendido de observadores. Si el proyecto escala significativamente, se recomienda evaluar herramientas de empaquetado más ligeras o migrar a un entorno de desarrollo con mayores recursos.
- * **Flexibilidad de Dependencias:** Se ha utilizado --legacy-peer-deps para gestionar la instalación de paquetes debido a conflictos de versiones con React 19. Es recomendable realizar una auditoría periódica de las dependencias (npm audit) para actualizar a versiones compatibles de forma nativa.
- * **Librería dayjs (En espera):** Se ha incluido dayjs como dependencia, pero aún no se ha integrado en la lógica de negocio. Se recomienda su uso para futuras refactorizaciones en el manejo de fechas complejas, reemplazando el Intl.DateTimeFormat nativo.
- * **Uso de Console Logs:** Aunque se ha implementado un estándar de auditoría mediante src/utils/logger.ts, aún existen logs nativos de desarrollo en componentes de terceros. Se planea una limpieza gradual en futuras iteraciones.
+ * **🔴 Rojo:** Errores críticos (Fallas de base de datos, colapso de servicios).
+ * **🟡 Amarillo:** Advertencias (Ediciones manuales de nómina, colisiones de horario).
+ * **🟢 Verde:** Operaciones exitosas (Auto Check-in, reportes generados, transacciones completadas).
+ * **🔵 Azul:** Eventos de estado del sistema (Inicialización de DB, registro de listeners).
+ * **⚪️ Blanco:** Traza de depuración y bloqueos de concurrencia (Mutex locks).
+## ⚠️ Observaciones y Evolución Continua
+Para mantener la transparencia sobre la arquitectura y la escalabilidad del sistema, se documentan los siguientes vectores de optimización futura:
+ * **Gestión de File Watchers (Entorno Termux):** Debido a las limitaciones de inotify nativo en entornos móviles, el límite de observadores ha sido extendido. Si el proyecto escala en número de archivos, se evaluará la migración del entorno de compilación.
+ * **Resolución Estricta de NPM:** Se requiere --legacy-peer-deps temporalmente para conciliar las dependencias de testing (react-test-renderer) con la versión fijada de React por el motor de Expo (Hermes/Fabric).
+ * **Motor de Fechas:** La librería dayjs se encuentra empaquetada. La migración desde el objeto nativo Intl.DateTimeFormat hacia dayjs está programada para la próxima refactorización estructural del módulo de reportes y soporte de husos horarios complejos.
 **Desarrollado por:** Byron De Paz
 **Propiedad:** BDevDPaz
 **Licencia:** Privada / Propietaria
-

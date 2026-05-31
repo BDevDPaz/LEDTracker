@@ -1,3 +1,4 @@
+// --- app/(tabs)/_layout.tsx ---
 import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,7 +29,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Inicio",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <Ionicons name="home" size={20} color={color} />
           ),
         }}
@@ -66,3 +67,4 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+

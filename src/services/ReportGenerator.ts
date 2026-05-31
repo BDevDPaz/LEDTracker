@@ -2,7 +2,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as MailComposer from 'expo-mail-composer';
-import { getDB, getSettings, getAllAsync } from '../database/db';
+import { getSettings, getAllAsync } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
 import { log } from '../utils/logger';
@@ -16,7 +16,6 @@ const formatCurrency = (amount: number) => { return `$${amount.toFixed(2)}`; };
 
 export const generateWeeklyReport = async (shouldShare: boolean = true, customRange?: { start: number, end: number }): Promise<string | null> => {
   try {
-    const db = getDB();
     const settings = await getSettings();
 
     if (!settings) {

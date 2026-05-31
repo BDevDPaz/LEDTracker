@@ -7,15 +7,15 @@ const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const BridgeMock = {
-  isTaskRegisteredAsync: async (taskName: string) => {
+  isTaskRegisteredAsync: async (_taskName: string) => {
     await delay(50);
     return true;
   },
-  stopGeofencingAsync: async (taskName: string) => {
+  stopGeofencingAsync: async (_taskName: string) => {
     await delay(50);
     return Promise.resolve();
   },
-  removeItem: async (key: string) => {
+  removeItem: async (_key: string) => {
     await delay(50);
     return Promise.resolve();
   }
@@ -29,7 +29,9 @@ async function currentImplementation() {
       await BridgeMock.stopGeofencingAsync(GEOFENCE_TASK);
     }
     await BridgeMock.removeItem(EXIT_TIMESTAMP_KEY);
-  } catch (e) {}
+  } catch {
+    // Ignorado intencionalmente para el benchmark
+  }
   const end = performance.now();
   return end - start;
 }
@@ -41,7 +43,9 @@ async function optimizedImplementation() {
       BridgeMock.stopGeofencingAsync(GEOFENCE_TASK).catch(() => {}),
       BridgeMock.removeItem(EXIT_TIMESTAMP_KEY)
     ]);
-  } catch (e) {}
+  } catch {
+    // Ignorado intencionalmente para el benchmark
+  }
   const end = performance.now();
   return end - start;
 }

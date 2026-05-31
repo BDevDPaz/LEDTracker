@@ -1,23 +1,22 @@
+// --- app/(tabs)/report.tsx ---
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton } from '../../src/components/LuxuryUI';
-import { useLanguage } from '../../src/context/LanguageContext';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { generateWeeklyReport, sendReportByEmail } from '../../src/services/ReportGenerator';
 import { getSettings } from '../../src/database/db';
 
 export default function ReportScreen() {
-  const { t } = useLanguage();
   const { showToast } = useLuxuryUI();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleDownload = async () => {
     setIsProcessing(true);
     // true = compartir/descargar
-    const path = await generateWeeklyReport(true); 
+    const path = await generateWeeklyReport(true);
     setIsProcessing(false);
     if (path) showToast("Reporte generado", "success");
   };
@@ -26,8 +25,8 @@ export default function ReportScreen() {
     setIsProcessing(true);
     const settings = await getSettings();
     // false = solo generar URI para adjuntar
-    const pdfUri = await generateWeeklyReport(false); 
-    
+    const pdfUri = await generateWeeklyReport(false);
+
     if (pdfUri && settings) {
         await sendReportByEmail(pdfUri, settings);
         showToast("Abriendo correo...", "success");
@@ -40,7 +39,7 @@ export default function ReportScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        
+
         {/* HEADER */}
         <View style={styles.header}>
             <View>
@@ -70,18 +69,18 @@ export default function ReportScreen() {
 
         {/* BOTONES DE ACCIÓN */}
         <View style={styles.actions}>
-            <LuxuryButton 
-                text="DESCARGAR PDF" 
+            <LuxuryButton
+                text="DESCARGAR PDF"
                 variant="primary"
                 onPress={handleDownload}
                 disabled={isProcessing}
                 icon={<Ionicons name="download-outline" size={20} color="#000" />}
             />
-            
+
             <View style={{height: 20}} />
 
-            <LuxuryButton 
-                text="ENVIAR A ALEX LEÓN" 
+            <LuxuryButton
+                text="ENVIAR A ALEX LEÓN"
                 variant="success"
                 onPress={handleEmail}
                 disabled={isProcessing}
@@ -118,3 +117,4 @@ const styles = StyleSheet.create({
   actions: { width: '100%' },
   footerNote: { fontFamily: 'Montserrat_400Regular', color: '#555', textAlign: 'center', fontSize: 11, marginTop: 40, fontStyle: 'italic', paddingHorizontal: 20 }
 });
+

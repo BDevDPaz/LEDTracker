@@ -13,7 +13,17 @@ const TASK_NAME = 'APP_BACKGROUND_SERVICES';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 const FAILSAFE_THRESHOLD_MS = 15 * 60 * 1000;
 
+// Mutex para evitar concurrencia del OS o re-renders nativos
+let isTaskRunning = false;
+
 TaskManager.defineTask(TASK_NAME, async () => {
+  if (isTaskRunning) {
+    log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Mutex bloqueado: Tarea omitida por ejecución concurrente.');
+    // Corrección de Tipo: Retornamos Success para la API de expo-background-task
+    return BackgroundTask.BackgroundTaskResult.Success;
+  }
+
+  isTaskRunning = true;
   log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Tarea iniciada por el sistema...');
   let newDataProcessed = false;
 
@@ -50,7 +60,7 @@ TaskManager.defineTask(TASK_NAME, async () => {
               log('AMARILLO', 'ADVERTENCIA', 'WARN', `Auto Check-out (GPS) ejecutado para sesión #${session.id} por inactividad`);
 
               await updateSessionEndTime(session.id, exitTime);
-              
+
               // ✅ LOG PARA EL REPORTE PDF
               await insertAuditLog(session.id, 'AUTO_CHECKOUT_GPS', 'Auto Check-out (GPS) por inactividad prolongada fuera del área.');
 
@@ -133,6 +143,9 @@ TaskManager.defineTask(TASK_NAME, async () => {
   } catch (criticalError) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error Crítico General en BackgroundTasks', criticalError);
     return BackgroundTask.BackgroundTaskResult.Failed;
+  } finally {
+    // Liberamos el Mutex sin importar si la tarea fue exitosa o falló
+    isTaskRunning = false;
   }
 });
 
