@@ -1,55 +1,65 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920">
   <defs>
-    <!-- Identical styling as adaptive icon, scaled to fit an 800x800 tight crop -->
-    <linearGradient id="cGlassBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12" />
-      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.05" />
+    <radialGradient id="splashBg" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#0B132B" />
+      <stop offset="70%" stop-color="#050812" />
+      <stop offset="100%" stop-color="#020306" />
+    </radialGradient>
+    <linearGradient id="sGlassBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.03" />
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0.01" />
     </linearGradient>
-    <linearGradient id="cGlassBorder" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6" />
+    <linearGradient id="sGlassBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5" />
       <stop offset="50%" stop-color="#ffffff" stop-opacity="0.1" />
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0" />
     </linearGradient>
-    <linearGradient id="cBeam" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.9" />
+    <linearGradient id="sBeam" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.8" />
       <stop offset="100%" stop-color="#007AFF" stop-opacity="0.0" />
     </linearGradient>
-    <filter id="cGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="10" result="blur" />
+    <filter id="sGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
 
-  <!-- Group translated -112 to crop the 1024x1024 into 800x800 perfectly centered -->
-  <g transform="translate(-112, -112)">
-    <!-- Glass Rect (originally x=162 y=162 width=700) -->
-    <rect x="162" y="162" width="700" height="700" rx="180" ry="180" fill="url(#cGlassBg)" stroke="url(#cGlassBorder)" stroke-width="6" />
+  <rect width="1080" height="1920" fill="url(#splashBg)" />
 
-    <!-- Radar Rings -->
+  <pattern id="grid" width="120" height="120" patternUnits="userSpaceOnUse">
+    <path d="M 120 0 L 0 0 0 120" fill="none" stroke="#ffffff" stroke-opacity="0.02" stroke-width="1"/>
+  </pattern>
+  <rect width="1080" height="1920" fill="url(#grid)" />
+
+  <g transform="translate(28, 298)">
+    <rect x="162" y="162" width="700" height="700" rx="180" ry="180" fill="url(#sGlassBg)" stroke="url(#sGlassBorder)" stroke-width="4" />
     <g stroke="#ffffff" fill="none">
-      <circle cx="512" cy="512" r="280" stroke-opacity="0.15" stroke-width="2" />
-      <circle cx="512" cy="512" r="160" stroke-opacity="0.2" stroke-width="2" stroke-dasharray="10 10" />
+      <circle cx="512" cy="512" r="280" stroke-opacity="0.06" stroke-width="2" />
+      <circle cx="512" cy="512" r="160" stroke-opacity="0.1" stroke-width="2" stroke-dasharray="10 10" />
     </g>
-
-    <!-- Crosshairs -->
-    <g stroke="#ffffff" stroke-opacity="0.2" stroke-width="2">
+    <g stroke="#ffffff" stroke-opacity="0.1" stroke-width="2">
       <line x1="512" y1="202" x2="512" y2="822" />
       <line x1="202" y1="512" x2="822" y2="512" />
     </g>
+    <polygon points="512,512 850,174 950,230" fill="url(#sBeam)" />
+    <line x1="200" y1="824" x2="824" y2="200" stroke="#00E5FF" stroke-width="6" filter="url(#sGlow)" />
+    <line x1="200" y1="824" x2="824" y2="200" stroke="#FFFFFF" stroke-width="2" />
 
-    <!-- Ray -->
-    <polygon points="512,512 850,174 950,230" fill="url(#cBeam)" />
-    <line x1="200" y1="824" x2="824" y2="200" stroke="#00E5FF" stroke-width="8" filter="url(#cGlow)" />
-    <line x1="200" y1="824" x2="824" y2="200" stroke="#FFFFFF" stroke-width="3" />
-
-    <!-- Nodes -->
-    <g transform="translate(300, 724)"><circle cx="0" cy="0" r="14" fill="#34C759" filter="url(#cGlow)" /><circle cx="0" cy="0" r="6" fill="#FFFFFF" /></g>
-    <g transform="translate(650, 374)"><circle cx="0" cy="0" r="18" fill="#007AFF" filter="url(#cGlow)" /><circle cx="0" cy="0" r="8" fill="#FFFFFF" /></g>
-    <g transform="translate(232, 512)"><circle cx="0" cy="0" r="10" fill="#FFCC00" filter="url(#cGlow)" /><circle cx="0" cy="0" r="4" fill="#FFFFFF" /></g>
-    <g transform="translate(512, 232)"><circle cx="0" cy="0" r="10" fill="#FF9500" filter="url(#cGlow)" /><circle cx="0" cy="0" r="4" fill="#FFFFFF" /></g>
-    <g transform="translate(730, 730)"><circle cx="0" cy="0" r="12" fill="#FF3B30" filter="url(#cGlow)" /><circle cx="0" cy="0" r="5" fill="#FFFFFF" /></g>
-    <g transform="translate(512, 512)"><circle cx="0" cy="0" r="28" fill="#FFFFFF" filter="url(#cGlow)" opacity="0.4" /><circle cx="0" cy="0" r="14" fill="#FFFFFF" filter="url(#cGlow)" /><circle cx="0" cy="0" r="7" fill="#00E5FF" /></g>
+    <g transform="translate(300, 724)"><circle cx="0" cy="0" r="14" fill="#34C759" filter="url(#sGlow)" /><circle cx="0" cy="0" r="6" fill="#FFFFFF" /></g>
+    <g transform="translate(650, 374)"><circle cx="0" cy="0" r="18" fill="#007AFF" filter="url(#sGlow)" /><circle cx="0" cy="0" r="8" fill="#FFFFFF" /></g>
+    <g transform="translate(232, 512)"><circle cx="0" cy="0" r="10" fill="#FFCC00" filter="url(#sGlow)" /><circle cx="0" cy="0" r="4" fill="#FFFFFF" /></g>
+    <g transform="translate(512, 232)"><circle cx="0" cy="0" r="10" fill="#FF9500" filter="url(#sGlow)" /><circle cx="0" cy="0" r="4" fill="#FFFFFF" /></g>
+    <g transform="translate(730, 730)"><circle cx="0" cy="0" r="12" fill="#FF3B30" filter="url(#sGlow)" /><circle cx="0" cy="0" r="5" fill="#FFFFFF" /></g>
+    <g transform="translate(512, 512)"><circle cx="0" cy="0" r="24" fill="#FFFFFF" filter="url(#sGlow)" opacity="0.3" /><circle cx="0" cy="0" r="12" fill="#FFFFFF" filter="url(#sGlow)" /><circle cx="0" cy="0" r="6" fill="#00E5FF" /></g>
   </g>
-</svg>
 
+  <!-- W-TRACKER Typography -->
+  <text x="540" y="1450" font-family="sans-serif" font-weight="bold" font-size="68" fill="#FFFFFF" text-anchor="middle" letter-spacing="14">W-TRACKER</text>
+  
+  <!-- BDevDPaz v1 Badge -->
+  <rect x="340" y="1520" width="400" height="64" rx="32" fill="#FF9500" fill-opacity="0.1" stroke="#FF9500" stroke-width="2" filter="url(#sGlow)"/>
+  <text x="540" y="1562" font-family="sans-serif" font-weight="bold" font-size="24" fill="#FF9500" text-anchor="middle" letter-spacing="4">VERSION 1.0 / BDevDPaz</text>
+
+  <text x="540" y="1800" font-family="sans-serif" font-weight="normal" font-size="20" fill="#ffffff" fill-opacity="0.3" text-anchor="middle" letter-spacing="2">FORENSIC GEOLOCATION ENGINE</text>
+</svg>

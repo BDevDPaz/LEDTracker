@@ -1,5 +1,6 @@
 {
-  "name": "ledtracker",
+  "name": "w-tracker",
+  "author": "BDevDPaz",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -11,7 +12,6 @@
     "lint": "expo lint",
     "test": "jest --coverage --no-watchman",
     "typecheck": "tsc --noEmit",
-
     "audit:gm": "tsx scripts/audit/gold-master.ts",
     "audit:time": "tsx scripts/audit/audits/time.audit.ts",
     "audit:db": "tsx scripts/audit/audits/database.audit.ts",
@@ -22,7 +22,6 @@
     "audit:ui": "tsx scripts/audit/audits/ui.audit.ts",
     "audit:android": "tsx scripts/audit/audits/android.audit.ts",
     "audit:security": "tsx scripts/audit/audits/security.audit.ts",
-
     "gm": "npm run typecheck && npm run lint && npm run test && npm run audit:gm"
   },
   "dependencies": {
