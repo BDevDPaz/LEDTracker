@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1780327245393" clover="3.2.0">
+  <project timestamp="1780327245393" name="All files">
+    <metrics statements="51" coveredstatements="51" conditionals="23" coveredconditionals="23" methods="7" coveredmethods="7" elements="81" coveredelements="81" complexity="0" loc="51" ncloc="51" packages="1" files="4" classes="4"/>
+    <file name="dateUtils.ts" path="/data/data/com.termux/files/home/LEDTracker/src/utils/dateUtils.ts">
+      <metrics statements="12" coveredstatements="12" conditionals="8" coveredconditionals="8" methods="3" coveredmethods="3"/>
+      <line num="7" count="1" type="stmt"/>
+      <line num="8" count="3" type="cond" truecount="2" falsecount="0"/>
+      <line num="11" count="1" type="stmt"/>
+      <line num="17" count="1" type="stmt"/>
+      <line num="18" count="2" type="cond" truecount="2" falsecount="0"/>
+      <line num="20" count="1" type="stmt"/>
+      <line num="27" count="1" type="stmt"/>
+      <line num="28" count="3" type="cond" truecount="4" falsecount="0"/>
+      <line num="30" count="1" type="stmt"/>
+      <line num="31" count="1" type="stmt"/>
+      <line num="32" count="1" type="stmt"/>
+      <line num="34" count="1" type="stmt"/>
+    </file>
+    <file name="dayjsSetup.ts" path="/data/data/com.termux/files/home/LEDTracker/src/utils/dayjsSetup.ts">
+      <metrics statements="8" coveredstatements="8" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      <line num="12" count="2" type="stmt"/>
+      <line num="13" count="2" type="stmt"/>
+      <line num="14" count="2" type="stmt"/>
+      <line num="15" count="2" type="stmt"/>
+      <line num="16" count="2" type="stmt"/>
+      <line num="17" count="2" type="stmt"/>
+      <line num="20" count="2" type="stmt"/>
+      <line num="24" count="2" type="stmt"/>
+    </file>
+    <file name="geoUtils.ts" path="/data/data/com.termux/files/home/LEDTracker/src/utils/geoUtils.ts">
+      <metrics statements="10" coveredstatements="10" conditionals="6" coveredconditionals="6" methods="2" coveredmethods="2"/>
+      <line num="7" count="1" type="stmt"/>
+      <line num="13" count="4" type="cond" truecount="6" falsecount="0"/>
+      <line num="15" count="3" type="stmt"/>
+      <line num="16" count="3" type="stmt"/>
+      <line num="17" count="3" type="stmt"/>
+      <line num="20" count="3" type="stmt"/>
+      <line num="24" count="3" type="stmt"/>
+      <line num="25" count="3" type="stmt"/>
+      <line num="28" count="1" type="stmt"/>
+      <line num="29" count="12" type="stmt"/>
+    </file>
+    <file name="payrollUtils.ts" path="/data/data/com.termux/files/home/LEDTracker/src/utils/payrollUtils.ts">
+      <metrics statements="21" coveredstatements="21" conditionals="9" coveredconditionals="9" methods="2" coveredmethods="2"/>
+      <line num="8" count="1" type="stmt"/>
+      <line num="15" count="5" type="stmt"/>
+      <line num="16" count="5" type="stmt"/>
+      <line num="18" count="5" type="stmt"/>
+      <line num="20" count="5" type="cond" truecount="2" falsecount="0"/>
+      <line num="21" count="4" type="cond" truecount="4" falsecount="0"/>
+      <line num="23" count="1" type="stmt"/>
+      <line num="24" count="1" type="stmt"/>
+      <line num="25" count="1" type="stmt"/>
+      <line num="28" count="3" type="stmt"/>
+      <line num="32" count="5" type="stmt"/>
+      <line num="41" count="1" type="stmt"/>
+      <line num="46" count="4" type="stmt"/>
+      <line num="48" count="4" type="stmt"/>
+      <line num="49" count="4" type="stmt"/>
+      <line num="51" count="4" type="cond" truecount="2" falsecount="0"/>
+      <line num="52" count="2" type="stmt"/>
+      <line num="53" count="2" type="stmt"/>
+      <line num="56" count="4" type="stmt"/>
+      <line num="57" count="4" type="stmt"/>
+      <line num="59" count="4" type="stmt"/>
+    </file>
+  </project>
+</coverage>

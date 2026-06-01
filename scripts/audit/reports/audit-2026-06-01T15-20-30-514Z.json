@@ -1,15 +1,37 @@
 {
   "project": "LEDTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-01T06:54:04.108Z",
+  "generatedAt": "2026-06-01T15:20:30.512Z",
   "summary": {
-    "total": 9,
+    "total": 11,
     "critical": 0,
     "high": 0,
-    "medium": 3,
+    "medium": 5,
     "low": 6,
     "trace": 0
   },
   "findings": [
+    {
+      "id": "TIME-003",
+      "domain": "time",
+      "severity": "medium",
+      "title": "Direct Date.now usage detected",
+      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
+      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
+      "file": "src/context/LuxuryUIContext.tsx",
+      "line": 111,
+      "evidence": "Date.now("
+    },
+    {
+      "id": "TIME-003",
+      "domain": "time",
+      "severity": "medium",
+      "title": "Direct Date.now usage detected",
+      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
+      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
+      "file": "src/feedback/logBridge.ts",
+      "line": 98,
+      "evidence": "Date.now("
+    },
     {
       "id": "LOG-004",
       "domain": "logger",

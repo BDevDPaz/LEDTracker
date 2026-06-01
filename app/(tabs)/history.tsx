@@ -90,7 +90,7 @@ export default function HistoryScreen() {
       onConfirm: async () => {
         try {
           await deleteWorkSession(id);
-          log('ROJO', 'ACCION_DESTRUCTIVA', 'ERROR', `Registro eliminado manualmente ID: ${id}`);
+          log('NARANJA', 'ACCION_DESTRUCTIVA', 'EVENT', `Registro eliminado manualmente ID: ${id}`);
           showToast('Registro eliminado', 'success');
           void loadHistory();
         } catch (e) {
