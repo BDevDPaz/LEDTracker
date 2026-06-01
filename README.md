@@ -1,4 +1,4 @@
-# LED Tracker (v2.2 — Gold Master / PRO MAX)
+# W Tracker (v1.0 — Gold Master / PRO MAX)
 
 ![React Compiler](https://img.shields.io/badge/React-Compiler_Enabled-087ea4?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat-square&logo=typescript)
