@@ -1,15 +1,49 @@
 # LEDTracker v2.2 - Gold Master - Audit Report
 
-Generated at: `2026-06-01T03:43:28.849Z`
+Generated at: `2026-06-01T07:55:14.168Z`
 
 ## Summary
 
-- Total: 9
+- Total: 11
 - 🔴 Critical: 0
 - 🟡 High: 0
-- 🟢 Medium: 3
+- 🟢 Medium: 5
 - 🔵 Low: 6
 - ⚪️ Trace: 0
+
+## time
+
+### 🟢 TIME-003: Direct Date.now usage detected
+
+**Severity:** `medium`
+
+**Description:** Pattern "Date.now(" was found outside approved time utilities.
+
+**Recommendation:** Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.
+
+**File:** `src/context/LuxuryUIContext.tsx:111`
+
+**Evidence:**
+
+```text
+Date.now(
+```
+
+### 🟢 TIME-003: Direct Date.now usage detected
+
+**Severity:** `medium`
+
+**Description:** Pattern "Date.now(" was found outside approved time utilities.
+
+**Recommendation:** Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.
+
+**File:** `src/feedback/logBridge.ts:98`
+
+**Evidence:**
+
+```text
+Date.now(
+```
 
 ## logger
 

@@ -8,7 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
-  Alert
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,7 +20,7 @@ import Animated, {
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  withSequence
+  withSequence,
 } from 'react-native-reanimated';
 
 // Imports de Lógica
@@ -30,7 +30,7 @@ import {
   updateSessionEndTime,
   getSettings,
   updateSessionLunch,
-  insertAuditLog
+  insertAuditLog,
 } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { LocationService } from '../../src/services/LocationManager';
@@ -47,7 +47,7 @@ import { COLORS } from '../../src/constants/theme';
 import {
   LuxuryCard,
   LuxuryButton,
-  GlassModalWrapper
+  GlassModalWrapper,
 } from '../../src/components/LuxuryUI';
 import { formatTime } from '../../src/utils/dateUtils';
 
@@ -73,7 +73,7 @@ export default function HomeScreen() {
 
   const pulseAnim = useSharedValue(1);
   const animatedIconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseAnim.value }]
+    transform: [{ scale: pulseAnim.value }],
   }));
 
   useEffect(() => {
@@ -156,7 +156,7 @@ export default function HomeScreen() {
 
     setStats({
       hours: parseFloat(totalHoursToday.toFixed(2)),
-      earnings: parseFloat(totalPay.toFixed(2))
+      earnings: parseFloat(totalPay.toFixed(2)),
     });
   };
 
@@ -168,7 +168,7 @@ export default function HomeScreen() {
         getSettings(),
         db.getFirstAsync<WorkSession>(
           "SELECT * FROM work_sessions WHERE status IN ('active', 'travel', 'pending_arrival') ORDER BY id DESC"
-        )
+        ),
       ]);
 
       setActiveSession(session || null);
@@ -211,11 +211,11 @@ export default function HomeScreen() {
     log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'UI: Mostrando decisión de Checkout');
 
     Alert.alert(
-      '📍 Saliste del Área de Trabajo',
-      '¿Terminaste tu jornada o vas a otro sitio?',
+      t.alert_exit_title || '📍 Saliste del Área de Trabajo',
+      t.alert_exit_msg || '¿Terminaste tu jornada o vas a otro sitio?',
       [
         {
-          text: 'Otro Trabajo',
+          text: t.btn_moving || 'Otro Trabajo',
           onPress: () => {
             log(
               'NARANJA',
@@ -225,10 +225,10 @@ export default function HomeScreen() {
             );
             setSetupMode('transit');
             setShowSetupModal(true);
-          }
+          },
         },
         {
-          text: 'Terminar Jornada',
+          text: t.btn_finished || 'Terminar Jornada',
           style: 'destructive',
           onPress: () => {
             log(
@@ -238,8 +238,8 @@ export default function HomeScreen() {
               'Usuario seleccionó terminar la jornada'
             );
             void handleClockOut();
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -261,13 +261,12 @@ export default function HomeScreen() {
           'WARN',
           'Permisos de ubicación denegados al configurar jornada'
         );
-        showToast('Se requiere ubicación', 'error');
         setIsProcessing(false);
         return;
       }
 
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
+        accuracy: Location.Accuracy.High,
       });
 
       const geocoded = await Location.geocodeAsync(addrInput);
@@ -279,7 +278,6 @@ export default function HomeScreen() {
           'WARN',
           `No se encontró la dirección: ${addrInput}`
         );
-        showToast('Dirección no encontrada', 'error');
         setIsProcessing(false);
         return;
       }
@@ -305,7 +303,7 @@ export default function HomeScreen() {
           location_confirmed: 0,
           is_manual_edit: 0,
           lunch_taken: 0,
-          date_string: dateStr
+          date_string: dateStr,
         });
 
         await insertAuditLog(
@@ -331,7 +329,7 @@ export default function HomeScreen() {
               notesInput,
               target.latitude,
               target.longitude,
-              activeSession.id
+              activeSession.id,
             ]
           );
 
@@ -360,7 +358,9 @@ export default function HomeScreen() {
       await loadData();
 
       showToast(
-        setupMode === 'start' ? 'Geocerca Activada' : 'Tránsito iniciado',
+        setupMode === 'start'
+          ? t.toast_geofence_active || 'Geocerca Activada. Ve al sitio.'
+          : t.toast_transit_started || 'Tránsito iniciado.',
         'success'
       );
     } catch (error) {
@@ -371,7 +371,6 @@ export default function HomeScreen() {
         'Fallo general configurando la jornada/tránsito',
         error
       );
-      showToast('Error al configurar', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -412,7 +411,7 @@ export default function HomeScreen() {
 
       setShowLunchModal(false);
       await loadData();
-      showToast('Jornada finalizada', 'success');
+      showToast(t.toast_shift_ended || 'Jornada finalizada.', 'success');
     } catch (e) {
       log(
         'ROJO',
@@ -421,7 +420,6 @@ export default function HomeScreen() {
         'Error al cerrar la sesión en la base de datos',
         e
       );
-      showToast('Error al finalizar', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -497,8 +495,8 @@ export default function HomeScreen() {
                       ? activeSession.status === 'active'
                         ? COLORS.success
                         : '#f59e0b'
-                      : '#666'
-                  }
+                      : '#666',
+                  },
                 ]}
               />
               <Text testID="home-status-text" style={styles.statusText}>
@@ -524,14 +522,10 @@ export default function HomeScreen() {
                   testID="home-icon-bubble"
                   style={[
                     styles.iconBubble,
-                    activeSession && { backgroundColor: 'rgba(255,255,255,0.05)' }
+                    activeSession && { backgroundColor: 'rgba(255,255,255,0.05)' },
                   ]}
                 >
-                  <Ionicons
-                    name={getStatusIcon()}
-                    size={32}
-                    color={getStatusColor()}
-                  />
+                  <Ionicons name={getStatusIcon()} size={32} color={getStatusColor()} />
                 </View>
 
                 <Text testID="home-location-label" style={styles.label}>
@@ -544,7 +538,7 @@ export default function HomeScreen() {
                   testID="home-address"
                   style={[
                     styles.addressText,
-                    activeSession && { color: '#FFF' }
+                    activeSession && { color: '#FFF' },
                   ]}
                 >
                   {address}
@@ -569,7 +563,7 @@ export default function HomeScreen() {
                       color: '#f59e0b',
                       fontSize: 10,
                       marginTop: 10,
-                      fontFamily: 'Montserrat_600SemiBold'
+                      fontFamily: 'Montserrat_600SemiBold',
                     }}
                   >
                     Geocerca Activa • Check-in automático al llegar
@@ -615,7 +609,10 @@ export default function HomeScreen() {
             <Text style={[styles.statLabel, { color: COLORS.gold }]}>
               {t.stats_earnings}
             </Text>
-            <Text testID="home-earnings-value" style={[styles.statValue, { color: COLORS.gold }]}>
+            <Text
+              testID="home-earnings-value"
+              style={[styles.statValue, { color: COLORS.gold }]}
+            >
               ${stats.earnings.toFixed(2)}
             </Text>
           </View>
@@ -663,7 +660,7 @@ export default function HomeScreen() {
                 style={{
                   color: COLORS.gold,
                   fontSize: 12,
-                  fontFamily: 'Montserrat_700Bold'
+                  fontFamily: 'Montserrat_700Bold',
                 }}
               >
                 CERRAR
@@ -683,19 +680,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32
+    marginBottom: 32,
   },
   appTitle: {
     fontFamily: 'Montserrat_700Bold',
     fontSize: 28,
     color: '#FFF',
-    letterSpacing: 1
+    letterSpacing: 1,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    gap: 6
+    gap: 6,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: {
@@ -703,27 +700,27 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textSecondary,
     letterSpacing: 2,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
   },
   iconBubble: {
     padding: 16,
     borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    marginBottom: 16
+    marginBottom: 16,
   },
   label: {
     fontFamily: 'Montserrat_700Bold',
     color: COLORS.textSecondary,
     fontSize: 10,
     letterSpacing: 2,
-    marginBottom: 8
+    marginBottom: 8,
   },
   addressText: {
     fontFamily: 'Montserrat_600SemiBold',
     color: COLORS.textSecondary,
     fontSize: 22,
     textAlign: 'center',
-    marginBottom: 12
+    marginBottom: 12,
   },
   timerBadge: {
     flexDirection: 'row',
@@ -732,12 +729,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceHighlight,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 10
+    borderRadius: 10,
   },
   timerText: {
     fontFamily: 'Montserrat_600SemiBold',
     color: COLORS.gold,
-    fontSize: 12
+    fontSize: 12,
   },
   statsContainer: { flexDirection: 'row', gap: 14 },
   statBox: {
@@ -747,11 +744,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: 'center'
+    alignItems: 'center',
   },
   statBoxGold: {
     borderColor: 'rgba(212,175,55,0.3)',
-    backgroundColor: 'rgba(212,175,55,0.05)'
+    backgroundColor: 'rgba(212,175,55,0.05)',
   },
   statLabel: {
     fontFamily: 'Montserrat_700Bold',
@@ -759,19 +756,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
     marginBottom: 5,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
   },
   statValue: {
     fontFamily: 'Montserrat_700Bold',
     color: '#FFF',
-    fontSize: 22
+    fontSize: 22,
   },
   eggTitle: {
     fontFamily: 'Montserrat_700Bold',
     color: COLORS.gold,
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 5
+    marginBottom: 5,
   },
   eggAuthor: {
     fontFamily: 'Montserrat_400Regular',
@@ -779,20 +776,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 20,
-    letterSpacing: 1
+    letterSpacing: 1,
   },
   eggDivider: {
     height: 1,
     width: 50,
     backgroundColor: COLORS.border,
-    marginBottom: 20
+    marginBottom: 20,
   },
   eggText: {
     fontFamily: 'Montserrat_600SemiBold',
     color: '#AAA',
     fontSize: 10,
     textAlign: 'center',
-    lineHeight: 18
-  }
+    lineHeight: 18,
+  },
 });
 

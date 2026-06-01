@@ -1,9 +1,15 @@
 // --- src/utils/logger.ts ---
 import * as SQLite from 'expo-sqlite';
-import { LogColor, LogCategory, LogSeverity, SystemLogEntry } from '../types';
+import {
+  LogColor,
+  LogCategory,
+  LogSeverity,
+  SystemLogEntry,
+} from '../types';
 import dayjs from './dayjsSetup';
+import { emitFeedbackFromLog } from '../feedback/logBridge';
 
-// Cola de logs temporal para cuando la DB aún no está inicializada
+// Cola temporal mientras la DB no está inicializada
 const logQueue: SystemLogEntry[] = [];
 const auditQueue: AuditLogEntry[] = [];
 
@@ -17,7 +23,7 @@ export const AUDIT_ACTIONS = {
   MUTEX: 'MUTEX',
   LOCATION: 'LOCATION',
   PDF: 'PDF',
-  PAYROLL: 'PAYROLL'
+  PAYROLL: 'PAYROLL',
 } as const;
 
 export interface AuditLogEntry {
@@ -27,7 +33,6 @@ export interface AuditLogEntry {
   timestamp: number;
 }
 
-// Vincula la DB al logger y procesa los pendientes
 export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
   dbInstance = db;
   void flushLogQueue();
@@ -36,6 +41,7 @@ export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
 
 const flushLogQueue = async () => {
   if (!dbInstance) return;
+
   while (logQueue.length > 0) {
     const entry = logQueue.shift();
     if (entry) {
@@ -46,6 +52,7 @@ const flushLogQueue = async () => {
 
 const flushAuditQueue = async () => {
   if (!dbInstance) return;
+
   while (auditQueue.length > 0) {
     const entry = auditQueue.shift();
     if (entry) {
@@ -60,7 +67,13 @@ const saveSystemLogToDb = async (entry: SystemLogEntry) => {
   try {
     await dbInstance.runAsync(
       `INSERT INTO system_logs (
-        timestamp, timestamp_str, color, categoria, severidad, mensaje, metadata
+        timestamp,
+        timestamp_str,
+        color,
+        categoria,
+        severidad,
+        mensaje,
+        metadata
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.timestamp,
@@ -69,7 +82,7 @@ const saveSystemLogToDb = async (entry: SystemLogEntry) => {
         entry.categoria,
         entry.severidad,
         entry.mensaje,
-        entry.metadata || null
+        entry.metadata ?? null,
       ]
     );
   } catch (e) {
@@ -83,13 +96,16 @@ const saveAuditToDb = async (entry: AuditLogEntry) => {
   try {
     await dbInstance.runAsync(
       `INSERT INTO audit_logs (
-        session_id, action_type, details, timestamp
+        session_id,
+        action_type,
+        details,
+        timestamp
       ) VALUES (?, ?, ?, ?)`,
       [
         entry.session_id,
         entry.action_type,
         entry.details,
-        entry.timestamp
+        entry.timestamp,
       ]
     );
   } catch (e) {
@@ -105,13 +121,58 @@ export const logAudit = async (entry: AuditLogEntry): Promise<void> => {
   }
 };
 
+function safeSerializeMetadata(metadata: unknown): string | undefined {
+  if (metadata === undefined) return undefined;
+
+  try {
+    if (metadata instanceof Error) {
+      return JSON.stringify(
+        {
+          name: metadata.name,
+          message: metadata.message,
+          stack: metadata.stack,
+        },
+        null,
+        0
+      );
+    }
+
+    return JSON.stringify(metadata);
+  } catch {
+    try {
+      return String(metadata);
+    } catch {
+      return '[unserializable-metadata]';
+    }
+  }
+}
+
+function getIconByColor(color: LogColor): string {
+  switch (color) {
+    case 'VERDE':
+      return '🟢';
+    case 'AMARILLO':
+      return '🟡';
+    case 'NARANJA':
+      return '🟠';
+    case 'AZUL':
+      return '🔵';
+    case 'BLANCO':
+      return '⚪️';
+    case 'ROJO':
+      return '🔴';
+    default:
+      return '•';
+  }
+}
+
 export const log = (
   color: LogColor,
   categoria: LogCategory,
   severidad: LogSeverity,
   mensaje: string,
-  metadata?: any
-) => {
+  metadata?: unknown
+): void => {
   const now = dayjs();
   const timestamp = now.valueOf();
   const timestamp_str = now.format('YYYY-MM-DDTHH:mm:ss.SSSZ');
@@ -123,39 +184,18 @@ export const log = (
     categoria,
     severidad,
     mensaje,
-    metadata: metadata ? JSON.stringify(metadata, Object.getOwnPropertyNames(metadata)) : undefined
+    metadata: safeSerializeMetadata(metadata),
   };
 
-  let icon = '';
-  switch (color) {
-    case 'VERDE':
-      icon = '🟢';
-      break;
-    case 'AMARILLO':
-      icon = '🟡';
-      break;
-    case 'NARANJA':
-      icon = '🟠';
-      break;
-    case 'AZUL':
-      icon = '🔵';
-      break;
-    case 'BLANCO':
-      icon = '⚪️';
-      break;
-    case 'ROJO':
-      icon = '🔴';
-      break;
-  }
-
+  const icon = getIconByColor(color);
   const consoleMsg = `[${timestamp_str}] ${icon} [${categoria}] ${mensaje}`;
 
-  if (severidad === 'ERROR' && metadata instanceof Error) {
-    console.error(consoleMsg, metadata);
+  if (severidad === 'ERROR') {
+    console.error(consoleMsg, metadata ?? '');
   } else if (severidad === 'WARN') {
-    console.warn(consoleMsg, metadata || '');
+    console.warn(consoleMsg, metadata ?? '');
   } else {
-    console.log(consoleMsg, metadata || '');
+    console.log(consoleMsg, metadata ?? '');
   }
 
   if (dbInstance) {
@@ -163,5 +203,16 @@ export const log = (
   } else {
     logQueue.push(entry);
   }
+
+  // ======================================================
+  // BRIDGE UX → MODO PREMIUM SILENCIOSO
+  // ======================================================
+  // El bridge decide internamente si:
+  // - se muestra feedback,
+  // - qué tipo de feedback,
+  // - o si el evento debe quedarse silencioso.
+  // Esto preserva la auditoría forense sin inundar al usuario.
+  // ======================================================
+  emitFeedbackFromLog(severidad, categoria, mensaje);
 };
 

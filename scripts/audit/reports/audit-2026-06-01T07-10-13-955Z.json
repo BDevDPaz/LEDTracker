@@ -1,48 +1,15 @@
 {
   "project": "LEDTracker v2.2 - Gold Master",
-  "generatedAt": "2026-05-31T22:36:59.646Z",
+  "generatedAt": "2026-06-01T07:10:13.952Z",
   "summary": {
-    "total": 15,
+    "total": 9,
     "critical": 0,
     "high": 0,
-    "medium": 7,
-    "low": 8,
+    "medium": 3,
+    "low": 6,
     "trace": 0
   },
   "findings": [
-    {
-      "id": "TIME-003",
-      "domain": "time",
-      "severity": "medium",
-      "title": "Direct Date.now usage detected",
-      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
-      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
-      "file": "src/services/ReportGenerator.ts",
-      "line": 61,
-      "evidence": "Date.now("
-    },
-    {
-      "id": "TIME-003",
-      "domain": "time",
-      "severity": "medium",
-      "title": "Direct Date.now usage detected",
-      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
-      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
-      "file": "app/(tabs)/history.tsx",
-      "line": 48,
-      "evidence": "Date.now("
-    },
-    {
-      "id": "TIME-003",
-      "domain": "time",
-      "severity": "medium",
-      "title": "Direct Date.now usage detected",
-      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
-      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
-      "file": "app/(tabs)/index.tsx",
-      "line": 137,
-      "evidence": "Date.now("
-    },
     {
       "id": "LOG-004",
       "domain": "logger",
@@ -81,34 +48,6 @@
       "description": "The architectural overwrite pattern was not detected by name.",
       "recommendation": "Consider documenting the overwrite strategy in code comments or function names for auditability.",
       "file": "src/services/LocationManager.ts"
-    },
-    {
-      "id": "PAY-006",
-      "domain": "payroll",
-      "severity": "medium",
-      "title": "Payroll appears to operate directly on decimal hours",
-      "description": "The payroll calculation uses totalHours. Decimal hours can be valid, but minutes are safer as the internal unit.",
-      "recommendation": "Consider calculating internally in integer minutes, then converting to decimal hours only for presentation.",
-      "file": "src/utils/payrollUtils.ts",
-      "line": 40
-    },
-    {
-      "id": "UI-002",
-      "domain": "ui",
-      "severity": "low",
-      "title": "No testID detected in critical screen",
-      "description": "The screen app/(tabs)/index.tsx does not include testID markers.",
-      "recommendation": "Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.",
-      "file": "app/(tabs)/index.tsx"
-    },
-    {
-      "id": "UI-002",
-      "domain": "ui",
-      "severity": "low",
-      "title": "No testID detected in critical screen",
-      "description": "The screen app/(tabs)/history.tsx does not include testID markers.",
-      "recommendation": "Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.",
-      "file": "app/(tabs)/history.tsx"
     },
     {
       "id": "UI-002",

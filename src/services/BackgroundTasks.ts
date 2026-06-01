@@ -6,8 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { log } from '../utils/logger';
 import {
-  getDB,
-  initDatabase,
+  ensureDbReady,
   insertAuditLog,
   updateSessionEndTime,
 } from '../database/db';
@@ -40,24 +39,7 @@ TaskManager.defineTask(TASK_NAME, async () => {
   let newDataProcessed = false;
 
   try {
-    let db = getDB();
-
-    if (!db) {
-      log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'DB no inicializada. Iniciando ahora...');
-      await initDatabase();
-      db = getDB();
-    }
-
-    if (!db) {
-      log(
-        'ROJO',
-        'ERROR_CRITICO',
-        'ERROR',
-        'Fallo fatal: No se pudo conectar a la DB en background.'
-      );
-      return BackgroundTask.BackgroundTaskResult.Failed;
-    }
-
+    const db = await ensureDbReady();
     const now = dayjs().valueOf();
 
     // -----------------------------

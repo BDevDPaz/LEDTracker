@@ -4,11 +4,22 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getDB, deleteWorkSession, updateWorkSessionManual, getSettings, checkSessionOverlap, getWeeklyStats } from '../../src/database/db';
+import {
+  getDB,
+  deleteWorkSession,
+  updateWorkSessionManual,
+  getSettings,
+  checkSessionOverlap,
+  getWeeklyStats,
+} from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 import { COLORS } from '../../src/constants/theme';
-import { GlassModalWrapper, LuxuryButton, LuxuryEmptyState } from '../../src/components/LuxuryUI';
+import {
+  GlassModalWrapper,
+  LuxuryButton,
+  LuxuryEmptyState,
+} from '../../src/components/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { formatTime, formatDate } from '../../src/utils/dateUtils';
 import { log } from '../../src/utils/logger';
@@ -41,7 +52,7 @@ export default function HistoryScreen() {
         getSettings(),
         db.getAllAsync<WorkSession>(
           "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
-        )
+        ),
       ]);
 
       const hourlyRate = settings?.hourly_rate || 0;
@@ -62,6 +73,7 @@ export default function HistoryScreen() {
   const formatTimeInput = (text: string, setter: (t: string) => void) => {
     const cleaned = text.replace(/[^0-9]/g, '');
     if (cleaned.length > 4) return;
+
     if (cleaned.length > 2) {
       setter(`${cleaned.slice(0, 2)}:${cleaned.slice(2)}`);
     } else {
@@ -84,7 +96,7 @@ export default function HistoryScreen() {
         } catch (e) {
           log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', e);
         }
-      }
+      },
     });
   };
 
@@ -101,6 +113,7 @@ export default function HistoryScreen() {
 
   const saveEdit = async () => {
     if (!selectedSession || !selectedSession.id) return;
+
     if (editTimeIn.length < 5) {
       showToast('Formato HH:MM inválido', 'error');
       return;
@@ -109,13 +122,21 @@ export default function HistoryScreen() {
     // ✅ Inyección de horas de forma inmutable, preservando la fecha real de la sesión
     const hIn = Number(editTimeIn.substring(0, 2));
     const mIn = Number(editTimeIn.substring(3, 5));
-    const newStart = dayjs(selectedSession.start_time).hour(hIn).minute(mIn).second(0).millisecond(0);
+    const newStart = dayjs(selectedSession.start_time)
+      .hour(hIn)
+      .minute(mIn)
+      .second(0)
+      .millisecond(0);
 
     let newEnd = null;
     if (editTimeOut && editTimeOut.length === 5) {
       const hOut = Number(editTimeOut.substring(0, 2));
       const mOut = Number(editTimeOut.substring(3, 5));
-      newEnd = dayjs(selectedSession.start_time).hour(hOut).minute(mOut).second(0).millisecond(0);
+      newEnd = dayjs(selectedSession.start_time)
+        .hour(hOut)
+        .minute(mOut)
+        .second(0)
+        .millisecond(0);
     }
 
     const hasOverlap = await checkSessionOverlap(
@@ -125,8 +146,12 @@ export default function HistoryScreen() {
     );
 
     if (hasOverlap) {
-      log('AMARILLO', 'ADVERTENCIA', 'WARN', 'El usuario intentó guardar un horario solapado');
-      showToast('Error: Horario choca con otra sesión', 'error');
+      log(
+        'AMARILLO',
+        'ADVERTENCIA',
+        'WARN',
+        'Horario choca con otra sesión. Revisa la hora e inténtalo nuevamente.'
+      );
       return;
     }
 
@@ -138,7 +163,12 @@ export default function HistoryScreen() {
         editNote
       );
 
-      log('AMARILLO', 'CONFIG_MODIFICADA', 'WARN', `Registro modificado manualmente ID: ${selectedSession.id}`);
+      log(
+        'AMARILLO',
+        'CONFIG_MODIFICADA',
+        'WARN',
+        `Registro modificado manualmente ID: ${selectedSession.id}`
+      );
       setEditModalVisible(false);
       showToast('Cambios guardados', 'success');
       void loadHistory();
@@ -162,7 +192,12 @@ export default function HistoryScreen() {
             {item.is_manual_edit === 1 && (
               <Ionicons name="pencil" size={12} color={COLORS.gold} style={{ marginRight: 6 }} />
             )}
-            <View style={[styles.dot, { backgroundColor: item.status === 'active' ? COLORS.success : '#666' }]} />
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: item.status === 'active' ? COLORS.success : '#666' },
+              ]}
+            />
           </View>
         </View>
 
@@ -268,7 +303,11 @@ export default function HistoryScreen() {
             <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
           </View>
           <View testID="history-cancel-wrapper">
-            <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
+            <LuxuryButton
+              text="CANCELAR"
+              onPress={() => setEditModalVisible(false)}
+              variant="outline"
+            />
           </View>
         </View>
       </GlassModalWrapper>
@@ -278,25 +317,91 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', padding: 24, paddingBottom: 10 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    padding: 24,
+    paddingBottom: 10,
+  },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
-  subHeader: { fontFamily: 'Montserrat_700Bold', fontSize: 11, color: COLORS.textSecondary, letterSpacing: 1, marginTop: 6 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25 },
+  subHeader: {
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+    marginTop: 6,
+  },
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.gold,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
+  },
   pdfText: { fontFamily: 'Montserrat_700Bold', color: '#000', fontSize: 10 },
-  card: { backgroundColor: COLORS.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
   cardContent: { padding: 20 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   date: { fontFamily: 'Montserrat_400Regular', color: COLORS.textSecondary, fontSize: 12 },
   statusBadge: { flexDirection: 'row', alignItems: 'center' },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  address: { fontFamily: 'Montserrat_600SemiBold', color: '#FFF', fontSize: 16, marginBottom: 12 },
-  timeContainer: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surfaceHighlight, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  address: {
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#FFF',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.surfaceHighlight,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   time: { fontFamily: 'Montserrat_400Regular', color: '#DDD', fontSize: 13 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 18, letterSpacing: 1 },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontFamily: 'Montserrat_700Bold',
+    color: '#FFF',
+    fontSize: 18,
+    letterSpacing: 1,
+  },
   closeBtn: { padding: 5 },
   inputGroup: { marginBottom: 16 },
-  label: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 8 },
-  input: { fontFamily: 'Montserrat_400Regular', backgroundColor: '#000', color: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }
+  label: {
+    fontFamily: 'Montserrat_700Bold',
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  input: {
+    fontFamily: 'Montserrat_400Regular',
+    backgroundColor: '#000',
+    color: 'white',
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
 });
 
