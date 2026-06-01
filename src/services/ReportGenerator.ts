@@ -10,19 +10,30 @@ import dayjs from '../utils/dayjsSetup';
 import { formatDate, formatTime } from '../utils/dateUtils';
 import { calculateSessionDuration, calculatePay } from '../utils/payrollUtils';
 
-const formatCurrency = (amount: number) => { return `$${amount.toFixed(2)}`; };
+const formatCurrency = (amount: number) => {
+  return `$${amount.toFixed(2)}`;
+};
 
-export const generateWeeklyReport = async (shouldShare: boolean = true, customRange?: { start: number, end: number }): Promise<string | null> => {
+export const generateWeeklyReport = async (
+  shouldShare: boolean = true,
+  customRange?: { start: number; end: number }
+): Promise<string | null> => {
   try {
     const settings = await getSettings();
 
     if (!settings) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'No se encontró la configuración (Settings) al generar reporte');
+      log(
+        'ROJO',
+        'ERROR_CRITICO',
+        'ERROR',
+        'No se encontró la configuración (Settings) al generar reporte'
+      );
       return null;
     }
 
-    let startTs: number, endTs: number;
-    let rangeTitle = "";
+    let startTs: number;
+    let endTs: number;
+    let rangeTitle = '';
 
     if (customRange) {
       startTs = customRange.start;
@@ -35,7 +46,7 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
 
       startTs = start.valueOf();
       endTs = end.valueOf();
-      rangeTitle = "Semana Actual";
+      rangeTitle = 'Semana Actual';
     }
 
     const sessions = await getAllAsync<WorkSession>(
@@ -55,11 +66,25 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
     let totalHours = 0;
     let totalOvertime = 0;
     let totalEarnings = 0;
+    type ReportRow = {
+    date: string;
+    client: string;
+    address: string;
+    notes: string;
+    start: string;
+    end: string;
+    lunch: string;
+    total: string;
+    pay: string;
+    status: string;
+    isGeofenceIn: boolean;
+    isGeofenceOut: boolean;
+  };
 
-    const rows = sessions.map(session => {
+    const rows: ReportRow[] = sessions.map((session: WorkSession) => {
       const startTime = session.actual_start_time || session.start_time;
-      const endTime = session.end_time || Date.now();
-      
+      const endTime = session.end_time || dayjs().valueOf();
+
       // Delegamos el cálculo a nuestra utilidad centralizada
       const durationMs = calculateSessionDuration(
         startTime,
@@ -82,8 +107,12 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
       totalOvertime += otHours;
       totalEarnings += pay;
 
-      // ✅ Buscamos en la auditoría si el sistema hizo un auto-checkout para esta sesión
-      const fueAutoCheckout = logs.some(l => l.session_id === session.id && l.action_type === 'AUTO_CHECKOUT_GPS');
+      // ✅ Busca auto-checkout usando el nombre actual de auditoría
+      const fueAutoCheckout = logs.some(
+        (l: AuditLog) =>
+          l.session_id === session.id &&
+          l.action_type.includes('AUTO_CHECKOUT')
+      );
 
       return {
         date: formatDate(startTime),
@@ -96,8 +125,8 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
         total: hours.toFixed(2),
         pay: formatCurrency(pay),
         status: session.status,
-        isGeofenceIn: session.actual_start_time ? true : false,
-        isGeofenceOut: fueAutoCheckout // ✅ Nueva bandera
+        isGeofenceIn: Boolean(session.actual_start_time),
+        isGeofenceOut: fueAutoCheckout
       };
     });
 
@@ -156,7 +185,7 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
             </div>
             <div class="info-col" style="text-align: right;">
               <div class="info-label">Empresa</div>
-              <div class="info-value">${escapeHtml(settings.employer_name || 'LEON\'S ELECTRICAL DESIGN')}</div>
+              <div class="info-value">${escapeHtml(settings.employer_name || "LEON'S ELECTRICAL DESIGN")}</div>
               <div class="info-label">Rango del Reporte</div>
               <div class="info-value">${rangeTitle}</div>
             </div>
@@ -188,7 +217,9 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
               </tr>
             </thead>
             <tbody>
-              ${rows.map(row => `
+              ${rows
+                .map(
+                  (row: ReportRow) => `
                 <tr class="${row.status === 'active' ? 'row-active' : ''}">
                   <td>
                     <strong>${row.date}</strong>
@@ -207,18 +238,26 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
                   <td><strong>${row.total}</strong></td>
                   <td>${row.pay}</td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join('')}
             </tbody>
           </table>
 
           <div class="audit-section">
             <div class="audit-title">Registro de Eventos Críticos (GPS & Sistema)</div>
-            ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' :
-              logs.map(log => `
-                <div class="log-item ${log.action_type.includes('AUTO') || log.action_type.includes('EXIT') ? 'log-alert' : ''}">
-                  <strong>${formatTime(log.timestamp)}</strong> — <span style="font-weight:bold">[${log.action_type}]</span> ${escapeHtml(log.details)}
+            ${
+              logs.length === 0
+                ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>'
+                : logs
+                  .map(
+                    (auditLog: AuditLog) => `
+                <div class="log-item ${auditLog.action_type.includes('AUTO') || auditLog.action_type.includes('EXIT') ? 'log-alert' : ''}">
+                  <strong>${formatTime(auditLog.timestamp)}</strong> — <span style="font-weight:bold">[${auditLog.action_type}]</span> ${escapeHtml(auditLog.details)}
                 </div>
-              `).join('')
+              `
+                  )
+                  .join('')
             }
           </div>
 
@@ -238,7 +277,6 @@ export const generateWeeklyReport = async (shouldShare: boolean = true, customRa
     }
 
     return uri;
-
   } catch (error) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo al generar el reporte PDF semanal', error);
     return null;

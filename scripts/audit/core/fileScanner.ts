@@ -25,7 +25,7 @@ export function readJsonFile<T = unknown>(path: string): T {
   return JSON.parse(readTextFile(path)) as T;
 }
 
-export function collectSourceFiles(roots: string[]): SourceFile[] {
+export function collectSourceFiles(roots: readonly string[]): SourceFile[] {
   const files: SourceFile[] = [];
 
   function walk(current: string) {
@@ -56,7 +56,7 @@ export function collectSourceFiles(roots: string[]): SourceFile[] {
     const content = readTextFile(current);
 
     files.push({
-      path: current.replaceAll('\\', '/'),
+      path: current.split('\\').join('/'), // ✅ mejor compatibilidad
       content,
       lines: content.split(/\r?\n/)
     });
@@ -74,3 +74,4 @@ export function findLineNumber(content: string, pattern: string): number | undef
   const index = lines.findIndex(line => line.includes(pattern));
   return index >= 0 ? index + 1 : undefined;
 }
+

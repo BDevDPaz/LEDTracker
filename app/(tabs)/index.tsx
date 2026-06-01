@@ -8,7 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,7 +20,7 @@ import Animated, {
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  withSequence,
+  withSequence
 } from 'react-native-reanimated';
 
 // Imports de Lógica
@@ -30,7 +30,7 @@ import {
   updateSessionEndTime,
   getSettings,
   updateSessionLunch,
-  insertAuditLog,
+  insertAuditLog
 } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { LocationService } from '../../src/services/LocationManager';
@@ -47,7 +47,7 @@ import { COLORS } from '../../src/constants/theme';
 import {
   LuxuryCard,
   LuxuryButton,
-  GlassModalWrapper,
+  GlassModalWrapper
 } from '../../src/components/LuxuryUI';
 import { formatTime } from '../../src/utils/dateUtils';
 
@@ -73,7 +73,7 @@ export default function HomeScreen() {
 
   const pulseAnim = useSharedValue(1);
   const animatedIconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseAnim.value }],
+    transform: [{ scale: pulseAnim.value }]
   }));
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function HomeScreen() {
     );
 
     return () => subscription.remove();
-  }, []);
+  }, [pulseAnim, router]);
 
   // Control de Parámetros (Navegación desde _layout)
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function HomeScreen() {
       triggerCheckoutDecision();
       router.setParams({ showCheckoutPrompt: undefined });
     }
-  }, [params.showSetup, params.showCheckoutPrompt]);
+  }, [params.showSetup, params.showCheckoutPrompt, router]);
 
   const calculateDailyStats = async (currentSettings: any) => {
     if (!currentSettings) return;
@@ -134,7 +134,7 @@ export default function HomeScreen() {
     sessions.forEach((s) => {
       if (s.status === 'pending_arrival') return;
 
-      const end = s.end_time ? s.end_time : Date.now();
+      const end = s.end_time ? s.end_time : dayjs().valueOf();
       const startPoint = s.actual_start_time || s.start_time;
 
       const durationMs = calculateSessionDuration(
@@ -156,7 +156,7 @@ export default function HomeScreen() {
 
     setStats({
       hours: parseFloat(totalHoursToday.toFixed(2)),
-      earnings: parseFloat(totalPay.toFixed(2)),
+      earnings: parseFloat(totalPay.toFixed(2))
     });
   };
 
@@ -168,7 +168,7 @@ export default function HomeScreen() {
         getSettings(),
         db.getFirstAsync<WorkSession>(
           "SELECT * FROM work_sessions WHERE status IN ('active', 'travel', 'pending_arrival') ORDER BY id DESC"
-        ),
+        )
       ]);
 
       setActiveSession(session || null);
@@ -225,7 +225,7 @@ export default function HomeScreen() {
             );
             setSetupMode('transit');
             setShowSetupModal(true);
-          },
+          }
         },
         {
           text: 'Terminar Jornada',
@@ -238,8 +238,8 @@ export default function HomeScreen() {
               'Usuario seleccionó terminar la jornada'
             );
             void handleClockOut();
-          },
-        },
+          }
+        }
       ]
     );
   };
@@ -267,7 +267,7 @@ export default function HomeScreen() {
       }
 
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.High
       });
 
       const geocoded = await Location.geocodeAsync(addrInput);
@@ -291,7 +291,7 @@ export default function HomeScreen() {
 
       if (setupMode === 'start') {
         await insertWorkSession({
-          start_time: Date.now(),
+          start_time: dayjs().valueOf(),
           status: 'pending_arrival',
           latitude: 0,
           longitude: 0,
@@ -305,7 +305,7 @@ export default function HomeScreen() {
           location_confirmed: 0,
           is_manual_edit: 0,
           lunch_taken: 0,
-          date_string: dateStr,
+          date_string: dateStr
         });
 
         await insertAuditLog(
@@ -331,7 +331,7 @@ export default function HomeScreen() {
               notesInput,
               target.latitude,
               target.longitude,
-              activeSession.id,
+              activeSession.id
             ]
           );
 
@@ -382,16 +382,14 @@ export default function HomeScreen() {
 
     try {
       if (activeSession) {
-        const now = Date.now();
+        const now = dayjs().valueOf();
 
         if (lunchMinutes > 0) {
           const startT = activeSession.actual_start_time || activeSession.start_time;
           const sessionDuration = now - startT;
           const lunchMidPoint = startT + sessionDuration / 2;
-          const lunchStart =
-            lunchMidPoint - (lunchMinutes * 60 * 1000) / 2;
-          const lunchEnd =
-            lunchMidPoint + (lunchMinutes * 60 * 1000) / 2;
+          const lunchStart = lunchMidPoint - (lunchMinutes * 60 * 1000) / 2;
+          const lunchEnd = lunchMidPoint + (lunchMinutes * 60 * 1000) / 2;
 
           await updateSessionLunch(activeSession.id!, lunchStart, lunchEnd);
         }
@@ -461,8 +459,9 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView testID="home-screen" style={styles.container} edges={['top']}>
       <ScrollView
+        testID="home-scroll"
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
@@ -472,18 +471,24 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={styles.header}>
+        <View testID="home-header" style={styles.header}>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text style={styles.appTitle}>{t.header_title || 'LED Tracker'}</Text>
-              <TouchableOpacity onPress={handleEasterEggTap} activeOpacity={0.8}>
+              <Text testID="home-title" style={styles.appTitle}>
+                {t.header_title || 'LED Tracker'}
+              </Text>
+              <TouchableOpacity
+                testID="home-easter-egg-trigger"
+                onPress={handleEasterEggTap}
+                activeOpacity={0.8}
+              >
                 <Animated.View style={animatedIconStyle}>
                   <Ionicons name="flash" size={18} color={COLORS.gold} />
                 </Animated.View>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.statusBadge}>
+            <View testID="home-status-badge" style={styles.statusBadge}>
               <View
                 style={[
                   styles.statusDot,
@@ -492,116 +497,125 @@ export default function HomeScreen() {
                       ? activeSession.status === 'active'
                         ? COLORS.success
                         : '#f59e0b'
-                      : '#666',
-                  },
+                      : '#666'
+                  }
                 ]}
               />
-              <Text style={styles.statusText}>
+              <Text testID="home-status-text" style={styles.statusText}>
                 {!activeSession
                   ? t.status_inactive
                   : activeSession.status === 'pending_arrival'
-                  ? 'ESPERANDO LLEGADA'
-                  : activeSession.status === 'travel'
-                  ? 'EN TRÁNSITO'
-                  : t.status_active}
+                    ? 'ESPERANDO LLEGADA'
+                    : activeSession.status === 'travel'
+                      ? 'EN TRÁNSITO'
+                      : t.status_active}
               </Text>
             </View>
           </View>
         </View>
 
-        <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
-          {isProcessing ? (
-            <ActivityIndicator size="large" color={COLORS.gold} />
-          ) : (
-            <View style={{ alignItems: 'center' }}>
-              <View
-                style={[
-                  styles.iconBubble,
-                  activeSession && { backgroundColor: 'rgba(255,255,255,0.05)' },
-                ]}
-              >
-                <Ionicons
-                  name={getStatusIcon()}
-                  size={32}
-                  color={getStatusColor()}
-                />
-              </View>
-
-              <Text style={styles.label}>
-                {activeSession?.status === 'pending_arrival'
-                  ? 'DESTINO CONFIGURADO'
-                  : 'UBICACIÓN ACTUAL'}
-              </Text>
-
-              <Text
-                style={[
-                  styles.addressText,
-                  activeSession && { color: '#FFF' },
-                ]}
-              >
-                {address}
-              </Text>
-
-              {activeSession && activeSession.status !== 'pending_arrival' && (
-                <View style={styles.timerBadge}>
-                  <Ionicons name="time-outline" size={14} color={COLORS.gold} />
-                  <Text style={styles.timerText}>
-                    {formatTime(
-                      activeSession.actual_start_time || activeSession.start_time
-                    )}{' '}
-                    - En curso
-                  </Text>
-                </View>
-              )}
-
-              {activeSession?.status === 'pending_arrival' && (
-                <Text
-                  style={{
-                    color: '#f59e0b',
-                    fontSize: 10,
-                    marginTop: 10,
-                    fontFamily: 'Montserrat_600SemiBold',
-                  }}
+        <View testID="home-card-wrapper">
+          <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
+            {isProcessing ? (
+              <ActivityIndicator size="large" color={COLORS.gold} />
+            ) : (
+              <View testID="home-session-state" style={{ alignItems: 'center' }}>
+                <View
+                  testID="home-icon-bubble"
+                  style={[
+                    styles.iconBubble,
+                    activeSession && { backgroundColor: 'rgba(255,255,255,0.05)' }
+                  ]}
                 >
-                  Geocerca Activa • Check-in automático al llegar
+                  <Ionicons
+                    name={getStatusIcon()}
+                    size={32}
+                    color={getStatusColor()}
+                  />
+                </View>
+
+                <Text testID="home-location-label" style={styles.label}>
+                  {activeSession?.status === 'pending_arrival'
+                    ? 'DESTINO CONFIGURADO'
+                    : 'UBICACIÓN ACTUAL'}
                 </Text>
-              )}
-            </View>
-          )}
-        </LuxuryCard>
 
-        <LuxuryButton
-          text={activeSession ? t.btn_clock_out : t.btn_new_job}
-          variant={activeSession ? 'danger' : 'primary'}
-          onPress={
-            activeSession
-              ? handleClockOut
-              : () => {
-                  setSetupMode('start');
-                  setShowSetupModal(true);
-                }
-          }
-          disabled={isProcessing}
-          icon={
-            <Ionicons
-              name={activeSession ? 'stop' : 'play'}
-              size={18}
-              color={activeSession ? '#FFF' : '#000'}
-            />
-          }
-        />
+                <Text
+                  testID="home-address"
+                  style={[
+                    styles.addressText,
+                    activeSession && { color: '#FFF' }
+                  ]}
+                >
+                  {address}
+                </Text>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
+                {activeSession && activeSession.status !== 'pending_arrival' && (
+                  <View testID="home-timer-badge" style={styles.timerBadge}>
+                    <Ionicons name="time-outline" size={14} color={COLORS.gold} />
+                    <Text testID="home-timer-text" style={styles.timerText}>
+                      {formatTime(
+                        activeSession.actual_start_time || activeSession.start_time
+                      )}{' '}
+                      - En curso
+                    </Text>
+                  </View>
+                )}
+
+                {activeSession?.status === 'pending_arrival' && (
+                  <Text
+                    testID="home-geofence-hint"
+                    style={{
+                      color: '#f59e0b',
+                      fontSize: 10,
+                      marginTop: 10,
+                      fontFamily: 'Montserrat_600SemiBold'
+                    }}
+                  >
+                    Geocerca Activa • Check-in automático al llegar
+                  </Text>
+                )}
+              </View>
+            )}
+          </LuxuryCard>
+        </View>
+
+        <View testID="home-primary-action-wrapper">
+          <LuxuryButton
+            text={activeSession ? t.btn_clock_out : t.btn_new_job}
+            variant={activeSession ? 'danger' : 'primary'}
+            onPress={
+              activeSession
+                ? handleClockOut
+                : () => {
+                    setSetupMode('start');
+                    setShowSetupModal(true);
+                  }
+            }
+            disabled={isProcessing}
+            icon={
+              <Ionicons
+                name={activeSession ? 'stop' : 'play'}
+                size={18}
+                color={activeSession ? '#FFF' : '#000'}
+              />
+            }
+          />
+        </View>
+
+        <View testID="home-stats-container" style={styles.statsContainer}>
+          <View testID="home-hours-card" style={styles.statBox}>
             <Text style={styles.statLabel}>{t.stats_hours}</Text>
-            <Text style={styles.statValue}>{stats.hours.toFixed(2)}h</Text>
+            <Text testID="home-hours-value" style={styles.statValue}>
+              {stats.hours.toFixed(2)}h
+            </Text>
           </View>
 
-          <View style={[styles.statBox, styles.statBoxGold]}>
+          <View testID="home-earnings-card" style={[styles.statBox, styles.statBoxGold]}>
             <Text style={[styles.statLabel, { color: COLORS.gold }]}>
               {t.stats_earnings}
             </Text>
-            <Text style={[styles.statValue, { color: COLORS.gold }]}>
+            <Text testID="home-earnings-value" style={[styles.statValue, { color: COLORS.gold }]}>
               ${stats.earnings.toFixed(2)}
             </Text>
           </View>
@@ -624,7 +638,7 @@ export default function HomeScreen() {
         />
 
         <GlassModalWrapper visible={showSpecialCard}>
-          <View style={{ alignItems: 'center', padding: 10 }}>
+          <View testID="home-special-card" style={{ alignItems: 'center', padding: 10 }}>
             <Ionicons
               name="trophy"
               size={40}
@@ -641,6 +655,7 @@ export default function HomeScreen() {
               CEO de LEON&apos;S ELECTRICAL DESIGN
             </Text>
             <TouchableOpacity
+              testID="home-special-card-close"
               onPress={() => setShowSpecialCard(false)}
               style={{ marginTop: 30 }}
             >
@@ -648,7 +663,7 @@ export default function HomeScreen() {
                 style={{
                   color: COLORS.gold,
                   fontSize: 12,
-                  fontFamily: 'Montserrat_700Bold',
+                  fontFamily: 'Montserrat_700Bold'
                 }}
               >
                 CERRAR
@@ -668,19 +683,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 32
   },
   appTitle: {
     fontFamily: 'Montserrat_700Bold',
     fontSize: 28,
     color: '#FFF',
-    letterSpacing: 1,
+    letterSpacing: 1
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    gap: 6,
+    gap: 6
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: {
@@ -688,27 +703,27 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textSecondary,
     letterSpacing: 2,
-    textTransform: 'uppercase',
+    textTransform: 'uppercase'
   },
   iconBubble: {
     padding: 16,
     borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    marginBottom: 16,
+    marginBottom: 16
   },
   label: {
     fontFamily: 'Montserrat_700Bold',
     color: COLORS.textSecondary,
     fontSize: 10,
     letterSpacing: 2,
-    marginBottom: 8,
+    marginBottom: 8
   },
   addressText: {
     fontFamily: 'Montserrat_600SemiBold',
     color: COLORS.textSecondary,
     fontSize: 22,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 12
   },
   timerBadge: {
     flexDirection: 'row',
@@ -717,12 +732,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceHighlight,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 10
   },
   timerText: {
     fontFamily: 'Montserrat_600SemiBold',
     color: COLORS.gold,
-    fontSize: 12,
+    fontSize: 12
   },
   statsContainer: { flexDirection: 'row', gap: 14 },
   statBox: {
@@ -732,11 +747,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: 'center',
+    alignItems: 'center'
   },
   statBoxGold: {
     borderColor: 'rgba(212,175,55,0.3)',
-    backgroundColor: 'rgba(212,175,55,0.05)',
+    backgroundColor: 'rgba(212,175,55,0.05)'
   },
   statLabel: {
     fontFamily: 'Montserrat_700Bold',
@@ -744,19 +759,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
     marginBottom: 5,
-    textTransform: 'uppercase',
+    textTransform: 'uppercase'
   },
   statValue: {
     fontFamily: 'Montserrat_700Bold',
     color: '#FFF',
-    fontSize: 22,
+    fontSize: 22
   },
   eggTitle: {
     fontFamily: 'Montserrat_700Bold',
     color: COLORS.gold,
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 5
   },
   eggAuthor: {
     fontFamily: 'Montserrat_400Regular',
@@ -764,20 +779,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 20,
-    letterSpacing: 1,
+    letterSpacing: 1
   },
   eggDivider: {
     height: 1,
     width: 50,
     backgroundColor: COLORS.border,
-    marginBottom: 20,
+    marginBottom: 20
   },
   eggText: {
     fontFamily: 'Montserrat_600SemiBold',
     color: '#AAA',
     fontSize: 10,
     textAlign: 'center',
-    lineHeight: 18,
-  },
+    lineHeight: 18
+  }
 });
 

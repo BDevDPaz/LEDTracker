@@ -1,7 +1,35 @@
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AuditFinding, AuditReport } from './finding';
 import { buildSummary, severityIcon } from './severity';
 
+// 📁 Carpeta de salida centralizada
+const REPORT_DIR = join(process.cwd(), 'scripts/audit/reports');
+
+// 🕒 Timestamp seguro para filenames
+function getTimestamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+// 🧹 Cleanup: mantener solo los archivos más recientes
+function cleanupOldReports(dir: string, maxFiles = 10): void {
+  const files = readdirSync(dir)
+    .filter(name => name.startsWith('audit-')) // solo históricos
+    .map(name => ({
+      name,
+      path: join(dir, name),
+      time: statSync(join(dir, name)).mtime.getTime()
+    }))
+    .sort((a, b) => b.time - a.time);
+
+  const oldFiles = files.slice(maxFiles);
+
+  for (const file of oldFiles) {
+    unlinkSync(file.path);
+  }
+}
+
+// 📊 Construcción del reporte
 export function buildReport(project: string, findings: AuditFinding[]): AuditReport {
   return {
     project,
@@ -11,11 +39,32 @@ export function buildReport(project: string, findings: AuditFinding[]): AuditRep
   };
 }
 
+// 🧾 JSON report
 export function writeJsonReport(report: AuditReport): void {
-  writeFileSync('audit-report.json', JSON.stringify(report, null, 2));
+  mkdirSync(REPORT_DIR, { recursive: true });
+  cleanupOldReports(REPORT_DIR);
+
+  const timestamp = getTimestamp();
+
+  // ✅ Histórico
+  writeFileSync(
+    join(REPORT_DIR, `audit-${timestamp}.json`),
+    JSON.stringify(report, null, 2)
+  );
+
+  // ✅ Último (para CI/CD)
+  writeFileSync(
+    join(REPORT_DIR, 'audit-report.json'),
+    JSON.stringify(report, null, 2)
+  );
 }
 
+// 📝 Markdown report
 export function writeMarkdownReport(report: AuditReport): void {
+  mkdirSync(REPORT_DIR, { recursive: true });
+  cleanupOldReports(REPORT_DIR);
+
+  const timestamp = getTimestamp();
   const lines: string[] = [];
 
   lines.push(`# ${report.project} - Audit Report`);
@@ -36,7 +85,12 @@ export function writeMarkdownReport(report: AuditReport): void {
     lines.push('## Findings');
     lines.push('');
     lines.push('No findings detected.');
-    writeFileSync('audit-report.md', lines.join('\n'));
+
+    const content = lines.join('\n');
+
+    writeFileSync(join(REPORT_DIR, `audit-${timestamp}.md`), content);
+    writeFileSync(join(REPORT_DIR, 'audit-report.md'), content);
+
     return;
   }
 
@@ -72,9 +126,16 @@ export function writeMarkdownReport(report: AuditReport): void {
     }
   }
 
-  writeFileSync('audit-report.md', lines.join('\n'));
+  const content = lines.join('\n');
+
+  // ✅ Histórico
+  writeFileSync(join(REPORT_DIR, `audit-${timestamp}.md`), content);
+
+  // ✅ Último
+  writeFileSync(join(REPORT_DIR, 'audit-report.md'), content);
 }
 
+// 📦 Agrupar findings por dominio
 function groupByDomain(findings: AuditFinding[]): Record<string, AuditFinding[]> {
   return findings.reduce<Record<string, AuditFinding[]>>((acc, finding) => {
     acc[finding.domain] ??= [];
@@ -82,3 +143,4 @@ function groupByDomain(findings: AuditFinding[]): Record<string, AuditFinding[]>
     return acc;
   }, {});
 }
+

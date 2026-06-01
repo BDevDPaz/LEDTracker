@@ -12,7 +12,7 @@ import { GlassModalWrapper, LuxuryButton, LuxuryEmptyState } from '../../src/com
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { formatTime, formatDate } from '../../src/utils/dateUtils';
 import { log } from '../../src/utils/logger';
-import dayjs from '../../src/utils/dayjsSetup'; // ✅ Integración del motor de fechas
+import dayjs from '../../src/utils/dayjsSetup';
 
 export default function HistoryScreen() {
   const { showToast, showDialog } = useLuxuryUI();
@@ -27,7 +27,11 @@ export default function HistoryScreen() {
   const [editTimeIn, setEditTimeIn] = useState('');
   const [editTimeOut, setEditTimeOut] = useState('');
 
-  useFocusEffect(useCallback(() => { loadHistory(); }, []));
+  useFocusEffect(
+    useCallback(() => {
+      void loadHistory();
+    }, [])
+  );
 
   const loadHistory = async () => {
     try {
@@ -45,12 +49,12 @@ export default function HistoryScreen() {
 
       // ✅ Cálculo determinista e inmutable usando dayjs (Lunes a las 00:00:00)
       const mondayTs = dayjs().startOf('isoWeek').valueOf();
-      const tMs = await getWeeklyStats(mondayTs, Date.now());
+      const tMs = await getWeeklyStats(mondayTs, dayjs().valueOf());
       const tHours = tMs / (1000 * 60 * 60);
 
       setTotalHours(tHours);
       setEstEarnings(tHours * hourlyRate);
-    } catch(e) {
+    } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al cargar el historial', e);
     }
   };
@@ -59,7 +63,7 @@ export default function HistoryScreen() {
     const cleaned = text.replace(/[^0-9]/g, '');
     if (cleaned.length > 4) return;
     if (cleaned.length > 2) {
-      setter(`${cleaned.slice(0,2)}:${cleaned.slice(2)}`);
+      setter(`${cleaned.slice(0, 2)}:${cleaned.slice(2)}`);
     } else {
       setter(cleaned);
     }
@@ -67,17 +71,17 @@ export default function HistoryScreen() {
 
   const handleDelete = (id: number) => {
     showDialog({
-      title: "ELIMINAR",
-      message: "¿Eliminar registro permanentemente?",
-      confirmText: "ELIMINAR",
+      title: 'ELIMINAR',
+      message: '¿Eliminar registro permanentemente?',
+      confirmText: 'ELIMINAR',
       isDestructive: true,
       onConfirm: async () => {
         try {
           await deleteWorkSession(id);
           log('ROJO', 'ACCION_DESTRUCTIVA', 'ERROR', `Registro eliminado manualmente ID: ${id}`);
-          showToast("Registro eliminado", "success");
-          loadHistory();
-        } catch(e) {
+          showToast('Registro eliminado', 'success');
+          void loadHistory();
+        } catch (e) {
           log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', e);
         }
       }
@@ -87,7 +91,7 @@ export default function HistoryScreen() {
   const openEdit = (item: WorkSession) => {
     setSelectedSession(item);
     setEditNote(item.manual_note || '');
-    
+
     // ✅ Formateo seguro de tiempos extraídos
     setEditTimeIn(dayjs(item.start_time).format('HH:mm'));
     setEditTimeOut(item.end_time ? dayjs(item.end_time).format('HH:mm') : '');
@@ -97,7 +101,10 @@ export default function HistoryScreen() {
 
   const saveEdit = async () => {
     if (!selectedSession || !selectedSession.id) return;
-    if (editTimeIn.length < 5) { showToast("Formato HH:MM inválido", "error"); return; }
+    if (editTimeIn.length < 5) {
+      showToast('Formato HH:MM inválido', 'error');
+      return;
+    }
 
     // ✅ Inyección de horas de forma inmutable, preservando la fecha real de la sesión
     const hIn = Number(editTimeIn.substring(0, 2));
@@ -119,7 +126,7 @@ export default function HistoryScreen() {
 
     if (hasOverlap) {
       log('AMARILLO', 'ADVERTENCIA', 'WARN', 'El usuario intentó guardar un horario solapado');
-      showToast("Error: Horario choca con otra sesión", "error");
+      showToast('Error: Horario choca con otra sesión', 'error');
       return;
     }
 
@@ -133,15 +140,16 @@ export default function HistoryScreen() {
 
       log('AMARILLO', 'CONFIG_MODIFICADA', 'WARN', `Registro modificado manualmente ID: ${selectedSession.id}`);
       setEditModalVisible(false);
-      showToast("Cambios guardados", "success");
-      loadHistory();
-    } catch(e) {
+      showToast('Cambios guardados', 'success');
+      void loadHistory();
+    } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', e);
     }
   };
 
   const renderItem = ({ item }: { item: WorkSession }) => (
     <TouchableOpacity
+      testID={`history-record-${item.id}`}
       style={styles.card}
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
@@ -170,7 +178,7 @@ export default function HistoryScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView testID="history-screen" style={styles.container}>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.header}>HISTORIAL</Text>
@@ -181,10 +189,11 @@ export default function HistoryScreen() {
         </View>
 
         <TouchableOpacity
+          testID="history-pdf-button"
           style={styles.pdfBtn}
           onPress={() => {
             log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
-            generateWeeklyReport(true);
+            void generateWeeklyReport(true);
           }}
         >
           <Ionicons name="document-text" size={16} color="#000" />
@@ -193,18 +202,23 @@ export default function HistoryScreen() {
       </View>
 
       <FlatList
+        testID="history-list"
         data={sessions}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
-        ListEmptyComponent={<LuxuryEmptyState text={"No hay actividad reciente"} icon="time-outline" />}
+        ListEmptyComponent={<LuxuryEmptyState text="No hay actividad reciente" icon="time-outline" />}
         showsVerticalScrollIndicator={false}
       />
 
       <GlassModalWrapper visible={editModalVisible}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
-          <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeBtn}>
+          <TouchableOpacity
+            testID="history-edit-close"
+            onPress={() => setEditModalVisible(false)}
+            style={styles.closeBtn}
+          >
             <Ionicons name="close" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -212,6 +226,7 @@ export default function HistoryScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>ENTRADA (HH:MM)</Text>
           <TextInput
+            testID="history-edit-time-in"
             style={styles.input}
             value={editTimeIn}
             onChangeText={(t) => formatTimeInput(t, setEditTimeIn)}
@@ -225,6 +240,7 @@ export default function HistoryScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>SALIDA (HH:MM)</Text>
           <TextInput
+            testID="history-edit-time-out"
             style={styles.input}
             value={editTimeOut}
             onChangeText={(t) => formatTimeInput(t, setEditTimeOut)}
@@ -238,6 +254,7 @@ export default function HistoryScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>NOTA AUDITORÍA</Text>
           <TextInput
+            testID="history-edit-note"
             style={styles.input}
             value={editNote}
             onChangeText={setEditNote}
@@ -247,8 +264,12 @@ export default function HistoryScreen() {
         </View>
 
         <View style={{ gap: 4, marginTop: 10 }}>
-          <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
-          <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
+          <View testID="history-save-wrapper">
+            <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
+          </View>
+          <View testID="history-cancel-wrapper">
+            <LuxuryButton text="CANCELAR" onPress={() => setEditModalVisible(false)} variant="outline" />
+          </View>
         </View>
       </GlassModalWrapper>
     </SafeAreaView>
@@ -276,6 +297,6 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 5 },
   inputGroup: { marginBottom: 16 },
   label: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 8 },
-  input: { fontFamily: 'Montserrat_400Regular', backgroundColor: '#000', color: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: COLORS.border },
+  input: { fontFamily: 'Montserrat_400Regular', backgroundColor: '#000', color: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: COLORS.border }
 });
 

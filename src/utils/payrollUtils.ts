@@ -14,7 +14,7 @@ export const calculateSessionDuration = (
 ): number => {
   const start = dayjs(startTime);
   const end = dayjs(endTime);
-  
+
   let durationMs = end.diff(start, 'millisecond');
 
   if (lunchTaken) {
@@ -35,28 +35,31 @@ export const calculateSessionDuration = (
 /**
  * Calcula el pago total basado en horas y horas extra.
  * Regla de California: > 8 horas diarias cuentan como Overtime.
+ *
+ * ✅ Internamente opera en minutos enteros para reducir errores de redondeo.
  */
 export const calculatePay = (
   totalHours: number,
   hourlyRate: number,
   overtimeMultiplier: number = 1.5
-): { totalPay: number, regularHours: number, overtimeHours: number } => {
+): { totalPay: number; regularHours: number; overtimeHours: number } => {
+  const totalMinutes = Math.max(0, Math.round(totalHours * 60));
 
-  let regularHours = totalHours;
-  let overtimeHours = 0;
+  let regularMinutes = totalMinutes;
+  let overtimeMinutes = 0;
 
-  if (totalHours > 8) {
-    regularHours = 8;
-    overtimeHours = totalHours - 8;
+  if (totalMinutes > 8 * 60) {
+    regularMinutes = 8 * 60;
+    overtimeMinutes = totalMinutes - regularMinutes;
   }
 
-  const regularPay = regularHours * hourlyRate;
-  const overtimePay = overtimeHours * hourlyRate * overtimeMultiplier;
+  const regularPay = (regularMinutes / 60) * hourlyRate;
+  const overtimePay = (overtimeMinutes / 60) * hourlyRate * overtimeMultiplier;
 
   return {
     totalPay: regularPay + overtimePay,
-    regularHours,
-    overtimeHours
+    regularHours: regularMinutes / 60,
+    overtimeHours: overtimeMinutes / 60
   };
 };
 
