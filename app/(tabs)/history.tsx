@@ -180,6 +180,9 @@ export default function HistoryScreen() {
   const renderItem = ({ item }: { item: WorkSession }) => (
     <TouchableOpacity
       testID={`history-record-${item.id}`}
+      accessibilityRole="button"
+      accessibilityLabel="Editar registro"
+      accessibilityHint="Mantén presionado para eliminar el registro"
       style={styles.card}
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
@@ -225,6 +228,8 @@ export default function HistoryScreen() {
 
         <TouchableOpacity
           testID="history-pdf-button"
+          accessibilityRole="button"
+          accessibilityLabel="Generar reporte PDF"
           style={styles.pdfBtn}
           onPress={() => {
             log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
@@ -251,6 +256,8 @@ export default function HistoryScreen() {
           <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
           <TouchableOpacity
             testID="history-edit-close"
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar modal de edición"
             onPress={() => setEditModalVisible(false)}
             style={styles.closeBtn}
           >
