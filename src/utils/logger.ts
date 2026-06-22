@@ -42,10 +42,38 @@ export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
 const flushLogQueue = async () => {
   if (!dbInstance) return;
 
-  while (logQueue.length > 0) {
-    const entry = logQueue.shift();
-    if (entry) {
-      await saveSystemLogToDb(entry);
+  const entries = logQueue.splice(0, logQueue.length);
+  if (entries.length === 0) return;
+
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + CHUNK_SIZE);
+    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const params = chunk.flatMap((e) => [
+      e.timestamp,
+      e.timestamp_str,
+      e.color,
+      e.categoria,
+      e.severidad,
+      e.mensaje,
+      e.metadata ?? null,
+    ]);
+
+    try {
+      await dbInstance.runAsync(
+        `INSERT INTO system_logs (
+          timestamp,
+          timestamp_str,
+          color,
+          categoria,
+          severidad,
+          mensaje,
+          metadata
+        ) VALUES ${placeholders}`,
+        params
+      );
+    } catch (e) {
+      console.error('❌ Fallo crítico al guardar log en DB de auditoría:', e);
     }
   }
 };
@@ -53,10 +81,32 @@ const flushLogQueue = async () => {
 const flushAuditQueue = async () => {
   if (!dbInstance) return;
 
-  while (auditQueue.length > 0) {
-    const entry = auditQueue.shift();
-    if (entry) {
-      await saveAuditToDb(entry);
+  const entries = auditQueue.splice(0, auditQueue.length);
+  if (entries.length === 0) return;
+
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + CHUNK_SIZE);
+    const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(', ');
+    const params = chunk.flatMap((e) => [
+      e.session_id,
+      e.action_type,
+      e.details,
+      e.timestamp,
+    ]);
+
+    try {
+      await dbInstance.runAsync(
+        `INSERT INTO audit_logs (
+          session_id,
+          action_type,
+          details,
+          timestamp
+        ) VALUES ${placeholders}`,
+        params
+      );
+    } catch (e) {
+      console.error('❌ Fallo crítico al guardar audit_log en DB:', e);
     }
   }
 };
