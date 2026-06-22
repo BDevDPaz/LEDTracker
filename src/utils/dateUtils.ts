@@ -6,8 +6,6 @@ import dayjs from './dayjsSetup';
  */
 export const formatTime = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '--:--';
-  // ✅ FIX: Eliminado .tz() forzado que causaba UTC leakage en Hermes.
-  // dayjs ya hereda la zona de Los Ángeles directamente desde dayjsSetup.ts
   return dayjs(timestamp).format('hh:mm A');
 };
 
@@ -16,7 +14,6 @@ export const formatTime = (timestamp: number | null | undefined): string => {
  */
 export const formatDate = (timestamp: number | null | undefined): string => {
   if (!timestamp) return '---';
-  // ✅ FIX: Eliminado .tz() forzado
   return dayjs(timestamp).format('ddd, D MMM YYYY');
 };
 
