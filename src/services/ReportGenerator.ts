@@ -81,6 +81,12 @@ export const generateWeeklyReport = async (
     isGeofenceOut: boolean;
   };
 
+    const autoCheckoutSessionIds = new Set(
+      logs
+        .filter((l: AuditLog) => l.action_type.includes('AUTO_CHECKOUT') && l.session_id)
+        .map((l: AuditLog) => l.session_id)
+    );
+
     const rows: ReportRow[] = sessions.map((session: WorkSession) => {
       const startTime = session.actual_start_time || session.start_time;
       const endTime = session.end_time || dayjs().valueOf();
@@ -107,12 +113,8 @@ export const generateWeeklyReport = async (
       totalOvertime += otHours;
       totalEarnings += pay;
 
-      // ✅ Busca auto-checkout usando el nombre actual de auditoría
-      const fueAutoCheckout = logs.some(
-        (l: AuditLog) =>
-          l.session_id === session.id &&
-          l.action_type.includes('AUTO_CHECKOUT')
-      );
+      // ✅ Busca auto-checkout usando el nombre actual de auditoría (Optimizado O(1))
+      const fueAutoCheckout = session.id ? autoCheckoutSessionIds.has(session.id) : false;
 
       return {
         date: formatDate(startTime),
