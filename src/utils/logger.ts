@@ -51,12 +51,10 @@ const flushLogQueue = async () => {
 const flushAuditQueue = async () => {
   if (!dbInstance) return;
 
-  while (auditQueue.length > 0) {
-    const entry = auditQueue.shift();
-    if (entry) {
-      await saveAuditToDb(entry);
-    }
-  }
+  const toProcess = auditQueue.splice(0, auditQueue.length);
+  await Promise.all(
+    toProcess.filter(Boolean).map((entry) => saveAuditToDb(entry))
+  );
 };
 
 const saveSystemLogToDb = async (entry: SystemLogEntry) => {
@@ -213,4 +211,3 @@ export const log = (
   // ======================================================
   emitFeedbackFromLog(severidad, categoria, mensaje);
 };
-
