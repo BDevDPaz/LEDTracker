@@ -1,4 +1,5 @@
 // --- src/feedback/logBridge.ts ---
+import dayjs from 'dayjs';
 import type { LogCategory, LogSeverity } from '../types';
 
 export type FeedbackKind = 'toast' | 'dialog';
@@ -95,7 +96,7 @@ function shouldThrottle(payload: FeedbackPayload): boolean {
   const key =
     payload.dedupeKey ||
     `${payload.kind}:${payload.tone}:${payload.title || ''}:${payload.message}`;
-  const now = Date.now();
+  const now = dayjs().valueOf();
 
   cleanupEmissionMap(now);
 

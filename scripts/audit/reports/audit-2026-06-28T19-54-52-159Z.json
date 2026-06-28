@@ -1,11 +1,11 @@
 {
   "project": "LEDTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-01T15:20:30.512Z",
+  "generatedAt": "2026-06-28T19:54:52.156Z",
   "summary": {
-    "total": 11,
+    "total": 13,
     "critical": 0,
-    "high": 0,
-    "medium": 5,
+    "high": 1,
+    "medium": 6,
     "low": 6,
     "trace": 0
   },
@@ -30,6 +30,17 @@
       "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
       "file": "src/feedback/logBridge.ts",
       "line": 98,
+      "evidence": "Date.now("
+    },
+    {
+      "id": "TIME-003",
+      "domain": "time",
+      "severity": "medium",
+      "title": "Direct Date.now usage detected",
+      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
+      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
+      "file": "app/(tabs)/index.tsx",
+      "line": 134,
       "evidence": "Date.now("
     },
     {
@@ -108,6 +119,15 @@
       "recommendation": "Verify that no secrets, tokens or sensitive credentials are hardcoded or logged.",
       "file": "src/utils/i18n.ts",
       "evidence": "password"
+    },
+    {
+      "id": "SEC-002",
+      "domain": "security",
+      "severity": "high",
+      "title": "Potential exact location logging to console",
+      "description": "A file references latitude/longitude and console logging.",
+      "recommendation": "Avoid logging exact GPS coordinates to console in production. Prefer structured audit logs with minimised location data.",
+      "file": "app/(tabs)/index.tsx"
     },
     {
       "id": "SEC-001",

@@ -1,11 +1,11 @@
 // --- src/components/LunchModal.tsx ---
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
-import { GlassModalWrapper, LuxuryButton } from './LuxuryUI';
+import { GlassModalWrapper, LuxuryButton, LuxuryInput } from './LuxuryUI';
 import { COLORS } from '../constants/theme';
-import { log } from '../utils/logger'; // ✅ Importando logger
+import { log } from '../utils/logger';
 
 interface Props {
     visible: boolean;
@@ -36,37 +36,39 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
   return (
     <GlassModalWrapper visible={visible}>
       <View style={{alignItems: 'center', marginBottom: 20}}>
-        <Ionicons name="restaurant-outline" size={40} color={COLORS.gold} style={{marginBottom:10}} />
-        <Text style={styles.title}>{t.lunch_title || "Registro de Almuerzo"}</Text>
-        <Text style={styles.msg}>Ingresa duración (minutos):</Text>
-
-        <View style={styles.inputContainer}>
-            <TextInput
-                style={styles.input}
-                value={durationStr}
-                onChangeText={setDurationStr}
-                keyboardType="number-pad"
-                maxLength={3}
-                selectTextOnFocus
-            />
-            <Text style={styles.suffix}>min</Text>
+        <View style={styles.iconHeader}>
+          <Ionicons name="restaurant-outline" size={40} color={COLORS.gold} />
         </View>
+        <Text style={styles.title}>{t.lunch_title || "Registro de Almuerzo"}</Text>
+        <Text style={styles.msg}>{t.lunch_subtitle || "Deducción automática de tiempo"}</Text>
+
+        <LuxuryInput
+          containerStyle={styles.inputContainer}
+          style={styles.input}
+          value={durationStr}
+          onChangeText={setDurationStr}
+          keyboardType="number-pad"
+          maxLength={3}
+          selectTextOnFocus
+          textAlign="center"
+        />
+        <Text style={styles.suffix}>minutos</Text>
       </View>
 
       <View style={{ gap: 8 }}>
-        <LuxuryButton text="CONFIRMAR" onPress={handleConfirm} variant="success" />
-        <LuxuryButton text="NO TOMÉ ALMUERZO" onPress={handleNoLunch} variant="secondary" />
-        <LuxuryButton text="CANCELAR" onPress={handleCancel} variant="outline" />
+        <LuxuryButton text={t.btn_save || "CONFIRMAR"} onPress={handleConfirm} variant="success" />
+        <LuxuryButton text={t.lunch_no || "NO TOMÉ ALMUERZO"} onPress={handleNoLunch} variant="secondary" />
+        <LuxuryButton text={t.btn_cancel || "CANCELAR"} onPress={handleCancel} variant="outline" />
       </View>
     </GlassModalWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 18, marginBottom: 5 },
-  msg: { fontFamily: 'Montserrat_400Regular', color: '#AAA', fontSize: 12, marginBottom: 15 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#222', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.gold },
-  input: { color: '#FFF', fontSize: 24, fontFamily: 'Montserrat_700Bold', width: 60, textAlign: 'center' },
-  suffix: { color: COLORS.gold, fontSize: 14, fontFamily: 'Montserrat_600SemiBold' }
+  iconHeader: { marginBottom: 16, padding: 10, backgroundColor: 'rgba(212,175,55,0.1)', borderRadius: 50 },
+  title: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 20, marginBottom: 5, textAlign: 'center' },
+  msg: { fontFamily: 'Montserrat_400Regular', color: '#AAA', fontSize: 12, marginBottom: 24, textAlign: 'center' },
+  inputContainer: { width: 120, alignSelf: 'center' },
+  input: { fontSize: 24, fontFamily: 'Montserrat_700Bold', color: COLORS.gold, textAlign: 'center' },
+  suffix: { color: COLORS.textSecondary, fontSize: 10, fontFamily: 'Montserrat_600SemiBold', textTransform: 'uppercase', letterSpacing: 1, marginTop: -10, marginBottom: 10 }
 });
-

@@ -1,37 +1,15 @@
 {
   "project": "LEDTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-22T22:28:26.956Z",
+  "generatedAt": "2026-06-28T20:17:25.757Z",
   "summary": {
-    "total": 11,
+    "total": 7,
     "critical": 0,
     "high": 0,
-    "medium": 5,
-    "low": 6,
+    "medium": 3,
+    "low": 4,
     "trace": 0
   },
   "findings": [
-    {
-      "id": "TIME-003",
-      "domain": "time",
-      "severity": "medium",
-      "title": "Direct Date.now usage detected",
-      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
-      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
-      "file": "src/context/LuxuryUIContext.tsx",
-      "line": 111,
-      "evidence": "Date.now("
-    },
-    {
-      "id": "TIME-003",
-      "domain": "time",
-      "severity": "medium",
-      "title": "Direct Date.now usage detected",
-      "description": "Pattern \"Date.now(\" was found outside approved time utilities.",
-      "recommendation": "Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.",
-      "file": "src/feedback/logBridge.ts",
-      "line": 98,
-      "evidence": "Date.now("
-    },
     {
       "id": "LOG-004",
       "domain": "logger",
@@ -70,24 +48,6 @@
       "description": "The architectural overwrite pattern was not detected by name.",
       "recommendation": "Consider documenting the overwrite strategy in code comments or function names for auditability.",
       "file": "src/services/LocationManager.ts"
-    },
-    {
-      "id": "UI-002",
-      "domain": "ui",
-      "severity": "low",
-      "title": "No testID detected in critical screen",
-      "description": "The screen app/(tabs)/report.tsx does not include testID markers.",
-      "recommendation": "Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.",
-      "file": "app/(tabs)/report.tsx"
-    },
-    {
-      "id": "UI-002",
-      "domain": "ui",
-      "severity": "low",
-      "title": "No testID detected in critical screen",
-      "description": "The screen app/(tabs)/settings.tsx does not include testID markers.",
-      "recommendation": "Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.",
-      "file": "app/(tabs)/settings.tsx"
     },
     {
       "id": "SEC-001",

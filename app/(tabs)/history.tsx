@@ -1,90 +1,85 @@
-// --- app/(tabs)/history.tsx ---
-import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react';
 import {
-  getDB,
-  deleteWorkSession,
-  updateWorkSessionManual,
-  getSettings,
-  checkSessionOverlap,
-  getWeeklyStats,
-} from '../../src/database/db';
-import { WorkSession } from '../../src/types';
-import { generateWeeklyReport } from '../../src/services/ReportGenerator';
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import dayjs from 'dayjs';
 import { COLORS } from '../../src/constants/theme';
 import {
-  GlassModalWrapper,
-  LuxuryButton,
-  LuxuryEmptyState,
-} from '../../src/components/LuxuryUI';
+  getHistory,
+  getSettings,
+  deleteWorkSession,
+  updateWorkSessionManual,
+  checkSessionOverlap,
+} from '../../src/database/db';
+import { WorkSession } from '../../src/types';
+import { formatDate, formatTime } from '../../src/utils/dateUtils';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
-import { formatTime, formatDate } from '../../src/utils/dateUtils';
+import {
+  LuxuryEmptyState,
+  LuxuryButton,
+  GlassModalWrapper,
+  LuxuryInput,
+  LuxuryCard,
+} from '../../src/components/LuxuryUI';
 import { log } from '../../src/utils/logger';
-import dayjs from '../../src/utils/dayjsSetup';
+import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 
 export default function HistoryScreen() {
   const { showToast, showDialog } = useLuxuryUI();
-
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
   const [estEarnings, setEstEarnings] = useState(0);
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSession, setSelectedSession] = useState<WorkSession | null>(null);
-  const [editNote, setEditNote] = useState('');
   const [editTimeIn, setEditTimeIn] = useState('');
   const [editTimeOut, setEditTimeOut] = useState('');
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadHistory();
-    }, [])
-  );
+  const [editNote, setEditNote] = useState('');
 
   const loadHistory = async () => {
     try {
-      const db = getDB();
+      const data = await getHistory();
+      setSessions(data);
 
-      const [settings, res] = await Promise.all([
-        getSettings(),
-        db.getAllAsync<WorkSession>(
-          "SELECT * FROM work_sessions WHERE status != 'deleted' ORDER BY start_time DESC LIMIT 50"
-        ),
-      ]);
+      const settings = await getSettings();
+      const rate = settings?.hourly_rate || 0;
 
-      const hourlyRate = settings?.hourly_rate || 0;
-      setSessions(res);
-
-      // ✅ Cálculo determinista e inmutable usando dayjs (Lunes a las 00:00:00)
-      const mondayTs = dayjs().startOf('isoWeek').valueOf();
-      const tMs = await getWeeklyStats(mondayTs, dayjs().valueOf());
-      const tHours = tMs / (1000 * 60 * 60);
-
-      setTotalHours(tHours);
-      setEstEarnings(tHours * hourlyRate);
+      let hours = 0;
+      data.forEach((s) => {
+        if (s.start_time && s.end_time) {
+          const diff = (s.end_time - s.start_time) / 3600000;
+          hours += diff;
+        }
+      });
+      setTotalHours(hours);
+      setEstEarnings(hours * rate);
     } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al cargar el historial', e);
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando historial', e);
     }
   };
 
-  const formatTimeInput = (text: string, setter: (t: string) => void) => {
-    const cleaned = text.replace(/[^0-9]/g, '');
-    if (cleaned.length > 4) return;
+  useEffect(() => {
+    void loadHistory();
+  }, []);
 
-    if (cleaned.length > 2) {
-      setter(`${cleaned.slice(0, 2)}:${cleaned.slice(2)}`);
-    } else {
-      setter(cleaned);
+  const formatTimeInput = (text: string, setter: (val: string) => void) => {
+    let clean = text.replace(/[^0-9]/g, '');
+    if (clean.length >= 3) {
+      clean = clean.substring(0, 2) + ':' + clean.substring(2, 4);
     }
+    setter(clean);
   };
 
   const handleDelete = (id: number) => {
     showDialog({
-      title: 'ELIMINAR',
-      message: '¿Eliminar registro permanentemente?',
+      title: 'BORRAR REGISTRO',
+      message: '¿Estás seguro de que deseas eliminar permanentemente esta sesión?',
       confirmText: 'ELIMINAR',
       isDestructive: true,
       onConfirm: async () => {
@@ -103,11 +98,8 @@ export default function HistoryScreen() {
   const openEdit = (item: WorkSession) => {
     setSelectedSession(item);
     setEditNote(item.manual_note || '');
-
-    // ✅ Formateo seguro de tiempos extraídos
     setEditTimeIn(dayjs(item.start_time).format('HH:mm'));
     setEditTimeOut(item.end_time ? dayjs(item.end_time).format('HH:mm') : '');
-
     setEditModalVisible(true);
   };
 
@@ -119,7 +111,6 @@ export default function HistoryScreen() {
       return;
     }
 
-    // ✅ Inyección de horas de forma inmutable, preservando la fecha real de la sesión
     const hIn = Number(editTimeIn.substring(0, 2));
     const mIn = Number(editTimeIn.substring(3, 5));
     const newStart = dayjs(selectedSession.start_time)
@@ -152,6 +143,7 @@ export default function HistoryScreen() {
         'WARN',
         'Horario choca con otra sesión. Revisa la hora e inténtalo nuevamente.'
       );
+      showToast('Horario en conflicto', 'error');
       return;
     }
 
@@ -180,20 +172,19 @@ export default function HistoryScreen() {
   const renderItem = ({ item }: { item: WorkSession }) => (
     <TouchableOpacity
       testID={`history-record-${item.id}`}
-      accessibilityRole="button"
-      accessibilityLabel="Editar registro"
-      accessibilityHint="Mantén presionado para eliminar el registro"
-      style={styles.card}
+      accessibilityRole='button'
+      accessibilityLabel='Editar registro'
+      accessibilityHint='Mantén presionado para eliminar el registro'
       onPress={() => openEdit(item)}
       onLongPress={() => handleDelete(item.id!)}
       activeOpacity={0.7}
     >
-      <View style={styles.cardContent}>
+      <LuxuryCard style={styles.card}>
         <View style={styles.row}>
           <Text style={styles.date}>{formatDate(item.start_time)}</Text>
           <View style={styles.statusBadge}>
             {item.is_manual_edit === 1 && (
-              <Ionicons name="pencil" size={12} color={COLORS.gold} style={{ marginRight: 6 }} />
+              <Ionicons name='pencil' size={12} color={COLORS.gold} style={{ marginRight: 6 }} />
             )}
             <View
               style={[
@@ -208,15 +199,15 @@ export default function HistoryScreen() {
 
         <View style={styles.timeContainer}>
           <Text style={styles.time}>{formatTime(item.start_time)}</Text>
-          <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
+          <Ionicons name='arrow-forward' size={12} color={COLORS.gold} />
           <Text style={styles.time}>{item.end_time ? formatTime(item.end_time) : '...'}</Text>
         </View>
-      </View>
+      </LuxuryCard>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView testID="history-screen" style={styles.container}>
+    <SafeAreaView testID='history-screen' style={styles.container}>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.header}>HISTORIAL</Text>
@@ -227,27 +218,27 @@ export default function HistoryScreen() {
         </View>
 
         <TouchableOpacity
-          testID="history-pdf-button"
-          accessibilityRole="button"
-          accessibilityLabel="Generar reporte PDF"
+          testID='history-pdf-button'
+          accessibilityRole='button'
+          accessibilityLabel='Generar reporte PDF'
           style={styles.pdfBtn}
           onPress={() => {
             log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
             void generateWeeklyReport(true);
           }}
         >
-          <Ionicons name="document-text" size={16} color="#000" />
+          <Ionicons name='document-text' size={16} color='#000' />
           <Text style={styles.pdfText}>PDF</Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
-        testID="history-list"
+        testID='history-list'
         data={sessions}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
-        ListEmptyComponent={<LuxuryEmptyState text="No hay actividad reciente" icon="time-outline" />}
+        ListEmptyComponent={<LuxuryEmptyState text='No hay actividad reciente' icon='time-outline' />}
         showsVerticalScrollIndicator={false}
       />
 
@@ -255,67 +246,51 @@ export default function HistoryScreen() {
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
           <TouchableOpacity
-            testID="history-edit-close"
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar modal de edición"
+            testID='history-edit-close'
+            accessibilityRole='button'
+            accessibilityLabel='Cerrar modal de edición'
             onPress={() => setEditModalVisible(false)}
             style={styles.closeBtn}
           >
-            <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+            <Ionicons name='close' size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>ENTRADA (HH:MM)</Text>
-          <TextInput
-            testID="history-edit-time-in"
-            style={styles.input}
-            value={editTimeIn}
-            onChangeText={(t) => formatTimeInput(t, setEditTimeIn)}
-            keyboardType="number-pad"
-            maxLength={5}
-            placeholder="00:00"
-            placeholderTextColor="#333"
-          />
-        </View>
+        <LuxuryInput
+          label='ENTRADA (HH:MM)'
+          testID='history-edit-time-in'
+          value={editTimeIn}
+          onChangeText={(t: string) => formatTimeInput(t, setEditTimeIn)}
+          keyboardType='number-pad'
+          maxLength={5}
+          placeholder='00:00'
+        />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>SALIDA (HH:MM)</Text>
-          <TextInput
-            testID="history-edit-time-out"
-            style={styles.input}
-            value={editTimeOut}
-            onChangeText={(t) => formatTimeInput(t, setEditTimeOut)}
-            placeholder="En progreso..."
-            placeholderTextColor="#333"
-            keyboardType="number-pad"
-            maxLength={5}
-          />
-        </View>
+        <LuxuryInput
+          label='SALIDA (HH:MM)'
+          testID='history-edit-time-out'
+          value={editTimeOut}
+          onChangeText={(t: string) => formatTimeInput(t, setEditTimeOut)}
+          placeholder='En progreso...'
+          keyboardType='number-pad'
+          maxLength={5}
+        />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>NOTA AUDITORÍA</Text>
-          <TextInput
-            testID="history-edit-note"
-            style={styles.input}
-            value={editNote}
-            onChangeText={setEditNote}
-            placeholder="Razón del cambio..."
-            placeholderTextColor="#333"
-          />
-        </View>
+        <LuxuryInput
+          label='NOTA AUDITORÍA'
+          testID='history-edit-note'
+          value={editNote}
+          onChangeText={setEditNote}
+          placeholder='Razón del cambio...'
+        />
 
-        <View style={{ gap: 4, marginTop: 10 }}>
-          <View testID="history-save-wrapper">
-            <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} />
-          </View>
-          <View testID="history-cancel-wrapper">
-            <LuxuryButton
-              text="CANCELAR"
-              onPress={() => setEditModalVisible(false)}
-              variant="outline"
-            />
-          </View>
+        <View style={{ gap: 8, marginTop: 10 }}>
+          <LuxuryButton text='GUARDAR CAMBIOS' onPress={saveEdit} variant='primary' />
+          <LuxuryButton
+            text='CANCELAR'
+            onPress={() => setEditModalVisible(false)}
+            variant='outline'
+          />
         </View>
       </GlassModalWrapper>
     </SafeAreaView>
@@ -349,15 +324,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   pdfText: { fontFamily: 'Montserrat_700Bold', color: '#000', fontSize: 10 },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  cardContent: { padding: 20 },
+  card: { marginBottom: 16 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   date: { fontFamily: 'Montserrat_400Regular', color: COLORS.textSecondary, fontSize: 12 },
   statusBadge: { flexDirection: 'row', alignItems: 'center' },
@@ -392,23 +359,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   closeBtn: { padding: 5 },
-  inputGroup: { marginBottom: 16 },
-  label: {
-    fontFamily: 'Montserrat_700Bold',
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  input: {
-    fontFamily: 'Montserrat_400Regular',
-    backgroundColor: '#000',
-    color: 'white',
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
 });
-

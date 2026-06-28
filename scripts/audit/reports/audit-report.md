@@ -1,49 +1,15 @@
 # LEDTracker v2.2 - Gold Master - Audit Report
 
-Generated at: `2026-06-22T22:28:26.956Z`
+Generated at: `2026-06-28T20:17:25.757Z`
 
 ## Summary
 
-- Total: 11
+- Total: 7
 - 🔴 Critical: 0
 - 🟡 High: 0
-- 🟢 Medium: 5
-- 🔵 Low: 6
+- 🟢 Medium: 3
+- 🔵 Low: 4
 - ⚪️ Trace: 0
-
-## time
-
-### 🟢 TIME-003: Direct Date.now usage detected
-
-**Severity:** `medium`
-
-**Description:** Pattern "Date.now(" was found outside approved time utilities.
-
-**Recommendation:** Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.
-
-**File:** `src/context/LuxuryUIContext.tsx:111`
-
-**Evidence:**
-
-```text
-Date.now(
-```
-
-### 🟢 TIME-003: Direct Date.now usage detected
-
-**Severity:** `medium`
-
-**Description:** Pattern "Date.now(" was found outside approved time utilities.
-
-**Recommendation:** Use a centralized time provider or dateUtils helper to avoid non-deterministic tests and timezone leaks.
-
-**File:** `src/feedback/logBridge.ts:98`
-
-**Evidence:**
-
-```text
-Date.now(
-```
 
 ## logger
 
@@ -106,28 +72,6 @@ console.error(
 **Recommendation:** Consider documenting the overwrite strategy in code comments or function names for auditability.
 
 **File:** `src/services/LocationManager.ts`
-
-## ui
-
-### 🔵 UI-002: No testID detected in critical screen
-
-**Severity:** `low`
-
-**Description:** The screen app/(tabs)/report.tsx does not include testID markers.
-
-**Recommendation:** Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.
-
-**File:** `app/(tabs)/report.tsx`
-
-### 🔵 UI-002: No testID detected in critical screen
-
-**Severity:** `low`
-
-**Description:** The screen app/(tabs)/settings.tsx does not include testID markers.
-
-**Recommendation:** Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.
-
-**File:** `app/(tabs)/settings.tsx`
 
 ## security
 
