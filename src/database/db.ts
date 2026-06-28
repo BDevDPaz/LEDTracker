@@ -369,9 +369,9 @@ export const insertAuditLog = async (
   });
 };
 
-export const getWeeklyStats = async (
-  mondayTs: number,
-  nowTs: number
+export const getTotalDurationMs = async (
+  sinceTs: number,
+  referenceNow: number
 ): Promise<number> => {
   const database = await ensureDbReady();
 
@@ -379,17 +379,30 @@ export const getWeeklyStats = async (
     `SELECT SUM(
         MAX(
           0,
-          COALESCE(end_time, ?) - start_time -
-          (CASE WHEN lunch_taken = 1 THEN 3600000 ELSE 0 END)
+          COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time) -
+          (CASE
+            WHEN lunch_taken = 1 AND lunch_start IS NOT NULL AND lunch_end IS NOT NULL
+            THEN (lunch_end - lunch_start)
+            WHEN lunch_taken = 1
+            THEN 3600000
+            ELSE 0
+          END)
         )
       ) as total_ms
      FROM work_sessions
-     WHERE status != 'deleted'
+     WHERE status NOT IN ('deleted', 'pending_arrival')
        AND start_time >= ?`,
-    [nowTs, mondayTs]
+    [referenceNow, sinceTs]
   );
 
   return result?.total_ms || 0;
+};
+
+export const getWeeklyStats = async (
+  mondayTs: number,
+  nowTs: number
+): Promise<number> => {
+  return getTotalDurationMs(mondayTs, nowTs);
 };
 
 export const getAllAsync = async <T>(

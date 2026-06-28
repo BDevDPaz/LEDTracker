@@ -29,6 +29,7 @@ import {
   insertWorkSession,
   updateSessionEndTime,
   getSettings,
+  getTotalDurationMs,
   updateSessionLunch,
   insertAuditLog,
 } from '../../src/database/db';
@@ -121,32 +122,11 @@ export default function HomeScreen() {
   const calculateDailyStats = async (currentSettings: any) => {
     if (!currentSettings) return;
 
-    const db = getDB();
     const startOfDayTs = dayjs().startOf('day').valueOf();
+    const nowTs = dayjs().valueOf();
 
-    const sessions = await db.getAllAsync<WorkSession>(
-      'SELECT * FROM work_sessions WHERE start_time >= ?',
-      [startOfDayTs]
-    );
-
-    let totalHoursToday = 0;
-
-    sessions.forEach((s) => {
-      if (s.status === 'pending_arrival') return;
-
-      const end = s.end_time ? s.end_time : dayjs().valueOf();
-      const startPoint = s.actual_start_time || s.start_time;
-
-      const durationMs = calculateSessionDuration(
-        startPoint,
-        end,
-        s.lunch_taken,
-        s.lunch_start,
-        s.lunch_end
-      );
-
-      totalHoursToday += durationMs / (1000 * 60 * 60);
-    });
+    const durationMs = await getTotalDurationMs(startOfDayTs, nowTs);
+    const totalHoursToday = durationMs / (1000 * 60 * 60);
 
     const { totalPay } = calculatePay(
       totalHoursToday,

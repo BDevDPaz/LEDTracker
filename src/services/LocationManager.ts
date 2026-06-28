@@ -153,11 +153,20 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      await Promise.all([
-        Location.stopGeofencingAsync(GEOFENCE_TASK).catch(() => {}),
-        Location.stopLocationUpdatesAsync(GEOFENCE_TASK).catch(() => {}),
+      const isGeofenceRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
+
+      const tasks = [
         AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
-      ]);
+      ];
+
+      if (isGeofenceRegistered) {
+        tasks.push(Location.stopGeofencingAsync(GEOFENCE_TASK));
+        tasks.push(Location.stopLocationUpdatesAsync(GEOFENCE_TASK));
+      }
+
+      await Promise.all(tasks.map(t => t.catch(e => {
+        log('NARANJA', 'ADVERTENCIA', 'WARN', 'Error silenciado en stopMonitoring', e);
+      })));
 
       log('ROJO', 'MONITOREO_DETENIDO', 'ERROR', 'Monitoreo y rastreo detenidos.');
     } catch (e) {
