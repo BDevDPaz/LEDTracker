@@ -42,12 +42,10 @@ export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
 const flushLogQueue = async () => {
   if (!dbInstance) return;
 
-  while (logQueue.length > 0) {
-    const entry = logQueue.shift();
-    if (entry) {
-      await saveSystemLogToDb(entry);
-    }
-  }
+  const toProcess = logQueue.splice(0, logQueue.length);
+  await Promise.all(
+    toProcess.filter(Boolean).map((entry) => saveSystemLogToDb(entry))
+  );
 };
 
 const flushAuditQueue = async () => {
