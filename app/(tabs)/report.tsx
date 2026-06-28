@@ -1,4 +1,3 @@
-// --- app/(tabs)/report.tsx ---
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,94 +5,96 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton } from '../../src/components/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { generateWeeklyReport, sendReportByEmail } from '../../src/services/ReportGenerator';
 import { getSettings } from '../../src/database/db';
 
 export default function ReportScreen() {
   const { showToast } = useLuxuryUI();
+  const { t } = useLanguage();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleDownload = async () => {
     setIsProcessing(true);
-    // true = compartir/descargar
     const path = await generateWeeklyReport(true);
     setIsProcessing(false);
-    if (path) showToast("Reporte generado", "success");
+    if (path) showToast(t.toast_geofence_active || 'Reporte generado', 'success');
   };
 
   const handleEmail = async () => {
     setIsProcessing(true);
     const settings = await getSettings();
-    // false = solo generar URI para adjuntar
     const pdfUri = await generateWeeklyReport(false);
 
     if (pdfUri && settings) {
         await sendReportByEmail(pdfUri, settings);
-        showToast("Abriendo correo...", "success");
+        showToast('Abriendo correo...', 'success');
     } else {
-        showToast("Error al preparar correo", "error");
+        showToast('Error al preparar correo', 'error');
     }
     setIsProcessing(false);
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <SafeAreaView testID='report-screen' style={styles.container} edges={['top']}>
+      <ScrollView testID='report-scroll-view' contentContainerStyle={styles.scroll}>
 
         {/* HEADER */}
-        <View style={styles.header}>
+        <View testID='report-header' style={styles.header}>
             <View>
-              <Text style={styles.appTitle}>REPORTE SEMANAL</Text>
-              <Text style={styles.subTitle}>NÓMINA Y AUDITORÍA</Text>
+              <Text testID='report-title' style={styles.appTitle}>{t.report_title || 'REPORTE SEMANAL'}</Text>
+              <Text testID='report-subtitle' style={styles.subTitle}>{t.report_subtitle || 'NÓMINA Y AUDITORÍA'}</Text>
             </View>
             <View style={styles.iconBadge}>
-               <Ionicons name="document-text" size={28} color={COLORS.gold} />
+               <Ionicons name='document-text' size={28} color={COLORS.gold} />
             </View>
         </View>
 
         {/* PREVIEW CARD */}
         <LuxuryCard style={styles.previewCard}>
-            <View style={styles.docContainer}>
-                <Ionicons name="document-attach" size={60} color={COLORS.textSecondary} />
+            <View testID='report-preview-icon' style={styles.docContainer}>
+                <Ionicons name='document-attach' size={60} color={COLORS.textSecondary} />
                 <View style={styles.docLines}>
                     <View style={[styles.line, { width: 60 }]} />
                     <View style={[styles.line, { width: 40 }]} />
                     <View style={[styles.line, { width: 50 }]} />
                 </View>
             </View>
-            <Text style={styles.cardTitle}>Listo para Generar</Text>
-            <Text style={styles.cardDesc}>
-                Genera un PDF oficial con el desglose de horas regulares, horas extra (Overtime) y registros de auditoría GPS.
+            <Text testID='report-card-title' style={styles.cardTitle}>{t.card_ready_title || 'Listo para Generar'}</Text>
+            <Text testID='report-card-desc' style={styles.cardDesc}>
+                {t.card_ready_desc || 'Genera un PDF oficial con el desglose de horas regulares, horas extra (Overtime) y registros de auditoría GPS.'}
             </Text>
         </LuxuryCard>
 
         {/* BOTONES DE ACCIÓN */}
         <View style={styles.actions}>
             <LuxuryButton
-                text="DESCARGAR PDF"
-                variant="primary"
+                testID='report-download-button'
+                text={t.btn_download_pdf || 'DESCARGAR PDF'}
+                variant='primary'
                 onPress={handleDownload}
                 disabled={isProcessing}
-                icon={<Ionicons name="download-outline" size={20} color="#000" />}
+                icon={<Ionicons name='download-outline' size={20} color='#000' />}
+                style={{ marginBottom: 16 }}
             />
 
-            <View style={{height: 20}} />
-
             <LuxuryButton
-                text="ENVIAR A ALEX LEÓN"
-                variant="success"
+                testID='report-email-button'
+                text={t.btn_send_email || 'ENVIAR POR EMAIL'}
+                variant='success'
                 onPress={handleEmail}
                 disabled={isProcessing}
-                icon={<Ionicons name="mail-outline" size={20} color="#FFF" />}
+                icon={<Ionicons name='mail-outline' size={20} color='#FFF' />}
+                style={{ marginBottom: 16 }}
             />
         </View>
 
         {isProcessing && (
-            <ActivityIndicator size="large" color={COLORS.gold} style={{marginTop: 30}} />
+            <ActivityIndicator testID='report-loading' size='large' color={COLORS.gold} style={{marginTop: 30}} />
         )}
 
-        <Text style={styles.footerNote}>
-            * Al enviar, se abrirá tu aplicación de correo predeterminada con el reporte adjunto automáticamente.
+        <Text testID='report-footer-note' style={styles.footerNote}>
+            {t.report_footer_note || '* Al enviar, se abrirá tu aplicación de correo predeterminada con el reporte adjunto automáticamente.'}
         </Text>
 
       </ScrollView>
@@ -117,4 +118,3 @@ const styles = StyleSheet.create({
   actions: { width: '100%' },
   footerNote: { fontFamily: 'Montserrat_400Regular', color: '#555', textAlign: 'center', fontSize: 11, marginTop: 40, fontStyle: 'italic', paddingHorizontal: 20 }
 });
-

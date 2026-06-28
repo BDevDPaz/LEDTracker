@@ -1,16 +1,16 @@
 // --- src/components/LuxuryUI.tsx ---
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ViewStyle, TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { COLORS } from '../constants/theme';
-import { log } from '../utils/logger'; // ✅ Importando logger para trazabilidad de UI
+import { log } from '../utils/logger';
 
 // --- TARJETA ---
-export const LuxuryCard = ({ children, active, style }: any) => (
+export const LuxuryCard = ({ children, active, style }: { children: React.ReactNode, active?: boolean, style?: ViewStyle }) => (
   <View style={[styles.cardContainer, style, active && styles.cardActive]}>
     <LinearGradient
       colors={active ? ['#1A1A1A', '#000000'] : ['#0A0A0A', '#050505']}
@@ -24,7 +24,7 @@ export const LuxuryCard = ({ children, active, style }: any) => (
 );
 
 // --- MODAL WRAPPER ---
-export const GlassModalWrapper = ({ visible, children }: any) => (
+export const GlassModalWrapper = ({ visible, children }: { visible: boolean, children: React.ReactNode }) => (
   <Modal visible={visible} transparent animationType="fade">
     <View style={styles.modalOverlay}>
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
@@ -36,7 +36,7 @@ export const GlassModalWrapper = ({ visible, children }: any) => (
 );
 
 // --- EMPTY STATE ---
-export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: any) => (
+export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: { text: string, icon?: any }) => (
   <View style={styles.emptyContainer}>
     <View style={styles.emptyIconBubble}>
       <Ionicons name={icon} size={32} color={COLORS.textSecondary} />
@@ -46,7 +46,7 @@ export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: any) => (
 );
 
 // --- SKELETON ---
-export const LuxurySkeleton = ({ width, height, style }: any) => {
+export const LuxurySkeleton = ({ width, height, style }: { width: number | string, height: number | string, style?: ViewStyle }) => {
   const opacity = useSharedValue(0.3);
   useEffect(() => {
     opacity.value = withRepeat(
@@ -62,7 +62,16 @@ export const LuxurySkeleton = ({ width, height, style }: any) => {
 };
 
 // --- BOTÓN ---
-export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled }: any) => {
+interface LuxuryButtonProps {
+  onPress: (e: any) => void;
+  text: string;
+  icon?: React.ReactNode;
+  variant?: 'primary' | 'danger' | 'outline' | 'success' | 'secondary';
+  disabled?: boolean;
+  style?: ViewStyle;
+}
+
+export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled, style }: LuxuryButtonProps) => {
   let bgColors: readonly [string, string, ...string[]] = ['#D4AF37', '#8a7224']; // Gold (Primary)
   let textColor = '#000';
   let borderColor = 'transparent';
@@ -86,7 +95,6 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
 
   const handlePress = (e: any) => {
     if (!disabled) {
-      // ✅ Auditoría silenciosa: Ideal para rastrear bloqueos de interfaz o quejas del usuario.
       log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', `UI: Botón presionado [${text}]`);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onPress(e);
@@ -98,7 +106,7 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
       onPress={handlePress}
       disabled={disabled}
       activeOpacity={0.7}
-      style={{marginBottom: 16}}
+      style={style}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       accessibilityLabel={text}
@@ -116,6 +124,28 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
   );
 };
 
+// --- INPUT ---
+interface LuxuryInputProps {
+  label?: string;
+  icon?: React.ReactNode;
+  containerStyle?: ViewStyle;
+  [key: string]: any;
+}
+
+export const LuxuryInput = ({ label, icon, containerStyle, ...props }: LuxuryInputProps) => (
+  <View style={[styles.inputGroup, containerStyle]}>
+    {label && <Text style={styles.inputLabel}>{label}</Text>}
+    <View style={styles.inputWrapper}>
+      {icon && <View style={styles.inputIconWrapper}>{icon}</View>}
+      <TextInput
+        style={styles.input}
+        placeholderTextColor="#444"
+        {...props}
+      />
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
   cardContainer: { borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 20 },
   cardActive: { borderColor: COLORS.gold, shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
@@ -128,5 +158,10 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, opacity: 0.7 },
   emptyIconBubble: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#333' },
   emptyText: { fontFamily: 'Montserrat_400Regular', color: '#666', fontSize: 14, letterSpacing: 1 },
+  // Estilos Input
+  inputGroup: { marginBottom: 16, width: '100%' },
+  inputLabel: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, height: 50, paddingHorizontal: 16 },
+  inputIconWrapper: { marginRight: 12 },
+  input: { flex: 1, color: '#FFF', fontFamily: 'Montserrat_400Regular', fontSize: 14 },
 });
-

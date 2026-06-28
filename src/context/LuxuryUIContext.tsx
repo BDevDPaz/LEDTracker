@@ -1,4 +1,5 @@
 // --- src/context/LuxuryUIContext.tsx ---
+import dayjs from 'dayjs';
 import React, {
   createContext,
   useContext,
@@ -108,7 +109,7 @@ export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
     if (!normalizedMsg) return;
 
     const key = createToastKey(normalizedMsg, type);
-    const now = Date.now();
+    const now = dayjs().valueOf();
 
     // Dedupe temporal del último toast mostrado
     if (
@@ -198,7 +199,7 @@ export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
 
   const showDialog = useCallback((options: DialogOptions) => {
     const key = createDialogKey(options);
-    const now = Date.now();
+    const now = dayjs().valueOf();
 
     // Dedupe temporal del último dialog emitido
     if (

@@ -1,12 +1,12 @@
 {
   "project": "LEDTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-22T22:28:26.956Z",
+  "generatedAt": "2026-06-28T20:02:16.287Z",
   "summary": {
-    "total": 11,
+    "total": 9,
     "critical": 0,
     "high": 0,
     "medium": 5,
-    "low": 6,
+    "low": 4,
     "trace": 0
   },
   "findings": [
@@ -70,24 +70,6 @@
       "description": "The architectural overwrite pattern was not detected by name.",
       "recommendation": "Consider documenting the overwrite strategy in code comments or function names for auditability.",
       "file": "src/services/LocationManager.ts"
-    },
-    {
-      "id": "UI-002",
-      "domain": "ui",
-      "severity": "low",
-      "title": "No testID detected in critical screen",
-      "description": "The screen app/(tabs)/report.tsx does not include testID markers.",
-      "recommendation": "Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.",
-      "file": "app/(tabs)/report.tsx"
-    },
-    {
-      "id": "UI-002",
-      "domain": "ui",
-      "severity": "low",
-      "title": "No testID detected in critical screen",
-      "description": "The screen app/(tabs)/settings.tsx does not include testID markers.",
-      "recommendation": "Add testID values to critical buttons, modals and summaries to improve React Native Testing Library coverage.",
-      "file": "app/(tabs)/settings.tsx"
     },
     {
       "id": "SEC-001",

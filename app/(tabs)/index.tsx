@@ -1,47 +1,34 @@
-// --- app/(tabs)/index.tsx ---
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  RefreshControl,
   ScrollView,
-  ActivityIndicator,
   TouchableOpacity,
-  Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
-  withTiming,
+  withSpring,
   withSequence,
+  withTiming,
 } from 'react-native-reanimated';
+import dayjs from 'dayjs';
 
-// Imports de Lógica
 import {
-  getDB,
-  insertWorkSession,
-  updateSessionEndTime,
+  getActiveSession,
   getSettings,
-  getTotalDurationMs,
-  updateSessionLunch,
-  insertAuditLog,
+  getHistory,
+  saveSession,
+  updateSessionStatus,
 } from '../../src/database/db';
 import { WorkSession } from '../../src/types';
 import { LocationService } from '../../src/services/LocationManager';
-import { calculateSessionDuration, calculatePay } from '../../src/utils/payrollUtils';
-import { log } from '../../src/utils/logger';
-import dayjs from '../../src/utils/dayjsSetup';
-
-// Componentes UI
-import { DailySetupModal } from '../../src/components/DailySetupModal';
-import { LunchModal } from '../../src/components/LunchModal';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
@@ -51,6 +38,9 @@ import {
   GlassModalWrapper,
 } from '../../src/components/LuxuryUI';
 import { formatTime } from '../../src/utils/dateUtils';
+import { DailySetupModal } from '../../src/components/DailySetupModal';
+import { LunchModal } from '../../src/components/LunchModal';
+import { log } from '../../src/utils/logger';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
@@ -69,377 +59,154 @@ export default function HomeScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [easterEggCount, setEasterEggCount] = useState(0);
-  const [showSpecialCard, setShowSpecialCard] = useState(false);
 
-  const pulseAnim = useSharedValue(1);
-  const animatedIconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseAnim.value }],
-  }));
+  // Easter Egg
+  const [tapCount, setTapCount] = useState(0);
+  const [showSpecialCard, setShowSpecialCard] = useState(false);
+  const iconScale = useSharedValue(1);
+
+  const loadData = useCallback(async () => {
+    try {
+      const session = await getActiveSession();
+      setActiveSession(session);
+
+      if (session) {
+        setAddress(session.address);
+      } else {
+        setAddress(t.no_activity || 'No hay actividad registrada.');
+      }
+
+      const history = await getHistory();
+      const settings = await getSettings();
+      const rate = settings?.hourly_rate || 0;
+
+      let totalH = 0;
+      history.forEach((s) => {
+        if (s.start_time && s.end_time) {
+          totalH += (s.end_time - s.start_time) / 3600000;
+        }
+      });
+      setStats({ hours: totalH, earnings: totalH * rate });
+    } catch (e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando datos de inicio', e);
+    }
+  }, [t.no_activity]);
 
   useEffect(() => {
-    pulseAnim.value = withRepeat(
-      withSequence(
-        withTiming(1.2, { duration: 1000 }),
-        withTiming(1, { duration: 1000 })
-      ),
-      -1,
-      true
-    );
+    void loadData();
+  }, [loadData]);
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      async (response) => {
-        const data = response?.notification?.request?.content?.data || {};
-
-        if (data.action === 'OPEN_DAILY_SETUP') {
-          setSetupMode('start');
-          setShowSetupModal(true);
-        } else if (data.action === 'GENERATE_REPORT_PROMPT') {
-          router.push('/(tabs)/report');
-        } else if (data.action === 'CHECKOUT_DECISION') {
-          triggerCheckoutDecision();
-        }
-      }
-    );
-
-    return () => subscription.remove();
-  }, [pulseAnim, router]);
-
-  // Control de Parámetros (Navegación desde _layout)
   useEffect(() => {
     if (params.showSetup === 'true') {
       setSetupMode('start');
       setShowSetupModal(true);
-      router.setParams({ showSetup: undefined });
     }
-
     if (params.showCheckoutPrompt === 'true') {
-      triggerCheckoutDecision();
-      router.setParams({ showCheckoutPrompt: undefined });
-    }
-  }, [params.showSetup, params.showCheckoutPrompt, router]);
-
-  const calculateDailyStats = async (currentSettings: any) => {
-    if (!currentSettings) return;
-
-    const startOfDayTs = dayjs().startOf('day').valueOf();
-    const nowTs = dayjs().valueOf();
-
-    const durationMs = await getTotalDurationMs(startOfDayTs, nowTs);
-    const totalHoursToday = durationMs / (1000 * 60 * 60);
-
-    const { totalPay } = calculatePay(
-      totalHoursToday,
-      currentSettings.hourly_rate,
-      currentSettings.overtime_multiplier
-    );
-
-    setStats({
-      hours: parseFloat(totalHoursToday.toFixed(2)),
-      earnings: parseFloat(totalPay.toFixed(2)),
-    });
-  };
-
-  const loadData = async () => {
-    try {
-      const db = getDB();
-
-      const [settings, session] = await Promise.all([
-        getSettings(),
-        db.getFirstAsync<WorkSession>(
-          "SELECT * FROM work_sessions WHERE status IN ('active', 'travel', 'pending_arrival') ORDER BY id DESC"
-        ),
-      ]);
-
-      setActiveSession(session || null);
-
-      if (session) {
-        if (session.status === 'pending_arrival') {
-          setAddress(`Rumbo a: ${session.address}`);
-        } else if (session.status === 'travel') {
-          setAddress(`Tránsito a: ${session.address}`);
-        } else {
-          setAddress(session.address);
-        }
-      } else {
-        setAddress(t.status_inactive || 'Fuera de Servicio');
-      }
-
-      await calculateDailyStats(settings);
-    } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando datos del HomeScreen', e);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadData();
-    }, [])
-  );
-
-  const handleClockOut = async () => {
-    if (!activeSession) return;
-
-    if (activeSession.status === 'active' && activeSession.lunch_taken === 0) {
       setShowLunchModal(true);
-    } else {
-      await completeSession(0);
     }
-  };
+  }, [params]);
 
-  const triggerCheckoutDecision = () => {
-    log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'UI: Mostrando decisión de Checkout');
-
-    Alert.alert(
-      t.alert_exit_title || '📍 Saliste del Área de Trabajo',
-      t.alert_exit_msg || '¿Terminaste tu jornada o vas a otro sitio?',
-      [
-        {
-          text: t.btn_moving || 'Otro Trabajo',
-          onPress: () => {
-            log(
-              'NARANJA',
-              'MODOS_ESPECIALES',
-              'EVENT',
-              'Usuario seleccionó ir a otro trabajo (Travel Mode)'
-            );
-            setSetupMode('transit');
-            setShowSetupModal(true);
-          },
-        },
-        {
-          text: t.btn_finished || 'Terminar Jornada',
-          style: 'destructive',
-          onPress: () => {
-            log(
-              'VERDE',
-              'OPERACION_EXITOSA',
-              'INFO',
-              'Usuario seleccionó terminar la jornada'
-            );
-            void handleClockOut();
-          },
-        },
-      ]
-    );
-  };
-
-  const handleSetupSubmit = async (
-    addrInput: string,
-    clientInput: string,
-    notesInput: string
-  ) => {
-    setIsProcessing(true);
-
-    try {
-      const perm = await LocationService.requestPermissions();
-
-      if (!perm) {
-        log(
-          'AMARILLO',
-          'ADVERTENCIA',
-          'WARN',
-          'Permisos de ubicación denegados al configurar jornada'
-        );
-        setIsProcessing(false);
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const geocoded = await Location.geocodeAsync(addrInput);
-
-      if (!geocoded || geocoded.length === 0) {
-        log(
-          'AMARILLO',
-          'ADVERTENCIA',
-          'WARN',
-          `No se encontró la dirección: ${addrInput}`
-        );
-        setIsProcessing(false);
-        return;
-      }
-
-      const target = geocoded[0];
-      const db = getDB();
-      const settings = await getSettings();
-      const dateStr = dayjs().format('YYYY-MM-DD');
-
-      if (setupMode === 'start') {
-        await insertWorkSession({
-          start_time: dayjs().valueOf(),
-          status: 'pending_arrival',
-          latitude: 0,
-          longitude: 0,
-          target_latitude: target.latitude,
-          target_longitude: target.longitude,
-          setup_latitude: loc.coords.latitude,
-          setup_longitude: loc.coords.longitude,
-          address: addrInput,
-          client_name: clientInput,
-          manual_note: notesInput,
-          location_confirmed: 0,
-          is_manual_edit: 0,
-          lunch_taken: 0,
-          date_string: dateStr,
-        });
-
-        await insertAuditLog(
-          0,
-          'SETUP_START',
-          `Inicio a: ${addrInput} | Cliente: ${clientInput}`
-        );
-
-        log(
-          'VERDE',
-          'OPERACION_EXITOSA',
-          'INFO',
-          `Nueva sesión creada hacia: ${addrInput}`
-        );
-      } else {
-        if (activeSession?.id) {
-          await db.runAsync(
-            'UPDATE work_sessions SET status = ?, address = ?, client_name = ?, manual_note = ?, target_latitude = ?, target_longitude = ? WHERE id = ?',
-            [
-              'travel',
-              addrInput,
-              clientInput,
-              notesInput,
-              target.latitude,
-              target.longitude,
-              activeSession.id,
-            ]
-          );
-
-          await insertAuditLog(
-            activeSession.id,
-            'TRANSIT_START',
-            `Tránsito a: ${addrInput} | Cliente: ${clientInput}`
-          );
-
-          log(
-            'VERDE',
-            'OPERACION_EXITOSA',
-            'INFO',
-            `Sesión actualizada a tránsito hacia: ${addrInput}`
-          );
-        }
-      }
-
-      await LocationService.startMonitoringArrival(
-        target.latitude,
-        target.longitude,
-        settings?.tolerance_radius || 200
-      );
-
-      setShowSetupModal(false);
-      await loadData();
-
-      showToast(
-        setupMode === 'start'
-          ? t.toast_geofence_active || 'Geocerca Activada. Ve al sitio.'
-          : t.toast_transit_started || 'Tránsito iniciado.',
-        'success'
-      );
-    } catch (error) {
-      log(
-        'ROJO',
-        'ERROR_CRITICO',
-        'ERROR',
-        'Fallo general configurando la jornada/tránsito',
-        error
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const completeSession = async (lunchMinutes: number) => {
-    setIsProcessing(true);
-
-    try {
-      if (activeSession) {
-        const now = dayjs().valueOf();
-
-        if (lunchMinutes > 0) {
-          const startT = activeSession.actual_start_time || activeSession.start_time;
-          const sessionDuration = now - startT;
-          const lunchMidPoint = startT + sessionDuration / 2;
-          const lunchStart = lunchMidPoint - (lunchMinutes * 60 * 1000) / 2;
-          const lunchEnd = lunchMidPoint + (lunchMinutes * 60 * 1000) / 2;
-
-          await updateSessionLunch(activeSession.id!, lunchStart, lunchEnd);
-        }
-
-        await updateSessionEndTime(activeSession.id!, now);
-        await LocationService.stopMonitoring();
-        await insertAuditLog(
-          activeSession.id!,
-          'MANUAL_CHECKOUT',
-          'Fin de jornada manual.'
-        );
-
-        log(
-          'VERDE',
-          'OPERACION_EXITOSA',
-          'INFO',
-          `Sesión completada exitosamente (ID: ${activeSession.id})`
-        );
-      }
-
-      setShowLunchModal(false);
-      await loadData();
-      showToast(t.toast_shift_ended || 'Jornada finalizada.', 'success');
-    } catch (e) {
-      log(
-        'ROJO',
-        'ERROR_CRITICO',
-        'ERROR',
-        'Error al cerrar la sesión en la base de datos',
-        e
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const getStatusIcon = () => {
-    if (!activeSession) return 'moon';
-    if (activeSession.status === 'pending_arrival') return 'navigate';
-    if (activeSession.status === 'travel') return 'car-sport';
-    return 'location';
-  };
-
-  const getStatusColor = () => {
-    if (!activeSession) return COLORS.textSecondary;
-    if (activeSession.status === 'pending_arrival') return '#f59e0b';
-    if (activeSession.status === 'travel') return '#3b82f6';
-    return COLORS.gold;
-  };
-
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
-  };
+  }, [loadData]);
 
-  const handleEasterEggTap = () => {
-    const newCount = easterEggCount + 1;
-    setEasterEggCount(newCount);
+  const handleSetupSubmit = async (addr: string, client: string, notes: string) => {
+    setIsProcessing(true);
+    setShowSetupModal(false);
+    try {
+      const coords = await LocationService.getCoordsFromAddress(addr);
+      if (!coords) {
+        showToast(t.alert_address_not_found || 'Dirección no encontrada', 'error');
+        setIsProcessing(false);
+        return;
+      }
 
-    if (newCount === 3) {
-      log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Easter Egg del CEO activado en la UI');
-      setShowSpecialCard(true);
-      setEasterEggCount(0);
+      const settings = await getSettings();
+      const radius = settings?.tolerance_radius || 100;
+
+      await saveSession({
+        address: addr,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        target_latitude: coords.latitude,
+        target_longitude: coords.longitude,
+        status: 'pending_arrival',
+        start_time: dayjs().valueOf(),
+        client_name: client,
+        manual_note: notes,
+      });
+
+      await LocationService.startMonitoring(
+        coords.latitude,
+        coords.longitude,
+        radius,
+        addr
+      );
+
+      showToast(t.toast_geofence_active || 'Geocerca Activada', 'success');
+      void loadData();
+    } catch (e) {
+      showToast(t.toast_error_generic || 'Error al iniciar', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
+  const handleClockOut = () => {
+    setShowLunchModal(true);
+  };
+
+  const completeSession = async (lunchMinutes: number) => {
+    setShowLunchModal(false);
+    setIsProcessing(true);
+    try {
+      if (activeSession?.id) {
+        await updateSessionStatus(activeSession.id, 'completed', lunchMinutes);
+        await LocationService.stopMonitoring();
+        showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
+        void loadData();
+      }
+    } catch (e) {
+      showToast('Error al finalizar', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleEasterEggTap = () => {
+    setTapCount((prev) => prev + 1);
+    iconScale.value = withSequence(withSpring(1.5), withSpring(1));
+
+    if (tapCount + 1 >= 7) {
+      setShowSpecialCard(true);
+      setTapCount(0);
+    }
+  };
+
+  const animatedIconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }));
+
+  const getStatusColor = () => {
+    if (!activeSession) return COLORS.textSecondary;
+    if (activeSession.status === 'active') return COLORS.success;
+    if (activeSession.status === 'pending_arrival') return '#f59e0b';
+    return COLORS.gold;
+  };
+
+  const getStatusIcon = () => {
+    if (!activeSession) return 'pause-circle-outline';
+    if (activeSession.status === 'active') return 'checkmark-circle';
+    if (activeSession.status === 'pending_arrival') return 'navigate-circle';
+    return 'car-sport';
+  };
+
   return (
-    <SafeAreaView testID="home-screen" style={styles.container} edges={['top']}>
+    <SafeAreaView testID='home-screen' style={styles.container} edges={['top']}>
       <ScrollView
-        testID="home-scroll"
+        testID='home-scroll-view'
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
@@ -449,24 +216,24 @@ export default function HomeScreen() {
           />
         }
       >
-        <View testID="home-header" style={styles.header}>
+        <View testID='home-header' style={styles.header}>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text testID="home-title" style={styles.appTitle}>
+              <Text testID='home-title' style={styles.appTitle}>
                 {t.header_title || 'LED Tracker'}
               </Text>
               <TouchableOpacity
-                testID="home-easter-egg-trigger"
+                testID='home-easter-egg-trigger'
                 onPress={handleEasterEggTap}
                 activeOpacity={0.8}
               >
                 <Animated.View style={animatedIconStyle}>
-                  <Ionicons name="flash" size={18} color={COLORS.gold} />
+                  <Ionicons name='flash' size={18} color={COLORS.gold} />
                 </Animated.View>
               </TouchableOpacity>
             </View>
 
-            <View testID="home-status-badge" style={styles.statusBadge}>
+            <View testID='home-status-badge' style={styles.statusBadge}>
               <View
                 style={[
                   styles.statusDot,
@@ -479,27 +246,27 @@ export default function HomeScreen() {
                   },
                 ]}
               />
-              <Text testID="home-status-text" style={styles.statusText}>
+              <Text testID='home-status-text' style={styles.statusText}>
                 {!activeSession
                   ? t.status_inactive
                   : activeSession.status === 'pending_arrival'
-                    ? 'ESPERANDO LLEGADA'
+                    ? t.status_pending
                     : activeSession.status === 'travel'
-                      ? 'EN TRÁNSITO'
+                      ? t.status_transit
                       : t.status_active}
               </Text>
             </View>
           </View>
         </View>
 
-        <View testID="home-card-wrapper">
+        <View testID='home-card-wrapper'>
           <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
             {isProcessing ? (
-              <ActivityIndicator size="large" color={COLORS.gold} />
+              <ActivityIndicator testID='home-loading-indicator' size='large' color={COLORS.gold} />
             ) : (
-              <View testID="home-session-state" style={{ alignItems: 'center' }}>
+              <View testID='home-session-state' style={{ alignItems: 'center' }}>
                 <View
-                  testID="home-icon-bubble"
+                  testID='home-icon-bubble'
                   style={[
                     styles.iconBubble,
                     activeSession && { backgroundColor: 'rgba(255,255,255,0.05)' },
@@ -508,14 +275,14 @@ export default function HomeScreen() {
                   <Ionicons name={getStatusIcon()} size={32} color={getStatusColor()} />
                 </View>
 
-                <Text testID="home-location-label" style={styles.label}>
+                <Text testID='home-location-label' style={styles.label}>
                   {activeSession?.status === 'pending_arrival'
-                    ? 'DESTINO CONFIGURADO'
-                    : 'UBICACIÓN ACTUAL'}
+                    ? t.label_destination
+                    : t.label_location}
                 </Text>
 
                 <Text
-                  testID="home-address"
+                  testID='home-address'
                   style={[
                     styles.addressText,
                     activeSession && { color: '#FFF' },
@@ -525,9 +292,9 @@ export default function HomeScreen() {
                 </Text>
 
                 {activeSession && activeSession.status !== 'pending_arrival' && (
-                  <View testID="home-timer-badge" style={styles.timerBadge}>
-                    <Ionicons name="time-outline" size={14} color={COLORS.gold} />
-                    <Text testID="home-timer-text" style={styles.timerText}>
+                  <View testID='home-timer-badge' style={styles.timerBadge}>
+                    <Ionicons name='time-outline' size={14} color={COLORS.gold} />
+                    <Text testID='home-timer-text' style={styles.timerText}>
                       {formatTime(
                         activeSession.actual_start_time || activeSession.start_time
                       )}{' '}
@@ -538,7 +305,7 @@ export default function HomeScreen() {
 
                 {activeSession?.status === 'pending_arrival' && (
                   <Text
-                    testID="home-geofence-hint"
+                    testID='home-geofence-hint'
                     style={{
                       color: '#f59e0b',
                       fontSize: 10,
@@ -546,7 +313,7 @@ export default function HomeScreen() {
                       fontFamily: 'Montserrat_600SemiBold',
                     }}
                   >
-                    Geocerca Activa • Check-in automático al llegar
+                    {t.hint_geofence_active}
                   </Text>
                 )}
               </View>
@@ -554,8 +321,10 @@ export default function HomeScreen() {
           </LuxuryCard>
         </View>
 
-        <View testID="home-primary-action-wrapper">
+        <View testID='home-primary-action-wrapper'>
           <LuxuryButton
+            testID='home-primary-action'
+            style={{ marginBottom: 16 }}
             text={activeSession ? t.btn_clock_out : t.btn_new_job}
             variant={activeSession ? 'danger' : 'primary'}
             onPress={
@@ -577,25 +346,25 @@ export default function HomeScreen() {
           />
         </View>
 
-        <View testID="home-stats-container" style={styles.statsContainer}>
-          <View testID="home-hours-card" style={styles.statBox}>
+        <View testID='home-stats-container' style={styles.statsContainer}>
+          <LuxuryCard style={styles.statBox}>
             <Text style={styles.statLabel}>{t.stats_hours}</Text>
-            <Text testID="home-hours-value" style={styles.statValue}>
-              {stats.hours.toFixed(2)}h
+            <Text testID='home-hours-value' style={styles.statValue}>
+              {stats.hours.toFixed(1)}h
             </Text>
-          </View>
+          </LuxuryCard>
 
-          <View testID="home-earnings-card" style={[styles.statBox, styles.statBoxGold]}>
+          <LuxuryCard style={[styles.statBox, styles.statBoxGold]}>
             <Text style={[styles.statLabel, { color: COLORS.gold }]}>
               {t.stats_earnings}
             </Text>
             <Text
-              testID="home-earnings-value"
+              testID='home-earnings-value'
               style={[styles.statValue, { color: COLORS.gold }]}
             >
-              ${stats.earnings.toFixed(2)}
+              ${stats.earnings.toFixed(0)}
             </Text>
-          </View>
+          </LuxuryCard>
         </View>
 
         <DailySetupModal
@@ -615,9 +384,9 @@ export default function HomeScreen() {
         />
 
         <GlassModalWrapper visible={showSpecialCard}>
-          <View testID="home-special-card" style={{ alignItems: 'center', padding: 10 }}>
+          <View testID='home-special-card' style={{ alignItems: 'center', padding: 10 }}>
             <Ionicons
-              name="trophy"
+              name='trophy'
               size={40}
               color={COLORS.gold}
               style={{ marginBottom: 20 }}
@@ -631,21 +400,13 @@ export default function HomeScreen() {
               {'\n'}
               CEO de LEON&apos;S ELECTRICAL DESIGN
             </Text>
-            <TouchableOpacity
-              testID="home-special-card-close"
+            <LuxuryButton
+              testID='home-special-card-close'
+              text={t.btn_close || 'CERRAR'}
               onPress={() => setShowSpecialCard(false)}
+              variant='outline'
               style={{ marginTop: 30 }}
-            >
-              <Text
-                style={{
-                  color: COLORS.gold,
-                  fontSize: 12,
-                  fontFamily: 'Montserrat_700Bold',
-                }}
-              >
-                CERRAR
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
         </GlassModalWrapper>
       </ScrollView>
@@ -719,12 +480,8 @@ const styles = StyleSheet.create({
   statsContainer: { flexDirection: 'row', gap: 14 },
   statBox: {
     flex: 1,
-    backgroundColor: COLORS.surface,
-    padding: 20,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     alignItems: 'center',
+    marginBottom: 0,
   },
   statBoxGold: {
     borderColor: 'rgba(212,175,55,0.3)',
@@ -772,4 +529,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-
