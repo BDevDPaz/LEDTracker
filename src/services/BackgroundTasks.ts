@@ -12,12 +12,14 @@ import {
 } from '../database/db';
 import { WorkSession } from '../types';
 import { generateWeeklyReport } from './ReportGenerator';
-import { LocationService, EXIT_TIMESTAMP_KEY } from './LocationManager';
+import { EXIT_TIMESTAMP_KEY } from './LocationManager';
 import dayjs from '../utils/dayjsSetup';
+import { engine } from '../engine/workTrackerEngine';
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
-const FAILSAFE_THRESHOLD_MS = 15 * 60 * 1000;
+// Threshold raised to 45 minutes to tolerate lunches and errands
+const FAILSAFE_THRESHOLD_MS = 45 * 60 * 1000;
 
 // Mutex para evitar concurrencia del SO
 let isTaskRunning = false;
@@ -57,16 +59,17 @@ TaskManager.defineTask(TASK_NAME, async () => {
           const timeDiff = now - exitTime;
 
           if (timeDiff > FAILSAFE_THRESHOLD_MS) {
+            // Find the active session that triggered the exit
             const session = await db.getFirstAsync<WorkSession>(
-              'SELECT * FROM work_sessions ORDER BY id DESC LIMIT 1'
+              "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY actual_start_time DESC LIMIT 1"
             );
 
-            if (session?.id && session.status === 'active') {
+            if (session?.id) {
               log(
                 'AMARILLO',
                 'ADVERTENCIA',
                 'WARN',
-                `Auto Check-out (GPS) ejecutado para sesión #${session.id} por inactividad`
+                `Failsafe: Auto Check-out retroactivo para sesión #${session.id} (Salida detectada hace ${Math.round(timeDiff/60000)} min)`
               );
 
               // Se usa exitTime para preservar la hora real de salida detectada
@@ -75,32 +78,30 @@ TaskManager.defineTask(TASK_NAME, async () => {
               await insertAuditLog(
                 session.id,
                 'AUTO_CHECKOUT_GPS',
-                'Auto Check-out (GPS) por inactividad prolongada fuera del área.'
+                `Auto Check-out (GPS) tras ${Math.round(FAILSAFE_THRESHOLD_MS/60000)} min fuera del área.`
               );
 
-              try {
-                await LocationService.stopMonitoring();
-              } catch (e) {
-                log(
-                  'ROJO',
-                  'ERROR_CRITICO',
-                  'ERROR',
-                  'Error parando GPS tras Failsafe',
-                  e
-                );
-              }
+              // REFACTOR: We DO NOT stop global monitoring anymore.
+              // This allows the user to return or go to another site.
 
-              await Notifications.scheduleNotificationAsync({
-                content: {
-                  title: 'Jornada Finalizada 🏁',
-                  body: 'Tu sesión se cerró automáticamente (Auto Check-out).',
-                  sound: true,
-                },
-                trigger: null,
-              });
+              await Promise.all([
+                AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
+                Notifications.scheduleNotificationAsync({
+                  content: {
+                    title: 'Jornada Finalizada 🏁',
+                    body: `Tu sesión en ${session.client_name || 'el sitio'} se cerró automáticamente por inactividad.`,
+                    sound: true,
+                  },
+                  trigger: null,
+                })
+              ]);
+
+              // Dispatch to engine for re-hydration
+              engine.dispatch({ type: 'BACKGROUND_SESSION_TIMEOUT' });
 
               newDataProcessed = true;
             } else {
+              // Si no hay sesión activa pero había un timestamp de salida, lo limpiamos
               await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
             }
           }
@@ -115,19 +116,15 @@ TaskManager.defineTask(TASK_NAME, async () => {
     // -----------------------------
     try {
       const currentDate = dayjs();
-      const day = currentDate.day(); // 0 = Domingo, 1 = Lunes, 2 = Martes
+      const day = currentDate.day();
 
       const isReportWindow =
         (day === 0 && currentDate.hour() >= 20) || day === 1 || day === 2;
 
       if (isReportWindow) {
-        // Si es domingo reporta la semana actual que termina hoy.
-        // Si es lunes/martes reporta la semana pasada.
         const targetWeek = day === 0 ? currentDate : currentDate.subtract(1, 'week');
-
         const startTs = targetWeek.startOf('isoWeek').valueOf();
         const endTs = targetWeek.endOf('isoWeek').valueOf();
-
         const currentWeekId = targetWeek.startOf('isoWeek').format('YYYY-MM-DD');
         const lastReported = await AsyncStorage.getItem(REPORT_STORAGE_KEY);
 
@@ -255,4 +252,3 @@ export const BackgroundTasks = {
     }
   },
 };
-

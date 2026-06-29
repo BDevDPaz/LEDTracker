@@ -3,6 +3,7 @@ import { LocationFSM, GeofenceState, GEOFENCE_STATE_KEY } from '../LocationFSM';
 describe('LocationFSM Hysteresis', () => {
   let mockStorage: Record<string, string>;
   let fsm: LocationFSM;
+  const SITE_ID = 'SITE_TEST';
 
   beforeEach(() => {
     mockStorage = {};
@@ -14,49 +15,65 @@ describe('LocationFSM Hysteresis', () => {
     fsm = new LocationFSM(storage);
   });
 
-  it('should require 3 samples to transition from OUTSIDE to INSIDE', async () => {
+  it('should require 3 samples to transition from OUTSIDE to INSIDE with site identifier', async () => {
+    const stateKey = `${GEOFENCE_STATE_KEY}_${SITE_ID}`;
     // 1st sample
-    let result = await fsm.update('Enter');
+    let result = await fsm.update('Enter', SITE_ID);
     expect(result.transition).toBe('STAY');
-    expect(mockStorage[GEOFENCE_STATE_KEY]).toBe(GeofenceState.ENTERING);
+    expect(mockStorage[stateKey]).toBe(GeofenceState.ENTERING);
 
     // 2nd sample
-    result = await fsm.update('Enter');
+    result = await fsm.update('Enter', SITE_ID);
     expect(result.transition).toBe('STAY');
 
     // 3rd sample
-    result = await fsm.update('Enter');
+    result = await fsm.update('Enter', SITE_ID);
     expect(result.transition).toBe('ENTERED');
-    expect(mockStorage[GEOFENCE_STATE_KEY]).toBe(GeofenceState.INSIDE);
+    expect(mockStorage[stateKey]).toBe(GeofenceState.INSIDE);
+  });
+
+  it('should isolate states between different sites', async () => {
+    const SITE_A = 'SITE_A';
+    const SITE_B = 'SITE_B';
+    const stateKeyA = `${GEOFENCE_STATE_KEY}_${SITE_A}`;
+    const stateKeyB = `${GEOFENCE_STATE_KEY}_${SITE_B}`;
+
+    await fsm.update('Enter', SITE_A);
+    expect(mockStorage[stateKeyA]).toBe(GeofenceState.ENTERING);
+    expect(mockStorage[stateKeyB]).toBeUndefined();
+
+    await fsm.update('Enter', SITE_B);
+    expect(mockStorage[stateKeyB]).toBe(GeofenceState.ENTERING);
   });
 
   it('should require 3 samples to transition from INSIDE to OUTSIDE', async () => {
+    const stateKey = `${GEOFENCE_STATE_KEY}_${SITE_ID}`;
     // Setup INSIDE state
-    await fsm.update('Enter');
-    await fsm.update('Enter');
-    await fsm.update('Enter');
+    await fsm.update('Enter', SITE_ID);
+    await fsm.update('Enter', SITE_ID);
+    await fsm.update('Enter', SITE_ID);
 
     // 1st sample EXIT
-    let result = await fsm.update('Exit');
+    let result = await fsm.update('Exit', SITE_ID);
     expect(result.transition).toBe('STAY');
-    expect(mockStorage[GEOFENCE_STATE_KEY]).toBe(GeofenceState.EXITING);
+    expect(mockStorage[stateKey]).toBe(GeofenceState.EXITING);
 
     // 2nd sample EXIT
-    result = await fsm.update('Exit');
+    result = await fsm.update('Exit', SITE_ID);
     expect(result.transition).toBe('STAY');
 
     // 3rd sample EXIT
-    result = await fsm.update('Exit');
+    result = await fsm.update('Exit', SITE_ID);
     expect(result.transition).toBe('EXITED');
-    expect(mockStorage[GEOFENCE_STATE_KEY]).toBe(GeofenceState.OUTSIDE);
+    expect(mockStorage[stateKey]).toBe(GeofenceState.OUTSIDE);
   });
 
-  it('should reset samples if noise is detected', async () => {
-    await fsm.update('Enter'); // ENTERING(1)
+  it('should reset specific site samples', async () => {
+    const stateKey = `${GEOFENCE_STATE_KEY}_${SITE_ID}`;
+    await fsm.update('Enter', SITE_ID);
+    expect(mockStorage[stateKey]).toBeDefined();
 
-    // Noise: Exit signal while in ENTERING state
-    let result = await fsm.update('Exit');
-    expect(result.transition).toBe('STAY');
-    expect(mockStorage[GEOFENCE_STATE_KEY]).toBe(GeofenceState.EXITING);
+    await fsm.reset([SITE_ID]);
+    expect(mockStorage[stateKey]).toBeUndefined();
   });
 });

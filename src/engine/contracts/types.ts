@@ -17,7 +17,8 @@ export type EngineEvent =
   | { type: 'STOP_SESSION_REQUEST'; lunchMinutes: number }
   | { type: 'SETTINGS_UPDATE_REQUEST'; settings: AppSettings }
   | { type: 'ERROR_OCCURRED'; error: string }
-  | { type: 'SET_LOADING'; isLoading: boolean };
+  | { type: 'SET_LOADING'; isLoading: boolean }
+  | { type: 'BACKGROUND_SESSION_TIMEOUT' };
 
 export interface EngineEffect {
   run: (event: EngineEvent, state: EngineState, dispatch: (event: EngineEvent) => void) => Promise<void>;

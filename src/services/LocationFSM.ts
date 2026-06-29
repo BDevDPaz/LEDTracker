@@ -28,11 +28,14 @@ export class LocationFSM {
    * Safe state transition with internal mutex to prevent race conditions
    * when multiple geofence events fire in rapid succession.
    */
-  async update(eventType: 'Enter' | 'Exit'): Promise<{ transition: 'ENTERED' | 'EXITED' | 'STAY' }> {
+  async update(eventType: 'Enter' | 'Exit', siteIdentifier: string): Promise<{ transition: 'ENTERED' | 'EXITED' | 'STAY' }> {
     const release = await this.acquireMutex();
+    const stateKey = `${GEOFENCE_STATE_KEY}_${siteIdentifier}`;
+    const samplesKey = `${GEOFENCE_SAMPLES_KEY}_${siteIdentifier}`;
+
     try {
-      const currentState = (await this.storage.getItem(GEOFENCE_STATE_KEY)) as GeofenceState || GeofenceState.OUTSIDE;
-      const currentSamples = parseInt((await this.storage.getItem(GEOFENCE_SAMPLES_KEY)) || '0', 10);
+      const currentState = (await this.storage.getItem(stateKey)) as GeofenceState || GeofenceState.OUTSIDE;
+      const currentSamples = parseInt((await this.storage.getItem(samplesKey)) || '0', 10);
 
       let nextState = currentState;
       let nextSamples = currentSamples;
@@ -65,8 +68,8 @@ export class LocationFSM {
       }
 
       await Promise.all([
-        this.storage.setItem(GEOFENCE_STATE_KEY, nextState),
-        this.storage.setItem(GEOFENCE_SAMPLES_KEY, nextSamples.toString())
+        this.storage.setItem(stateKey, nextState),
+        this.storage.setItem(samplesKey, nextSamples.toString())
       ]);
 
       return { transition };
@@ -75,13 +78,22 @@ export class LocationFSM {
     }
   }
 
-  async reset() {
+  async reset(siteIdentifiers?: string[]) {
     const release = await this.acquireMutex();
     try {
-      await Promise.all([
-        this.storage.removeItem(GEOFENCE_STATE_KEY),
-        this.storage.removeItem(GEOFENCE_SAMPLES_KEY)
-      ]);
+      if (siteIdentifiers && siteIdentifiers.length > 0) {
+        const cleanup = siteIdentifiers.flatMap(id => [
+          this.storage.removeItem(`${GEOFENCE_STATE_KEY}_${id}`),
+          this.storage.removeItem(`${GEOFENCE_SAMPLES_KEY}_${id}`)
+        ]);
+        await Promise.all(cleanup);
+      } else {
+        // Fallback or legacy cleanup
+        await Promise.all([
+          this.storage.removeItem(GEOFENCE_STATE_KEY),
+          this.storage.removeItem(GEOFENCE_SAMPLES_KEY)
+        ]);
+      }
     } finally {
       release();
     }
