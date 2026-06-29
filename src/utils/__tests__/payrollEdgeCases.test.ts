@@ -19,10 +19,7 @@ describe('Payroll Edge Cases', () => {
   });
 
   it('debería descontar el almuerzo exacto si está presente', () => {
-    const start = 1000000;
-    const end = 2000000;
-    const lStart = 1200000;
-    const lEnd = 1300000; // 100000 ms = ~1.6min? No, use bigger numbers
+    // Unused variables removed
 
     // 10 horas = 600 min
     const startMs = 0;

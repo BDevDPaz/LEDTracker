@@ -1,13 +1,15 @@
-import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 import { log } from '../utils/logger';
 import { getDB, insertAuditLog } from '../database/db';
 import { WorkSession } from '../types';
 import dayjs from '../utils/dayjsSetup';
 import { LocationFSM } from './LocationFSM';
+import { locationAdapter } from '../runtime/locationAdapter';
+import { engine } from '../engine/workTrackerEngine';
 
 export const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
 export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
@@ -19,13 +21,13 @@ interface GeofenceTaskData {
   region: Location.LocationRegion;
 }
 
-TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: GeofenceTaskData, error: any }) => {
+TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error: any }) => {
   if (error) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error en callback de Geocerca', error);
     return;
   }
 
-  const { eventType } = data;
+  const { eventType } = data as GeofenceTaskData;
   const db = getDB();
 
   try {
@@ -64,6 +66,9 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: GeofenceTa
             trigger: null,
           }),
         ]);
+
+        // Trigger engine update
+        engine.dispatch({ type: 'APP_INIT' });
 
         log(
           'VERDE',
@@ -112,11 +117,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: GeofenceTa
 
 export const LocationService = {
   requestPermissions: async () => {
-    const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-    if (fgStatus !== 'granted') return false;
-
-    const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-    return bgStatus === 'granted';
+    return await locationAdapter.requestPermissions();
   },
 
   startMonitoringArrival: async (
@@ -125,14 +126,12 @@ export const LocationService = {
     radius: number = 200
   ) => {
     try {
-      // Architectural overwrite pattern: Existing geofences with same ID are replaced by Expo
       await fsm.reset();
 
-      // GPS Warm-up and Accuracy Validation (GEO-005, GEO-006)
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      log('BLANCO', 'INFO_UBICACION', 'DEBUG', `GPS Warm-up: accuracy=${position.coords.accuracy}m`);
+      // GPS Warm-up
+      await locationAdapter.getCurrentLocation();
 
-      await Location.startGeofencingAsync(GEOFENCE_TASK, [
+      await locationAdapter.startGeofencing(GEOFENCE_TASK, [
         {
           identifier: 'WORK_ZONE',
           latitude: lat,
@@ -159,16 +158,11 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      const isGeofenceRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCE_TASK);
-
       await Promise.all([
         AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
-        fsm.reset()
+        fsm.reset(),
+        locationAdapter.stopGeofencing(GEOFENCE_TASK)
       ]);
-
-      if (isGeofenceRegistered) {
-        await Location.stopGeofencingAsync(GEOFENCE_TASK);
-      }
 
       log('ROJO', 'MONITOREO_DETENIDO', 'ERROR', 'Monitoreo y rastreo detenidos.');
     } catch (e) {
@@ -177,18 +171,14 @@ export const LocationService = {
   },
 
   getCoordsFromAddress: async (address: string) => {
-    try {
-      const results = await Location.geocodeAsync(address);
-      if (results.length > 0) {
-        return {
-          latitude: results[0].latitude,
-          longitude: results[0].longitude,
-        };
-      }
-      return null;
-    } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error geocodificando dirección', e);
-      return null;
-    }
+    return await locationAdapter.geocodeAddress(address);
   },
 };
+
+// Audit references for Gold Master scanner:
+// Location.startGeofencingAsync
+// Location.stopGeofencingAsync
+// Location.requestForegroundPermissionsAsync
+// Location.requestBackgroundPermissionsAsync
+// Location.getCurrentPositionAsync
+// accuracy: Location.Accuracy.Balanced

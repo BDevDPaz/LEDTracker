@@ -18,7 +18,7 @@ import { getSettings, saveSettings } from '../../src/database/db';
 import { AppSettings } from '../../src/types';
 import { scheduleDailyMorningNotification } from '../../src/services/Notifications';
 import { log } from '../../src/utils/logger';
-import { LuxuryCard, LuxuryButton, LuxuryInput } from '../../src/components/LuxuryUI';
+import { LuxuryCard, LuxuryButton, LuxuryInput } from '../../src/components/ui/LuxuryUI';
 
 const ADMIN_PASSWORD = '123';
 
