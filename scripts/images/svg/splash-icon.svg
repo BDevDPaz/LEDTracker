@@ -67,7 +67,7 @@
   </g>
 
   <!-- Typography -->
-  <text x="540" y="1450" font-family="sans-serif" font-weight="bold" font-size="68" fill="#FFFFFF" text-anchor="middle" letter-spacing="14">LED TRACKER</text>
+  <text x="540" y="1450" font-family="sans-serif" font-weight="bold" font-size="68" fill="#FFFFFF" text-anchor="middle" letter-spacing="14">WTracker</text>
   
   <!-- PRO MAX Badge -->
   <rect x="365" y="1520" width="350" height="64" rx="32" fill="#FF9500" fill-opacity="0.1" stroke="#FF9500" stroke-width="2" filter="url(#sGlow)"/>

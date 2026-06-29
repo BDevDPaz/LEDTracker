@@ -10,7 +10,7 @@ export const translations = {
     btn_moving: "OTRO SITIO",
 
     // --- HEADER & HOME (Estados del Flujo Maestro) ---
-    header_title: "WORK Tracker",
+    header_title: "WTracker",
     status_active: "ACTIVO",
     status_inactive: "FUERA DE SERVICIO",
     status_pending: "ESPERANDO LLEGADA", // ✅ Vital para Fase 1
@@ -119,7 +119,7 @@ export const translations = {
     btn_moving: "MOVING",
 
     // --- HEADER & HOME ---
-    header_title: "WORK Tracker",
+    header_title: "WTracker",
     status_active: "ACTIVE",
     status_inactive: "OFF DUTY",
     status_pending: "AWAITING ARRIVAL",

@@ -4,7 +4,7 @@ import dayjs from '../utils/dayjsSetup';
 import { WorkSession, AppSettings, SessionStatus } from '../types';
 import { log, logAudit, setLoggerDB, AUDIT_ACTIONS } from '../utils/logger';
 
-const DB_NAME = 'ledtracker_v2.db';
+const DB_NAME = 'wtracker_v1.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -126,7 +126,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       `INSERT OR IGNORE INTO settings (
         id, employee_name, employer_name, company_email,
         tolerance_radius, hourly_rate, language, start_time, overtime_multiplier
-      ) VALUES (1, 'Empleado Nuevo', 'LEON''S ELECTRICAL DESIGN', '', 200, 25.0, 'es', '07:00', 1.5)`
+      ) VALUES (1, 'Empleado Nuevo', 'COMPANY_NAME', '', 200, 25.0, 'es', '07:00', 1.5)`
     );
 
     if (result.changes > 0) {

@@ -174,7 +174,7 @@ export const generateWeeklyReport = async (
         </head>
         <body>
           <div class="header">
-            <div class="title">LED TRACKER</div>
+            <div class="title">WTracker</div>
             <div class="subtitle">Reporte Oficial de Nómina y Auditoría</div>
           </div>
 
@@ -187,7 +187,7 @@ export const generateWeeklyReport = async (
             </div>
             <div class="info-col" style="text-align: right;">
               <div class="info-label">Empresa</div>
-              <div class="info-value">${escapeHtml(settings.employer_name || "LEON'S ELECTRICAL DESIGN")}</div>
+              <div class="info-value">${escapeHtml(settings.employer_name || "COMPANY_NAME")}</div>
               <div class="info-label">Rango del Reporte</div>
               <div class="info-value">${rangeTitle}</div>
             </div>
@@ -264,7 +264,7 @@ export const generateWeeklyReport = async (
           </div>
 
           <div class="footer">
-            Documento generado electrónicamente por LED Tracker App.<br>
+            Documento generado electrónicamente por WTracker App.<br>
             Certificado digitalmente: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss Z')}
           </div>
         </body>

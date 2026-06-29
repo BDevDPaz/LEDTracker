@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
+import { useRouter } from 'expo-router';
 import { COLORS } from '../../src/constants/theme';
+import {
+  LuxuryCard,
+  LuxuryEmptyState,
+  LuxuryButton,
+  LuxuryInput,
+  GlassModalWrapper,
+} from '../../src/components/ui/LuxuryUI';
 import {
   getHistory,
   getSettings,
@@ -17,20 +18,16 @@ import {
   updateWorkSessionManual,
   checkSessionOverlap,
 } from '../../src/database/db';
-import { WorkSession } from '../../src/types';
+import { WorkSession } from '../../src/engine/contracts/types';
 import { formatDate, formatTime } from '../../src/utils/dateUtils';
-import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
-import {
-  LuxuryEmptyState,
-  LuxuryButton,
-  GlassModalWrapper,
-  LuxuryInput,
-  LuxuryCard,
-} from '../../src/components/ui/LuxuryUI';
 import { log } from '../../src/utils/logger';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
+import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
+import { historyEditSchema } from '../../src/utils/validation';
+import { z } from 'zod';
 
 export default function HistoryScreen() {
+  const router = useRouter();
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
@@ -41,6 +38,7 @@ export default function HistoryScreen() {
   const [editTimeIn, setEditTimeIn] = useState('');
   const [editTimeOut, setEditTimeOut] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const loadHistory = async () => {
     try {
@@ -100,59 +98,61 @@ export default function HistoryScreen() {
     setEditNote(item.manual_note || '');
     setEditTimeIn(dayjs(item.start_time).format('HH:mm'));
     setEditTimeOut(item.end_time ? dayjs(item.end_time).format('HH:mm') : '');
+    setErrors({});
     setEditModalVisible(true);
   };
 
   const saveEdit = async () => {
     if (!selectedSession || !selectedSession.id) return;
 
-    if (editTimeIn.length < 5) {
-      showToast('Formato HH:MM inválido', 'error');
-      return;
-    }
+    try {
+      const validated = historyEditSchema.parse({
+        timeIn: editTimeIn,
+        timeOut: editTimeOut,
+        note: editNote,
+      });
 
-    const hIn = Number(editTimeIn.substring(0, 2));
-    const mIn = Number(editTimeIn.substring(3, 5));
-    const newStart = dayjs(selectedSession.start_time)
-      .hour(hIn)
-      .minute(mIn)
-      .second(0)
-      .millisecond(0);
-
-    let newEnd = null;
-    if (editTimeOut && editTimeOut.length === 5) {
-      const hOut = Number(editTimeOut.substring(0, 2));
-      const mOut = Number(editTimeOut.substring(3, 5));
-      newEnd = dayjs(selectedSession.start_time)
-        .hour(hOut)
-        .minute(mOut)
+      const hIn = Number(validated.timeIn.substring(0, 2));
+      const mIn = Number(validated.timeIn.substring(3, 5));
+      const newStart = dayjs(selectedSession.start_time)
+        .hour(hIn)
+        .minute(mIn)
         .second(0)
         .millisecond(0);
-    }
 
-    const hasOverlap = await checkSessionOverlap(
-      newStart.valueOf(),
-      newEnd ? newEnd.valueOf() : 0,
-      selectedSession.id
-    );
+      let newEnd = null;
+      if (validated.timeOut && validated.timeOut.length === 5) {
+        const hOut = Number(validated.timeOut.substring(0, 2));
+        const mOut = Number(validated.timeOut.substring(3, 5));
+        newEnd = dayjs(selectedSession.start_time)
+          .hour(hOut)
+          .minute(mOut)
+          .second(0)
+          .millisecond(0);
+      }
 
-    if (hasOverlap) {
-      log(
-        'AMARILLO',
-        'ADVERTENCIA',
-        'WARN',
-        'Horario choca con otra sesión. Revisa la hora e inténtalo nuevamente.'
+      const hasOverlap = await checkSessionOverlap(
+        newStart.valueOf(),
+        newEnd ? newEnd.valueOf() : 0,
+        selectedSession.id
       );
-      showToast('Horario en conflicto', 'error');
-      return;
-    }
 
-    try {
+      if (hasOverlap) {
+        log(
+          'AMARILLO',
+          'ADVERTENCIA',
+          'WARN',
+          'Horario choca con otra sesión. Revisa la hora e inténtalo nuevamente.'
+        );
+        showToast('Horario en conflicto', 'error');
+        return;
+      }
+
       await updateWorkSessionManual(
         selectedSession.id,
         newStart.valueOf(),
         newEnd ? newEnd.valueOf() : null,
-        editNote
+        validated.note
       );
 
       log(
@@ -163,9 +163,20 @@ export default function HistoryScreen() {
       );
       setEditModalVisible(false);
       showToast('Cambios guardados', 'success');
+      setErrors({});
       void loadHistory();
-    } catch (_e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', _e);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        e.issues.forEach((err) => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+      } else {
+        log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', e);
+      }
     }
   };
 
@@ -209,27 +220,39 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView testID='history-screen' style={styles.container}>
       <View style={styles.headerRow}>
-        <View>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)')}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al Inicio"
+        >
+          <Ionicons name="chevron-back" size={24} color={COLORS.gold} />
+          <Text style={styles.backText}>INICIO</Text>
+        </TouchableOpacity>
+
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <TouchableOpacity
+            testID='history-pdf-button'
+            accessibilityRole='button'
+            accessibilityLabel='Generar reporte PDF'
+            style={styles.pdfBtn}
+            onPress={() => {
+              log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
+              void generateWeeklyReport(true);
+            }}
+          >
+            <Ionicons name='document-text' size={16} color='#000' />
+            <Text style={styles.pdfText}>PDF</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.summaryContainer}>
           <Text style={styles.header}>HISTORIAL</Text>
           <Text style={styles.subHeader}>
             ESTA SEMANA: <Text style={{ color: '#FFF' }}>{totalHours.toFixed(1)}h</Text> •{' '}
             <Text style={{ color: COLORS.gold }}>${estEarnings.toFixed(0)}</Text>
           </Text>
-        </View>
-
-        <TouchableOpacity
-          testID='history-pdf-button'
-          accessibilityRole='button'
-          accessibilityLabel='Generar reporte PDF'
-          style={styles.pdfBtn}
-          onPress={() => {
-            log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
-            void generateWeeklyReport(true);
-          }}
-        >
-          <Ionicons name='document-text' size={16} color='#000' />
-          <Text style={styles.pdfText}>PDF</Text>
-        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -260,28 +283,52 @@ export default function HistoryScreen() {
           label='ENTRADA (HH:MM)'
           testID='history-edit-time-in'
           value={editTimeIn}
-          onChangeText={(t: string) => formatTimeInput(t, setEditTimeIn)}
+          onChangeText={(t: string) => {
+            formatTimeInput(t, setEditTimeIn);
+            if (errors.timeIn) setErrors(prev => {
+              const next = {...prev};
+              delete next.timeIn;
+              return next;
+            });
+          }}
           keyboardType='number-pad'
           maxLength={5}
           placeholder='00:00'
+          error={errors.timeIn}
         />
 
         <LuxuryInput
           label='SALIDA (HH:MM)'
           testID='history-edit-time-out'
           value={editTimeOut}
-          onChangeText={(t: string) => formatTimeInput(t, setEditTimeOut)}
+          onChangeText={(t: string) => {
+            formatTimeInput(t, setEditTimeOut);
+            if (errors.timeOut) setErrors(prev => {
+              const next = {...prev};
+              delete next.timeOut;
+              return next;
+            });
+          }}
           placeholder='En progreso...'
           keyboardType='number-pad'
           maxLength={5}
+          error={errors.timeOut}
         />
 
         <LuxuryInput
           label='NOTA AUDITORÍA'
           testID='history-edit-note'
           value={editNote}
-          onChangeText={setEditNote}
+          onChangeText={(t: string) => {
+            setEditNote(t);
+            if (errors.note) setErrors(prev => {
+              const next = {...prev};
+              delete next.note;
+              return next;
+            });
+          }}
           placeholder='Razón del cambio...'
+          error={errors.note}
         />
 
         <View style={{ gap: 8, marginTop: 10 }}>
@@ -301,9 +348,28 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     padding: 24,
+    paddingBottom: 0,
+    gap: 16
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceHighlight,
+    paddingRight: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  backText: {
+    fontFamily: 'Montserrat_700Bold',
+    color: COLORS.gold,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  summaryContainer: {
+    padding: 24,
+    paddingTop: 16,
     paddingBottom: 10,
   },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
