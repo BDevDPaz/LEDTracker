@@ -383,7 +383,7 @@ export const getTotalDurationMs = async (
           (CASE
             WHEN lunch_taken = 1 AND lunch_start IS NOT NULL AND lunch_end IS NOT NULL
             THEN (lunch_end - lunch_start)
-            WHEN lunch_taken = 1
+            WHEN lunch_taken = 1 AND (COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time)) > 21600000
             THEN 3600000
             ELSE 0
           END)
