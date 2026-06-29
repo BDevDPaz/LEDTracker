@@ -44,3 +44,7 @@ app-example
 /android
 .env
 .vscode/
+
+# Testing and logs
+coverage/
+*.log
