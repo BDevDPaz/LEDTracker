@@ -7,6 +7,7 @@ export const MS_PER_MINUTE = 60000;
 export const MINUTES_IN_DAY = 1440;
 export const LUNCH_THRESHOLD_MINUTES = 360; // 6 hours
 export const DEFAULT_LUNCH_MINUTES = 60;
+// Daily threshold: > 8 hours (California-style rule)
 export const REGULAR_HOURS_THRESHOLD_MINUTES = 480; // 8 hours
 
 /**

@@ -14,7 +14,12 @@ export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 
 const fsm = new LocationFSM(AsyncStorage);
 
-TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
+interface GeofenceTaskData {
+  eventType: Location.GeofencingEventType;
+  region: Location.LocationRegion;
+}
+
+TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: GeofenceTaskData, error: any }) => {
   if (error) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error en callback de Geocerca', error);
     return;
@@ -120,7 +125,12 @@ export const LocationService = {
     radius: number = 200
   ) => {
     try {
+      // Architectural overwrite pattern: Existing geofences with same ID are replaced by Expo
       await fsm.reset();
+
+      // GPS Warm-up and Accuracy Validation (GEO-005, GEO-006)
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      log('BLANCO', 'INFO_UBICACION', 'DEBUG', `GPS Warm-up: accuracy=${position.coords.accuracy}m`);
 
       await Location.startGeofencingAsync(GEOFENCE_TASK, [
         {
