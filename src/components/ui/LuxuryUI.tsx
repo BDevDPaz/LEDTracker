@@ -7,8 +7,8 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
-import { COLORS } from '../constants/theme';
-import { log } from '../utils/logger';
+import { COLORS } from '../../constants/theme';
+import { log } from '../../utils/logger';
 
 // --- TARJETA ---
 export const LuxuryCard = ({ children, active, style }: { children: React.ReactNode, active?: boolean, style?: StyleProp<ViewStyle> }) => (

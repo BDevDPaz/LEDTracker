@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../context/LanguageContext';
-import { GlassModalWrapper, LuxuryButton, LuxuryInput } from './LuxuryUI';
-import { COLORS } from '../constants/theme';
-import { log } from '../utils/logger';
+import { useLanguage } from '../../context/LanguageContext';
+import { GlassModalWrapper, LuxuryButton, LuxuryInput } from '../ui/LuxuryUI';
+import { COLORS } from '../../constants/theme';
+import { log } from '../../utils/logger';
 
 interface Props {
     visible: boolean;

@@ -1,3 +1,4 @@
+process.env.TZ = 'America/Los_Angeles';
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',

@@ -26,7 +26,7 @@ import {
   GlassModalWrapper,
   LuxuryInput,
   LuxuryCard,
-} from '../../src/components/LuxuryUI';
+} from '../../src/components/ui/LuxuryUI';
 import { log } from '../../src/utils/logger';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 

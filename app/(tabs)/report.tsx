@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../src/constants/theme';
-import { LuxuryCard, LuxuryButton } from '../../src/components/LuxuryUI';
+import { LuxuryCard, LuxuryButton } from '../../src/components/ui/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { generateWeeklyReport, sendReportByEmail } from '../../src/services/ReportGenerator';

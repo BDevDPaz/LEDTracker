@@ -17,17 +17,10 @@ import Animated, {
   withSpring,
   withSequence,
 } from 'react-native-reanimated';
-import dayjs from 'dayjs';
 
-import {
-  getActiveSession,
-  getSettings,
-  getHistory,
-  saveSession,
-  updateSessionStatus,
-} from '../../src/database/db';
-import { WorkSession } from '../../src/types';
-import { LocationService } from '../../src/services/LocationManager';
+import { engine } from '../../src/engine/workTrackerEngine';
+import { selectActiveSession, selectIsLoading } from '../../src/engine/selectors/workTrackerSelectors';
+import { sessionStoreAdapter } from '../../src/runtime/sessionStoreAdapter';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
@@ -35,10 +28,10 @@ import {
   LuxuryCard,
   LuxuryButton,
   GlassModalWrapper,
-} from '../../src/components/LuxuryUI';
+} from '../../src/components/ui/LuxuryUI';
 import { formatTime } from '../../src/utils/dateUtils';
-import { DailySetupModal } from '../../src/components/DailySetupModal';
-import { LunchModal } from '../../src/components/LunchModal';
+import { DailySetupModal } from '../../src/components/modals/DailySetupModal';
+import { LunchModal } from '../../src/components/modals/LunchModal';
 import { log } from '../../src/utils/logger';
 
 export default function HomeScreen() {
@@ -47,8 +40,12 @@ export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // Estados
-  const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
+  // Engine state
+  const [engineState, setEngineState] = useState(engine.getState());
+
+  const activeSession = selectActiveSession(engineState);
+  const isProcessing = selectIsLoading(engineState);
+
   const [address, setAddress] = useState<string>('Cargando...');
   const [stats, setStats] = useState({ hours: 0, earnings: 0 });
 
@@ -57,43 +54,49 @@ export default function HomeScreen() {
   const [showLunchModal, setShowLunchModal] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   // Easter Egg
   const [tapCount, setTapCount] = useState(0);
   const [showSpecialCard, setShowSpecialCard] = useState(false);
   const iconScale = useSharedValue(1);
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    const unsubscribe = engine.subscribe(setEngineState);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    engine.dispatch({ type: 'APP_INIT' });
+  }, []);
+
+  const loadStats = useCallback(async () => {
     try {
-      const session = await getActiveSession();
-      setActiveSession(session);
-
-      if (session) {
-        setAddress(session.address);
-      } else {
-        setAddress(t.no_activity || 'No hay actividad registrada.');
-      }
-
-      const history = await getHistory();
-      const settings = await getSettings();
+      const history = await sessionStoreAdapter.getHistory();
+      const settings = await sessionStoreAdapter.getSettings();
       const rate = settings?.hourly_rate || 0;
 
       let totalH = 0;
-      history.forEach((s: WorkSession) => {
+      history.forEach((s) => {
         if (s.start_time && s.end_time) {
           totalH += (s.end_time - s.start_time) / 3600000;
         }
       });
       setStats({ hours: totalH, earnings: totalH * rate });
     } catch (_e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando datos de inicio', _e);
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando estadísticas', _e);
     }
-  }, [t.no_activity]);
+  }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    void loadStats();
+    if (activeSession) {
+      setAddress(activeSession.address);
+    } else {
+      setAddress(t.no_activity || 'No hay actividad registrada.');
+    }
+  }, [activeSession, loadStats, t.no_activity]);
 
   useEffect(() => {
     if (params.showSetup === 'true') {
@@ -107,49 +110,14 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData();
+    engine.dispatch({ type: 'APP_INIT' });
+    await loadStats();
     setRefreshing(false);
-  }, [loadData]);
+  }, [loadStats]);
 
   const handleSetupSubmit = async (addr: string, client: string, notes: string) => {
-    setIsProcessing(true);
     setShowSetupModal(false);
-    try {
-      const coords = await LocationService.getCoordsFromAddress(addr);
-      if (!coords) {
-        showToast(t.alert_address_not_found || 'Dirección no encontrada', 'error');
-        setIsProcessing(false);
-        return;
-      }
-
-      const settings = await getSettings();
-      const radius = settings?.tolerance_radius || 100;
-
-      await saveSession({
-        address: addr,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        target_latitude: coords.latitude,
-        target_longitude: coords.longitude,
-        status: 'pending_arrival',
-        start_time: dayjs().valueOf(), location_confirmed: 0, is_manual_edit: 0, lunch_taken: 0, date_string: dayjs().format('YYYY-MM-DD'),
-        client_name: client,
-        manual_note: notes,
-      });
-
-      await LocationService.startMonitoringArrival(
-        coords.latitude,
-        coords.longitude,
-        radius
-      );
-
-      showToast(t.toast_geofence_active || 'Geocerca Activada', 'success');
-      void loadData();
-    } catch (_e) {
-      showToast(t.toast_error_generic || 'Error al iniciar', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    engine.dispatch({ type: 'START_SESSION_REQUEST', address: addr, client, notes });
   };
 
   const handleClockOut = () => {
@@ -158,19 +126,8 @@ export default function HomeScreen() {
 
   const completeSession = async (lunchMinutes: number) => {
     setShowLunchModal(false);
-    setIsProcessing(true);
-    try {
-      if (activeSession?.id) {
-        await updateSessionStatus(activeSession.id, 'completed', lunchMinutes);
-        await LocationService.stopMonitoring();
-        showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
-        void loadData();
-      }
-    } catch (_e) {
-      showToast('Error al finalizar', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    engine.dispatch({ type: 'STOP_SESSION_REQUEST', lunchMinutes });
+    showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
   };
 
   const handleEasterEggTap = () => {
@@ -198,7 +155,7 @@ export default function HomeScreen() {
     if (!activeSession) return 'pause-circle-outline';
     if (activeSession.status === 'active') return 'checkmark-circle';
     if (activeSession.status === 'pending_arrival') return 'navigate-circle';
-    return 'car-sport';
+    return 'car-outline';
   };
 
   return (
@@ -393,9 +350,9 @@ export default function HomeScreen() {
             <Text style={styles.eggAuthor}>by BDevDPaz</Text>
             <View style={styles.eggDivider} />
             <Text style={styles.eggText}>
-              Para uso restringido de{'\n'}
+              Para uso restringido de{"\n"}
               <Text style={{ color: '#FFF' }}>Alex León</Text>
-              {'\n'}
+              {"\n"}
               CEO de LEON&apos;S ELECTRICAL DESIGN
             </Text>
             <LuxuryButton

@@ -1,24 +1,23 @@
 {
   "project": "LEDTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-29T07:39:26.426Z",
+  "generatedAt": "2026-06-29T11:06:26.775Z",
   "summary": {
-    "total": 3,
+    "total": 4,
     "critical": 0,
     "high": 0,
     "medium": 3,
-    "low": 0,
+    "low": 1,
     "trace": 0
   },
   "findings": [
     {
-      "id": "SEC-001",
-      "domain": "security",
-      "severity": "medium",
-      "title": "Potential sensitive term detected: password",
-      "description": "The term \"password\" was found in source code. This may be valid, but should be reviewed.",
-      "recommendation": "Verify that no secrets, tokens or sensitive credentials are hardcoded or logged.",
-      "file": "src/utils/i18n.ts",
-      "evidence": "password"
+      "id": "GEO-007",
+      "domain": "geofencing",
+      "severity": "low",
+      "title": "Overwrite geofence strategy not explicitly documented in code",
+      "description": "The architectural overwrite pattern was not detected by name.",
+      "recommendation": "Consider documenting the overwrite strategy in code comments or function names for auditability.",
+      "file": "src/services/LocationManager.ts"
     },
     {
       "id": "SEC-001",
@@ -29,6 +28,16 @@
       "recommendation": "Verify that no secrets, tokens or sensitive credentials are hardcoded or logged.",
       "file": "src/utils/__tests__/dateUtils.test.ts",
       "evidence": "token"
+    },
+    {
+      "id": "SEC-001",
+      "domain": "security",
+      "severity": "medium",
+      "title": "Potential sensitive term detected: password",
+      "description": "The term \"password\" was found in source code. This may be valid, but should be reviewed.",
+      "recommendation": "Verify that no secrets, tokens or sensitive credentials are hardcoded or logged.",
+      "file": "src/utils/i18n.ts",
+      "evidence": "password"
     },
     {
       "id": "SEC-001",
