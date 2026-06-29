@@ -377,18 +377,17 @@ export const getTotalDurationMs = async (
 
   const result = await database.getFirstAsync<{ total_ms: number }>(
     `SELECT SUM(
-        MAX(
-          0,
+        MAX(0,
           COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time) -
-          (CASE
+          CASE
             WHEN lunch_taken = 1 AND lunch_start IS NOT NULL AND lunch_end IS NOT NULL
-            THEN (lunch_end - lunch_start)
+              THEN (lunch_end - lunch_start)
             WHEN lunch_taken = 1 AND (COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time)) > 21600000
-            THEN 3600000
+              THEN 3600000
             ELSE 0
-          END)
+          END
         )
-      ) as total_ms
+      ) AS total_ms
      FROM work_sessions
      WHERE status NOT IN ('deleted', 'pending_arrival')
        AND start_time >= ?`,
