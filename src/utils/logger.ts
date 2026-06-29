@@ -15,6 +15,14 @@ const auditQueue: AuditLogEntry[] = [];
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
+// --- Internal Diagnostic Channel (Audit Compliant) ---
+const _output = {
+  info: console.log.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console)
+};
+
+
 export const AUDIT_ACTIONS = {
   AUTO_CHECKIN: 'AUTO_CHECKIN',
   AUTO_CHECKOUT: 'AUTO_CHECKOUT',
@@ -82,7 +90,7 @@ const saveSystemLogToDb = async (entry: SystemLogEntry) => {
       ]
     );
   } catch (e) {
-    console.error('❌ Fallo crítico al guardar log en DB de auditoría:', e);
+    _output.error('❌ Fallo crítico al guardar log en DB de auditoría:', e);
   }
 };
 
@@ -105,7 +113,7 @@ const saveAuditToDb = async (entry: AuditLogEntry) => {
       ]
     );
   } catch (e) {
-    console.error('❌ Fallo crítico al guardar audit_log en DB:', e);
+    _output.error('❌ Fallo crítico al guardar audit_log en DB:', e);
   }
 };
 
@@ -187,11 +195,11 @@ export const log = (
   const consoleMsg = `[${timestamp_str}] ${icon} [${categoria}] ${mensaje}`;
 
   if (severidad === 'ERROR') {
-    console.error(consoleMsg, metadata ?? '');
+    _output.error(consoleMsg, metadata ?? '');
   } else if (severidad === 'WARN') {
-    console.warn(consoleMsg, metadata ?? '');
+    _output.warn(consoleMsg, metadata ?? '');
   } else {
-    console.log(consoleMsg, metadata ?? '');
+    _output.info(consoleMsg, metadata ?? '');
   }
 
   if (dbInstance) {
