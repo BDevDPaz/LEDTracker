@@ -1,67 +1,68 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Switch,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '../../src/context/LanguageContext';
-import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../src/constants/theme';
+import { LuxuryCard, LuxuryButton, LuxuryInput } from '../../src/components/ui/LuxuryUI';
+import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
+import { useLanguage } from '../../src/context/LanguageContext';
 import { getSettings, saveSettings } from '../../src/database/db';
-import { AppSettings } from '../../src/types';
 import { scheduleDailyMorningNotification } from '../../src/services/Notifications';
 import { log } from '../../src/utils/logger';
-import { LuxuryCard, LuxuryButton, LuxuryInput } from '../../src/components/ui/LuxuryUI';
 
-const ADMIN_PASSWORD = '123';
+const ADMIN_PASSWORD = '777';
 
 export default function SettingsScreen() {
-  const { language, setLanguage, t } = useLanguage();
+  const router = useRouter();
   const { showToast } = useLuxuryUI();
+  const { t, language, setLanguage } = useLanguage();
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [passInput, setPassInput] = useState('');
-
-  const [form, setForm] = useState<AppSettings>({
-    id: 1,
+  const [form, setForm] = useState({
     employee_name: '',
     employer_name: '',
     company_email: '',
-    tolerance_radius: 100,
-    hourly_rate: 0,
-    language: 'es',
-    start_time: '08:00',
+    tolerance_radius: 200,
+    hourly_rate: 25,
+    start_time: '07:00',
     overtime_multiplier: 1.5,
   });
 
   useEffect(() => {
-    async function load() {
-      const s = await getSettings();
-      if (s) setForm(s);
+    const load = async () => {
+      const data = await getSettings();
+      if (data) {
+        setForm({
+          employee_name: data.employee_name,
+          employer_name: data.employer_name,
+          company_email: data.company_email,
+          tolerance_radius: data.tolerance_radius,
+          hourly_rate: data.hourly_rate,
+          start_time: data.start_time,
+          overtime_multiplier: data.overtime_multiplier,
+        });
+      }
       setIsLoading(false);
-    }
+    };
     void load();
   }, []);
 
   const handleSave = async () => {
     try {
-      await saveSettings(form);
-      log('AMARILLO', 'CONFIG_MODIFICADA', 'WARN', `Configuración general modificada. Empleado: ${form.employee_name}`);
+      await saveSettings({
+        ...form,
+        language,
+        id: 1,
+      });
+      log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Configuración actualizada correctamente');
+      showToast('Configuración guardada', 'success');
 
-      if (isAdmin) {
-        log('AMARILLO', 'CONFIG_MODIFICADA', 'WARN', 'Zona ADMIN modificada con éxito');
-      }
-
+      // Re-programar notificación si cambió la hora
       await scheduleDailyMorningNotification();
-      showToast(t.toast_geofence_active || 'Configuración guardada', 'success');
+
       setIsAdmin(false);
       setShowPass(false);
       setPassInput('');
@@ -92,10 +93,21 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView testID='settings-screen' style={styles.container} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView testID='settings-scroll-view' contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)')}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Volver al Inicio"
+          >
+            <Ionicons name="chevron-back" size={24} color={COLORS.gold} />
+            <Text style={styles.backText}>INICIO</Text>
+          </TouchableOpacity>
+          <Text style={styles.header}>{t.settings_title}</Text>
+        </View>
 
+        <ScrollView testID='settings-scroll-view' contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.headerContainer}>
-            <Text style={styles.header}>{t.settings_title}</Text>
             <Text style={styles.subHeaderLabel}>PREFERENCIAS GENERALES</Text>
           </View>
 
@@ -261,6 +273,26 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 24, paddingBottom: 100 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 24,
+    gap: 16
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceHighlight,
+    paddingRight: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  backText: {
+    fontFamily: 'Montserrat_700Bold',
+    color: COLORS.gold,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
   headerContainer: { marginBottom: 12 },
   header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
   subHeaderLabel: { fontFamily: 'Montserrat_700Bold', color: COLORS.textSecondary, fontSize: 10, letterSpacing: 2, marginTop: 4, textTransform: 'uppercase' },

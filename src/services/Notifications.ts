@@ -61,7 +61,7 @@ export async function scheduleDailyReminder(timeString: string) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '¡Buenos días! ☀️',
-        body: 'Es hora de iniciar tu jornada en LEDTracker.',
+        body: 'Es hora de iniciar tu jornada en WTracker.',
         sound: true,
         data: { action: 'OPEN_DAILY_SETUP' },
       },

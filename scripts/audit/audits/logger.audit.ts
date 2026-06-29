@@ -15,7 +15,7 @@ export async function runLoggerAudit(): Promise<AuditFinding[]> {
         title: 'Logger module missing',
         description: `Logger file not found: ${loggerFile}`,
         recommendation:
-          'Restore logger.ts. LEDTracker requires persistent forensic logging for critical operations.',
+          'Restore logger.ts. WTracker requires persistent forensic logging for critical operations.',
         file: loggerFile
       }
     ];

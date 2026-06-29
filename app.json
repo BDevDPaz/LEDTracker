@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "W-Tracker",
-    "slug": "LEDTracker",
+    "name": "WTracker",
+    "slug": "WTracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -58,7 +58,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "W-Tracker needs your location in the background to automatically record your entry and exit from work. / W-Tracker necesita tu ubicación en segundo plano para registrar automáticamente tu entrada y salida del trabajo.",
+          "locationAlwaysAndWhenInUsePermission": "WTracker needs your location in the background to automatically record your entry and exit from work. / WTracker necesita tu ubicación en segundo plano para registrar automáticamente tu entrada y salida del trabajo.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }

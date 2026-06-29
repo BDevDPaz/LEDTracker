@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton } from '../../src/components/ui/LuxuryUI';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
@@ -10,6 +11,7 @@ import { generateWeeklyReport, sendReportByEmail } from '../../src/services/Repo
 import { getSettings } from '../../src/database/db';
 
 export default function ReportScreen() {
+  const router = useRouter();
   const { showToast } = useLuxuryUI();
   const { t } = useLanguage();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -37,17 +39,29 @@ export default function ReportScreen() {
 
   return (
     <SafeAreaView testID='report-screen' style={styles.container} edges={['top']}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)')}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Volver al Inicio"
+        >
+          <Ionicons name="chevron-back" size={24} color={COLORS.gold} />
+          <Text style={styles.backText}>INICIO</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <View style={styles.iconBadge}>
+            <Ionicons name='document-text' size={24} color={COLORS.gold} />
+          </View>
+        </View>
+      </View>
+
       <ScrollView testID='report-scroll-view' contentContainerStyle={styles.scroll}>
 
-        {/* HEADER */}
-        <View testID='report-header' style={styles.header}>
-            <View>
-              <Text testID='report-title' style={styles.appTitle}>{t.report_title || 'REPORTE SEMANAL'}</Text>
-              <Text testID='report-subtitle' style={styles.subTitle}>{t.report_subtitle || 'NÓMINA Y AUDITORÍA'}</Text>
-            </View>
-            <View style={styles.iconBadge}>
-               <Ionicons name='document-text' size={28} color={COLORS.gold} />
-            </View>
+        {/* HEADER TITLE */}
+        <View style={{ marginBottom: 40 }}>
+          <Text testID='report-title' style={styles.appTitle}>{t.report_title || 'REPORTE SEMANAL'}</Text>
+          <Text testID='report-subtitle' style={styles.subTitle}>{t.report_subtitle || 'NÓMINA Y AUDITORÍA'}</Text>
         </View>
 
         {/* PREVIEW CARD */}
@@ -104,11 +118,30 @@ export default function ReportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 24 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40, marginTop: 10 },
-  appTitle: { fontFamily: 'Montserrat_700Bold', fontSize: 24, color: '#FFF', letterSpacing: 1 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 100 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 24,
+    gap: 16
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceHighlight,
+    paddingRight: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  backText: {
+    fontFamily: 'Montserrat_700Bold',
+    color: COLORS.gold,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  appTitle: { fontFamily: 'Montserrat_700Bold', fontSize: 28, color: '#FFF', letterSpacing: 1 },
   subTitle: { fontFamily: 'Montserrat_400Regular', fontSize: 10, color: COLORS.gold, letterSpacing: 2, marginTop: 4, textTransform: 'uppercase' },
-  iconBadge: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(212,175,55,0.1)', alignItems: 'center', justifyContent: 'center' },
+  iconBadge: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(212,175,55,0.1)', alignItems: 'center', justifyContent: 'center' },
   previewCard: { alignItems: 'center', paddingVertical: 40, marginBottom: 40 },
   docContainer: { flexDirection: 'row', marginBottom: 25, opacity: 0.9, alignItems: 'center' },
   docLines: { marginLeft: 15, gap: 8 },

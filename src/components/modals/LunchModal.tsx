@@ -1,4 +1,3 @@
-// --- src/components/LunchModal.tsx ---
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +5,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { GlassModalWrapper, LuxuryButton, LuxuryInput } from '../ui/LuxuryUI';
 import { COLORS } from '../../constants/theme';
 import { log } from '../../utils/logger';
+import { lunchSchema } from '../../utils/validation';
+import { z } from 'zod';
 
 interface Props {
     visible: boolean;
@@ -16,11 +17,19 @@ interface Props {
 export function LunchModal({ visible, onConfirm, onCancel }: Props) {
   const { t } = useLanguage();
   const [durationStr, setDurationStr] = useState('60');
+  const [error, setError] = useState<string | undefined>(undefined);
 
   const handleConfirm = () => {
-      const minutes = parseInt(durationStr) || 0;
-      log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Descanso de almuerzo confirmado: ${minutes} min`);
-      onConfirm(minutes);
+      try {
+        const validated = lunchSchema.parse({ minutes: durationStr });
+        log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Descanso de almuerzo confirmado: ${validated.minutes} min`);
+        setError(undefined);
+        onConfirm(validated.minutes);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          setError(e.issues[0].message);
+        }
+      }
   };
 
   const handleNoLunch = () => {
@@ -30,6 +39,7 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
 
   const handleCancel = () => {
       log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Lunch Modal cancelado por el usuario.');
+      setError(undefined);
       onCancel();
   };
 
@@ -46,13 +56,17 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
           containerStyle={styles.inputContainer}
           style={styles.input}
           value={durationStr}
-          onChangeText={setDurationStr}
+          onChangeText={(text: string) => {
+            setDurationStr(text);
+            if (error) setError(undefined);
+          }}
           keyboardType="number-pad"
           maxLength={3}
           selectTextOnFocus
           textAlign="center"
+          error={error}
         />
-        <Text style={styles.suffix}>minutos</Text>
+        {!error && <Text style={styles.suffix}>minutos</Text>}
       </View>
 
       <View style={{ gap: 8 }}>

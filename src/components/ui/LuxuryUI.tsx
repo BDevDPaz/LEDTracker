@@ -1,4 +1,3 @@
-// --- src/components/LuxuryUI.tsx ---
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ViewStyle } from 'react-native';
 import type { StyleProp, DimensionValue } from 'react-native';
@@ -132,13 +131,14 @@ interface LuxuryInputProps {
   label?: string;
   icon?: React.ReactNode;
   containerStyle?: ViewStyle;
+  error?: string;
   [key: string]: any;
 }
 
-export const LuxuryInput = ({ label, icon, containerStyle, ...props }: LuxuryInputProps) => (
+export const LuxuryInput = ({ label, icon, containerStyle, error, ...props }: LuxuryInputProps) => (
   <View style={[styles.inputGroup, containerStyle]}>
-    {label && <Text style={styles.inputLabel}>{label}</Text>}
-    <View style={styles.inputWrapper}>
+    {label && <Text style={[styles.inputLabel, error && { color: '#FF3B30' }]}>{label}</Text>}
+    <View style={[styles.inputWrapper, error && { borderColor: '#FF3B30' }]}>
       {icon && <View style={styles.inputIconWrapper}>{icon}</View>}
       <TextInput
         style={styles.input}
@@ -146,6 +146,7 @@ export const LuxuryInput = ({ label, icon, containerStyle, ...props }: LuxuryInp
         {...props}
       />
     </View>
+    {error && <Text style={styles.errorText}>{error}</Text>}
   </View>
 );
 
@@ -167,4 +168,5 @@ const styles = StyleSheet.create({
   inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, height: 50, paddingHorizontal: 16 },
   inputIconWrapper: { marginRight: 12 },
   input: { flex: 1, color: '#FFF', fontFamily: 'Montserrat_400Regular', fontSize: 14 },
+  errorText: { color: '#FF3B30', fontSize: 10, fontFamily: 'Montserrat_600SemiBold', marginTop: 4, marginLeft: 4 },
 });

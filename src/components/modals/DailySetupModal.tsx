@@ -1,4 +1,3 @@
-// --- src/components/DailySetupModal.tsx ---
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +5,8 @@ import { COLORS } from '../../constants/theme';
 import { LuxuryButton, LuxuryInput, GlassModalWrapper } from '../ui/LuxuryUI';
 import { log } from '../../utils/logger';
 import { useLanguage } from '../../context/LanguageContext';
+import { dailySetupSchema } from '../../utils/validation';
+import { z } from 'zod';
 
 interface DailySetupModalProps {
   visible: boolean;
@@ -19,26 +20,45 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
   const [address, setAddress] = useState('');
   const [client, setClient] = useState('');
   const [notes, setNotes] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleStart = () => {
-    if (address.trim()) {
+    try {
+      const validatedData = dailySetupSchema.parse({
+        address,
+        client: client || undefined,
+        notes: notes || undefined,
+      });
+
       if (mode === 'start') {
-        log('VERDE', 'OPERACION_EXITOSA', 'INFO', `Nueva jornada configurada. Destino: ${address}`);
+        log('VERDE', 'OPERACION_EXITOSA', 'INFO', `Nueva jornada configurada. Destino: ${validatedData.address}`);
       } else {
-        log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Travel Mode (Trayecto) iniciado hacia: ${address}`);
+        log('NARANJA', 'MODOS_ESPECIALES', 'EVENT', `Travel Mode (Trayecto) iniciado hacia: ${validatedData.address}`);
       }
 
-      onStart(address, client, notes);
+      onStart(validatedData.address, validatedData.client || '', validatedData.notes || '');
 
       // Limpieza
       setAddress('');
       setClient('');
       setNotes('');
+      setErrors({});
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        e.issues.forEach((err) => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+      }
     }
   };
 
   const handleCancel = () => {
     log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', `Setup Modal cancelado (Modo: ${mode})`);
+    setErrors({});
     onClose();
   };
 
@@ -63,7 +83,15 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
             icon={<Ionicons name="location-sharp" size={20} color={COLORS.textSecondary} />}
             placeholder={t.input_address}
             value={address}
-            onChangeText={setAddress}
+            onChangeText={(text: string) => {
+              setAddress(text);
+              if (errors.address) setErrors(prev => {
+                const next = {...prev};
+                delete next.address;
+                return next;
+              });
+            }}
+            error={errors.address}
             autoFocus={true}
           />
 
@@ -73,6 +101,7 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
             placeholder={t.input_client}
             value={client}
             onChangeText={setClient}
+            error={errors.client}
           />
 
           {/* INPUT NOTAS (Opcional) */}
@@ -81,6 +110,7 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
             placeholder={t.input_notes}
             value={notes}
             onChangeText={setNotes}
+            error={errors.notes}
           />
 
           <View style={styles.buttonRow}>

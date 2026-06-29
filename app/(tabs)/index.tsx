@@ -175,7 +175,7 @@ export default function HomeScreen() {
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Text testID='home-title' style={styles.appTitle}>
-                {t.header_title || 'LED Tracker'}
+                {t.header_title || 'WTracker'}
               </Text>
               <TouchableOpacity
                 testID='home-easter-egg-trigger'
@@ -346,14 +346,14 @@ export default function HomeScreen() {
               color={COLORS.gold}
               style={{ marginBottom: 20 }}
             />
-            <Text style={styles.eggTitle}>LED Tracker Special Edition</Text>
+            <Text style={styles.eggTitle}>WTracker Special Edition</Text>
             <Text style={styles.eggAuthor}>by BDevDPaz</Text>
             <View style={styles.eggDivider} />
             <Text style={styles.eggText}>
               Para uso restringido de{"\n"}
-              <Text style={{ color: '#FFF' }}>Alex León</Text>
+              <Text style={{ color: '#FFF' }}>USER_NAME</Text>
               {"\n"}
-              CEO de LEON&apos;S ELECTRICAL DESIGN
+              CEO de COMPANY_NAME
             </Text>
             <LuxuryButton
               testID='home-special-card-close'

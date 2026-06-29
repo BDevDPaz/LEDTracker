@@ -1,5 +1,5 @@
 export const auditConfig = {
-  projectName: 'LEDTracker v2.2 - Gold Master',
+  projectName: 'WTracker v2.2 - Gold Master',
 
   sourceRoots: ['src', 'app'],
 

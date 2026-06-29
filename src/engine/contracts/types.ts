@@ -1,5 +1,7 @@
 import { WorkSession, AppSettings } from '../../types';
 
+export { WorkSession, AppSettings };
+
 export interface EngineState {
   activeSession: WorkSession | null;
   settings: AppSettings | null;
