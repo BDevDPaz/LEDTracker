@@ -1,4 +1,4 @@
-# WTracker v2.2 - Professional Inventory & Audit
+# WTracke - Professional
 
 A production-ready React Native (Expo) application for automated work shift tracking, payroll calculation, and data integrity auditing.
 
