@@ -55,5 +55,5 @@ The **WorkTrackerEngine** implements a unidirectional data flow (Events → Redu
 - **Linting**: Strict ESLint configuration for React 19 and TypeScript.
 
 ---
-**Maintained by**: Jules (Expert Software Engineer)
-**License**: Proprietary - LEON'S ELECTRICAL DESIGN
+**Maintained by**: Jules Artificial Intelligence (Expert Software Engineer)
+**License**: Proprietary - BDevDPaz / Byron Efrain De Paz Garcia
