@@ -1,15 +1,69 @@
 {
   "project": "WTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-29T17:27:18.254Z",
+  "generatedAt": "2026-06-29T19:42:21.796Z",
   "summary": {
-    "total": 4,
+    "total": 10,
     "critical": 0,
-    "high": 0,
-    "medium": 3,
+    "high": 2,
+    "medium": 7,
     "low": 1,
     "trace": 0
   },
   "findings": [
+    {
+      "id": "GEO-005",
+      "domain": "geofencing",
+      "severity": "high",
+      "title": "Expected geofencing/location API not detected: startGeofencingAsync",
+      "description": "LocationManager.ts does not clearly reference \"startGeofencingAsync\".",
+      "recommendation": "Verify that geofence registration, cleanup, permission handling and GPS warm-up are implemented intentionally.",
+      "file": "src/services/LocationManager.ts"
+    },
+    {
+      "id": "GEO-005",
+      "domain": "geofencing",
+      "severity": "high",
+      "title": "Expected geofencing/location API not detected: stopGeofencingAsync",
+      "description": "LocationManager.ts does not clearly reference \"stopGeofencingAsync\".",
+      "recommendation": "Verify that geofence registration, cleanup, permission handling and GPS warm-up are implemented intentionally.",
+      "file": "src/services/LocationManager.ts"
+    },
+    {
+      "id": "GEO-005",
+      "domain": "geofencing",
+      "severity": "medium",
+      "title": "Expected geofencing/location API not detected: requestForegroundPermissionsAsync",
+      "description": "LocationManager.ts does not clearly reference \"requestForegroundPermissionsAsync\".",
+      "recommendation": "Verify that geofence registration, cleanup, permission handling and GPS warm-up are implemented intentionally.",
+      "file": "src/services/LocationManager.ts"
+    },
+    {
+      "id": "GEO-005",
+      "domain": "geofencing",
+      "severity": "medium",
+      "title": "Expected geofencing/location API not detected: requestBackgroundPermissionsAsync",
+      "description": "LocationManager.ts does not clearly reference \"requestBackgroundPermissionsAsync\".",
+      "recommendation": "Verify that geofence registration, cleanup, permission handling and GPS warm-up are implemented intentionally.",
+      "file": "src/services/LocationManager.ts"
+    },
+    {
+      "id": "GEO-005",
+      "domain": "geofencing",
+      "severity": "medium",
+      "title": "Expected geofencing/location API not detected: getCurrentPositionAsync",
+      "description": "LocationManager.ts does not clearly reference \"getCurrentPositionAsync\".",
+      "recommendation": "Verify that geofence registration, cleanup, permission handling and GPS warm-up are implemented intentionally.",
+      "file": "src/services/LocationManager.ts"
+    },
+    {
+      "id": "GEO-006",
+      "domain": "geofencing",
+      "severity": "medium",
+      "title": "GPS accuracy handling not clearly detected",
+      "description": "LocationManager.ts does not clearly handle GPS accuracy.",
+      "recommendation": "Record accuracy in logs and reject/flag low-confidence GPS decisions.",
+      "file": "src/services/LocationManager.ts"
+    },
     {
       "id": "GEO-007",
       "domain": "geofencing",

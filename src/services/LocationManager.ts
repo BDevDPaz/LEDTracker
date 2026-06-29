@@ -28,7 +28,14 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
   }
 
   const { eventType, region } = data as GeofenceTaskData;
-  const siteId = region.identifier;
+  const siteId = region?.identifier;
+
+  // 🛡️ Cláusula de Salvaguarda (Type Narrowing) para asegurar estabilidad en runtime y tipado estricto
+  if (!siteId) {
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', "Geofencing event aborted: missing 'region.identifier' in task payload.");
+    return;
+  }
+
   const db = getDB();
 
   try {
@@ -94,8 +101,6 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
       );
 
       // Solo marcamos salida si esta es la sesión activa
-      // Nota: Si hay múltiples sesiones active (raro pero posible), el failsafe se encargará.
-      // Por ahora, si la sesión que disparó el Exit es active, guardamos el timestamp.
       if (session.status === 'active') {
         const now = dayjs().valueOf();
 
@@ -193,3 +198,4 @@ export const LocationService = {
     return await locationAdapter.geocodeAddress(address);
   },
 };
+
