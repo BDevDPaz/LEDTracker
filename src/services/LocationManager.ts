@@ -173,5 +173,21 @@ export const LocationService = {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error general deteniendo monitoreo', e);
     }
   },
+
+  getCoordsFromAddress: async (address: string) => {
+    try {
+      const results = await Location.geocodeAsync(address);
+      if (results.length > 0) {
+        return {
+          latitude: results[0].latitude,
+          longitude: results[0].longitude,
+        };
+      }
+      return null;
+    } catch (e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error geocodificando dirección', e);
+      return null;
+    }
+  },
 };
 

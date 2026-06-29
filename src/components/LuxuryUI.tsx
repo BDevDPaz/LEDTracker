@@ -1,6 +1,7 @@
 // --- src/components/LuxuryUI.tsx ---
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ViewStyle } from 'react-native';
+import type { StyleProp, DimensionValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +11,7 @@ import { COLORS } from '../constants/theme';
 import { log } from '../utils/logger';
 
 // --- TARJETA ---
-export const LuxuryCard = ({ children, active, style }: { children: React.ReactNode, active?: boolean, style?: ViewStyle }) => (
+export const LuxuryCard = ({ children, active, style }: { children: React.ReactNode, active?: boolean, style?: StyleProp<ViewStyle> }) => (
   <View style={[styles.cardContainer, style, active && styles.cardActive]}>
     <LinearGradient
       colors={active ? ['#1A1A1A', '#000000'] : ['#0A0A0A', '#050505']}
@@ -46,7 +47,7 @@ export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: { text: s
 );
 
 // --- SKELETON ---
-export const LuxurySkeleton = ({ width, height, style }: { width: number | string, height: number | string, style?: ViewStyle }) => {
+export const LuxurySkeleton = ({ width, height, style }: { width: DimensionValue, height: DimensionValue, style?: ViewStyle }) => {
   const opacity = useSharedValue(0.3);
   useEffect(() => {
     opacity.value = withRepeat(
@@ -68,10 +69,11 @@ interface LuxuryButtonProps {
   icon?: React.ReactNode;
   variant?: 'primary' | 'danger' | 'outline' | 'success' | 'secondary';
   disabled?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
-export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled, style }: LuxuryButtonProps) => {
+export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled, style, testID }: LuxuryButtonProps) => {
   let bgColors: readonly [string, string, ...string[]] = ['#D4AF37', '#8a7224']; // Gold (Primary)
   let textColor = '#000';
   let borderColor = 'transparent';
@@ -107,6 +109,7 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
       disabled={disabled}
       activeOpacity={0.7}
       style={style}
+      testID={testID}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       accessibilityLabel={text}

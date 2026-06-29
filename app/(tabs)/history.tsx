@@ -51,7 +51,7 @@ export default function HistoryScreen() {
       const rate = settings?.hourly_rate || 0;
 
       let hours = 0;
-      data.forEach((s) => {
+      data.forEach((s: WorkSession) => {
         if (s.start_time && s.end_time) {
           const diff = (s.end_time - s.start_time) / 3600000;
           hours += diff;
@@ -59,8 +59,8 @@ export default function HistoryScreen() {
       });
       setTotalHours(hours);
       setEstEarnings(hours * rate);
-    } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando historial', e);
+    } catch (_e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando historial', _e);
     }
   };
 
@@ -88,8 +88,8 @@ export default function HistoryScreen() {
           log('NARANJA', 'ACCION_DESTRUCTIVA', 'EVENT', `Registro eliminado manualmente ID: ${id}`);
           showToast('Registro eliminado', 'success');
           void loadHistory();
-        } catch (e) {
-          log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', e);
+        } catch (_e) {
+          log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', _e);
         }
       },
     });
@@ -164,8 +164,8 @@ export default function HistoryScreen() {
       setEditModalVisible(false);
       showToast('Cambios guardados', 'success');
       void loadHistory();
-    } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', e);
+    } catch (_e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', _e);
     }
   };
 

@@ -1,7 +1,7 @@
 // --- src/database/db.ts ---
 import * as SQLite from 'expo-sqlite';
 import dayjs from '../utils/dayjsSetup';
-import { WorkSession, AppSettings } from '../types';
+import { WorkSession, AppSettings, SessionStatus } from '../types';
 import { log, logAudit, setLoggerDB, AUDIT_ACTIONS } from '../utils/logger';
 
 const DB_NAME = 'ledtracker_v2.db';
@@ -436,3 +436,62 @@ export const getOpenSession = async (): Promise<WorkSession | null> => {
   );
 };
 
+
+
+
+
+
+export const getHistory = async (): Promise<WorkSession[]> => {
+  const database = await ensureDbReady();
+  return await database.getAllAsync<WorkSession>(
+    `SELECT * FROM work_sessions
+     WHERE status != 'deleted'
+     ORDER BY start_time DESC`
+  );
+};
+
+export const updateSessionStatus = async (
+  id: number,
+  status: SessionStatus,
+  lunchMinutes: number = 0
+) => {
+  const endTime = nowMs();
+  await runInTransaction(async (database) => {
+    if (status === 'completed') {
+      let lunchStart = null;
+      let lunchEnd = null;
+      let lunchTaken = 0;
+
+      if (lunchMinutes > 0) {
+        lunchTaken = 1;
+        lunchEnd = endTime;
+        lunchStart = endTime - lunchMinutes * 60000;
+      }
+
+      await database.runAsync(
+        `UPDATE work_sessions
+         SET end_time = ?, status = ?, lunch_taken = ?, lunch_start = ?, lunch_end = ?
+         WHERE id = ?`,
+        [endTime, status, lunchTaken, lunchStart, lunchEnd, id]
+      );
+    } else {
+      await database.runAsync(
+        `UPDATE work_sessions
+         SET status = ?
+         WHERE id = ?`,
+        [status, id]
+      );
+    }
+
+    const lunchDetails = lunchMinutes > 0 ? " with " + lunchMinutes + "m lunch" : "";
+    await logAudit({
+      session_id: id,
+      action_type: status === 'completed' ? AUDIT_ACTIONS.AUTO_CHECKOUT : AUDIT_ACTIONS.MANUAL,
+      details: "Session status updated to " + status + lunchDetails,
+      timestamp: nowMs()
+    });
+  });
+};
+
+export const getActiveSession = getOpenSession;
+export const saveSession = insertWorkSession;
