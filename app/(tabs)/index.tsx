@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withSequence,
-  withTiming,
 } from 'react-native-reanimated';
 import dayjs from 'dayjs';
 
@@ -81,14 +80,14 @@ export default function HomeScreen() {
       const rate = settings?.hourly_rate || 0;
 
       let totalH = 0;
-      history.forEach((s) => {
+      history.forEach((s: WorkSession) => {
         if (s.start_time && s.end_time) {
           totalH += (s.end_time - s.start_time) / 3600000;
         }
       });
       setStats({ hours: totalH, earnings: totalH * rate });
-    } catch (e) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando datos de inicio', e);
+    } catch (_e) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando datos de inicio', _e);
     }
   }, [t.no_activity]);
 
@@ -133,21 +132,20 @@ export default function HomeScreen() {
         target_latitude: coords.latitude,
         target_longitude: coords.longitude,
         status: 'pending_arrival',
-        start_time: dayjs().valueOf(),
+        start_time: dayjs().valueOf(), location_confirmed: 0, is_manual_edit: 0, lunch_taken: 0, date_string: dayjs().format('YYYY-MM-DD'),
         client_name: client,
         manual_note: notes,
       });
 
-      await LocationService.startMonitoring(
+      await LocationService.startMonitoringArrival(
         coords.latitude,
         coords.longitude,
-        radius,
-        addr
+        radius
       );
 
       showToast(t.toast_geofence_active || 'Geocerca Activada', 'success');
       void loadData();
-    } catch (e) {
+    } catch (_e) {
       showToast(t.toast_error_generic || 'Error al iniciar', 'error');
     } finally {
       setIsProcessing(false);
@@ -168,7 +166,7 @@ export default function HomeScreen() {
         showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
         void loadData();
       }
-    } catch (e) {
+    } catch (_e) {
       showToast('Error al finalizar', 'error');
     } finally {
       setIsProcessing(false);
