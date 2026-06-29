@@ -45,3 +45,7 @@ app-example
 .env
 .vscode/
 coverage/
+
+# Testing and logs
+coverage/
+*.log
