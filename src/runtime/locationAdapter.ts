@@ -5,6 +5,7 @@ import { log } from '../utils/logger';
 export interface LocationCoordinates {
   latitude: number;
   longitude: number;
+  accuracy?: number;
 }
 
 export const locationAdapter = {
@@ -21,6 +22,7 @@ export const locationAdapter = {
       return {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy ?? undefined,
       };
     } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error getting current location', e);

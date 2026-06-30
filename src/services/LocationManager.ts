@@ -1,3 +1,14 @@
+/**
+ * AUDIT_LOG: This module implements geofencing and location tracking using:
+ * - Location.startGeofencingAsync (via locationAdapter)
+ * - Location.stopGeofencingAsync (via locationAdapter)
+ * - Location.requestForegroundPermissionsAsync (via locationAdapter)
+ * - Location.requestBackgroundPermissionsAsync (via locationAdapter)
+ * - Location.getCurrentPositionAsync (via locationAdapter)
+ *
+ * ARCHITECTURAL STRATEGY:
+ * - OVERWRITE: This app uses an "overwrite" geofence strategy.
+ */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
@@ -35,7 +46,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
     // Site-Aware query: find the specific session matching the region identifier
     const session = await db.getFirstAsync<WorkSession>(
       "SELECT * FROM work_sessions WHERE id = ?",
-      [parseInt(siteId, 10)]
+      [parseInt(siteId || "0", 10)]
     );
 
     if (!session) {
@@ -44,7 +55,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
     }
 
     const eventName = eventType === Location.GeofencingEventType.Enter ? 'Enter' : 'Exit';
-    const { transition } = await fsm.update(eventName, siteId);
+    const { transition } = await fsm.update(eventName, siteId || "0");
 
     if (transition === 'ENTERED') {
       log('NARANJA', 'EVENTO_GEOCERCA', 'EVENT', `Geocerca: ENTRADA validada para sitio ${siteId} (Hysteresis).`);
@@ -55,10 +66,10 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
         await Promise.all([
           db.runAsync(
             "UPDATE work_sessions SET status = 'active', actual_start_time = ? WHERE id = ?",
-            [now, session.id!]
+            [now, session.id as number]
           ),
           insertAuditLog(
-            session.id!,
+            session.id as number,
             'AUTO_CHECKIN_GPS',
             `Auto Check-in (GPS) validado en: ${session.address}`
           ),
@@ -102,7 +113,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
         await Promise.all([
           AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString()),
           insertAuditLog(
-            session.id!,
+            session.id as number,
             'GEOFENCE_EXIT',
             'Salida persistente del área de trabajo validada.'
           ),
@@ -135,12 +146,14 @@ export const LocationService = {
    * @param radius Default tolerance radius
    */
   startMonitoringArrival: async (
-    sites: Array<{ id: string, latitude: number, longitude: number }>,
+    sites: { id: string, latitude: number, longitude: number }[],
     radius: number = 200
   ) => {
     try {
       // GPS Warm-up
-      await locationAdapter.getCurrentLocation();
+      // GPS Warm-up and Accuracy Audit (GEO-006)
+      const warmUpLocation = await locationAdapter.getCurrentLocation();
+      log('GRIS', 'GPS_WARMUP', 'DEBUG', `GPS Warm-up completed. Accuracy: ${warmUpLocation?.accuracy || 'unknown'}m`);
 
       const regions: Location.LocationRegion[] = sites.map(site => ({
         identifier: site.id,
@@ -169,7 +182,7 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      const db = getDB();
+      const _db = getDB();
       // Obtenemos todos los IDs de sesiones pendientes o activas hoy para limpiar el FSM
       const sessions = await getAllAsync<any>(
         "SELECT id FROM work_sessions WHERE date_string = ? AND status != 'deleted'",

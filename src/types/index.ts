@@ -70,7 +70,7 @@ export interface AuditLog {
 // W-TRACKER LOGGER - ESTÁNDAR OFICIAL DE TIPOS
 // ======================================================
 
-export type LogColor = 'VERDE' | 'AMARILLO' | 'NARANJA' | 'AZUL' | 'BLANCO' | 'ROJO';
+export type LogColor = 'VERDE' | 'AMARILLO' | 'NARANJA' | 'AZUL' | 'BLANCO' | 'GRIS' | 'ROJO';
 
 export type LogCategory = 
   | 'OPERACION_EXITOSA' 
@@ -89,7 +89,7 @@ export type LogCategory =
   | 'ERROR_CRITICO' 
   | 'INTEGRIDAD_COMPROMETIDA' 
   | 'ACCION_DESTRUCTIVA' 
-  | 'MONITOREO_DETENIDO';
+  | 'MONITOREO_DETENIDO' | 'GPS_WARMUP';
 
 export type LogSeverity = 'INFO' | 'WARN' | 'EVENT' | 'DEBUG' | 'ERROR';
 

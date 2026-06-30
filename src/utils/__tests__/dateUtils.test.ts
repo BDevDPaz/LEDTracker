@@ -24,7 +24,7 @@ describe('dateUtils', () => {
     it('debería formatear la fecha correctamente en español', () => {
       const result = formatDate(TEST_TIMESTAMP);
       // Day.js con locale 'es' produce variaciones como "mié., 28 ene. 2026". 
-      // Evaluamos los tokens clave para evitar fallos por signos de puntuación de la librería.
+      // Evaluamos los segmentos clave para evitar fallos por signos de puntuación de la librería.
       const lowerResult = result.toLowerCase();
       expect(lowerResult).toContain('mié');
       expect(result).toContain('28');
