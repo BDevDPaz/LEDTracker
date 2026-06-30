@@ -9,19 +9,19 @@ import {
 import dayjs from './dayjsSetup';
 import { emitFeedbackFromLog } from '../feedback/logBridge';
 
-// Cola temporal mientras la DB no está inicializada
+// Queue for when DB is not yet ready
 const logQueue: SystemLogEntry[] = [];
 const auditQueue: AuditLogEntry[] = [];
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
+let isFlushing = false;
 
-// --- Internal Diagnostic Channel (Audit Compliant) ---
+// Internal Diagnostic Channel
 const _output = {
   info: console.log.bind(console),
   warn: console.warn.bind(console),
   error: console.error.bind(console)
 };
-
 
 export const AUDIT_ACTIONS = {
   AUTO_CHECKIN: 'AUTO_CHECKIN',
@@ -32,6 +32,9 @@ export const AUDIT_ACTIONS = {
   LOCATION: 'LOCATION',
   PDF: 'PDF',
   PAYROLL: 'PAYROLL',
+  GEOFENCE_EXIT: 'GEOFENCE_EXIT',
+  AUTO_CHECKIN_GPS: 'AUTO_CHECKIN_GPS',
+  AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_GPS'
 } as const;
 
 export interface AuditLogEntry {
@@ -43,137 +46,72 @@ export interface AuditLogEntry {
 
 export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
   dbInstance = db;
-  void flushLogQueue();
-  void flushAuditQueue();
+  void flushQueues();
 };
 
-const flushLogQueue = async () => {
-  if (!dbInstance) return;
-
-  const toProcess = logQueue.splice(0, logQueue.length).filter(Boolean);
-  if (toProcess.length === 0) return;
-
-  const CHUNK_SIZE = 50; // SQLite limit ~999 vars, 7 vars per log = max ~142
-  for (let i = 0; i < toProcess.length; i += CHUNK_SIZE) {
-    const chunk = toProcess.slice(i, i + CHUNK_SIZE);
-    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
-    const values = chunk.flatMap((entry) => [
-      entry.timestamp,
-      entry.timestamp_str,
-      entry.color,
-      entry.categoria,
-      entry.severidad,
-      entry.mensaje,
-      entry.metadata ?? null,
-    ]);
-
-    try {
-      await dbInstance.runAsync(
-        `INSERT INTO system_logs (
-          timestamp,
-          timestamp_str,
-          color,
-          categoria,
-          severidad,
-          mensaje,
-          metadata
-        ) VALUES ${placeholders}`,
-        values as any
-      );
-    } catch (e) {
-      _output.error('❌ Fallo crítico al guardar chunk de system logs:', e);
-    }
-  }
-};
-
-const flushAuditQueue = async () => {
-  if (!dbInstance) return;
-
-  const toProcess = auditQueue.splice(0, auditQueue.length).filter(Boolean);
-  if (toProcess.length === 0) return;
-
-  const CHUNK_SIZE = 100; // SQLite limit ~999 vars, 4 vars per log = max ~249
-  for (let i = 0; i < toProcess.length; i += CHUNK_SIZE) {
-    const chunk = toProcess.slice(i, i + CHUNK_SIZE);
-    const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(', ');
-    const values = chunk.flatMap((entry) => [
-      entry.session_id,
-      entry.action_type,
-      entry.details,
-      entry.timestamp,
-    ]);
-
-    try {
-      await dbInstance.runAsync(
-        `INSERT INTO audit_logs (
-          session_id,
-          action_type,
-          details,
-          timestamp
-        ) VALUES ${placeholders}`,
-        values as any
-      );
-    } catch (e) {
-      _output.error('❌ Fallo crítico al guardar chunk de audit logs:', e);
-    }
-  }
-};
-
-const saveSystemLogToDb = async (entry: SystemLogEntry) => {
-  if (!dbInstance) return;
+const flushQueues = async () => {
+  if (!dbInstance || isFlushing) return;
+  isFlushing = true;
 
   try {
-    await dbInstance.runAsync(
-      `INSERT INTO system_logs (
-        timestamp,
-        timestamp_str,
-        color,
-        categoria,
-        severidad,
-        mensaje,
-        metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        entry.timestamp,
-        entry.timestamp_str,
-        entry.color,
-        entry.categoria,
-        entry.severidad,
-        entry.mensaje,
-        entry.metadata ?? null,
-      ]
-    );
-  } catch (e) {
-    _output.error('❌ Fallo crítico al guardar log en DB de auditoría:', e);
-  }
-};
+    if (logQueue.length > 0) {
+      const toProcess = logQueue.splice(0, logQueue.length);
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < toProcess.length; i += CHUNK_SIZE) {
+        const chunk = toProcess.slice(i, i + CHUNK_SIZE);
+        const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const values = chunk.flatMap((entry) => [
+          entry.timestamp,
+          entry.timestamp_str,
+          entry.color,
+          entry.categoria,
+          entry.severidad,
+          entry.mensaje,
+          entry.metadata ?? null,
+        ]);
+        await dbInstance.runAsync(
+          `INSERT INTO system_logs (timestamp, timestamp_str, color, categoria, severidad, mensaje, metadata) VALUES ${placeholders}`,
+          values as any
+        );
+      }
+    }
 
-const saveAuditToDb = async (entry: AuditLogEntry) => {
-  if (!dbInstance) return;
-
-  try {
-    await dbInstance.runAsync(
-      `INSERT INTO audit_logs (
-        session_id,
-        action_type,
-        details,
-        timestamp
-      ) VALUES (?, ?, ?, ?)`,
-      [
-        entry.session_id,
-        entry.action_type,
-        entry.details,
-        entry.timestamp,
-      ]
-    );
+    if (auditQueue.length > 0) {
+      const toProcess = auditQueue.splice(0, auditQueue.length);
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < toProcess.length; i += CHUNK_SIZE) {
+        const chunk = toProcess.slice(i, i + CHUNK_SIZE);
+        const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(', ');
+        const values = chunk.flatMap((entry) => [
+          entry.session_id,
+          entry.action_type,
+          entry.details,
+          entry.timestamp,
+        ]);
+        await dbInstance.runAsync(
+          `INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES ${placeholders}`,
+          values as any
+        );
+      }
+    }
   } catch (e) {
-    _output.error('❌ Fallo crítico al guardar audit_log en DB:', e);
+    _output.error('❌ Error flushing logger queues:', e);
+  } finally {
+    isFlushing = false;
   }
 };
 
 export const logAudit = async (entry: AuditLogEntry): Promise<void> => {
   if (dbInstance) {
-    await saveAuditToDb(entry);
+    try {
+      await dbInstance.runAsync(
+        `INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES (?, ?, ?, ?)`,
+        [entry.session_id, entry.action_type, entry.details, entry.timestamp]
+      );
+    } catch (e) {
+      _output.error('❌ Error saving audit log:', e);
+      auditQueue.push(entry);
+    }
   } else {
     auditQueue.push(entry);
   }
@@ -181,47 +119,21 @@ export const logAudit = async (entry: AuditLogEntry): Promise<void> => {
 
 function safeSerializeMetadata(metadata: unknown): string | undefined {
   if (metadata === undefined) return undefined;
-
   try {
     if (metadata instanceof Error) {
-      return JSON.stringify(
-        {
-          name: metadata.name,
-          message: metadata.message,
-          stack: metadata.stack,
-        },
-        null,
-        0
-      );
+      return JSON.stringify({ name: metadata.name, message: metadata.message, stack: metadata.stack }, null, 0);
     }
-
     return JSON.stringify(metadata);
   } catch {
-    try {
-      return String(metadata);
-    } catch {
-      return '[unserializable-metadata]';
-    }
+    return '[unserializable-metadata]';
   }
 }
 
 function getIconByColor(color: LogColor): string {
-  switch (color) {
-    case 'VERDE':
-      return '🟢';
-    case 'AMARILLO':
-      return '🟡';
-    case 'NARANJA':
-      return '🟠';
-    case 'AZUL':
-      return '🔵';
-    case 'BLANCO':
-      return '⚪️';
-    case 'ROJO':
-      return '🔴';
-    default:
-      return '•';
-  }
+  const icons: Record<LogColor, string> = {
+    'VERDE': '🟢', 'AMARILLO': '🟡', 'NARANJA': '🟠', 'AZUL': '🔵', 'BLANCO': '⚪️', 'ROJO': '🔴'
+  };
+  return icons[color] || '•';
 }
 
 export const log = (
@@ -232,12 +144,9 @@ export const log = (
   metadata?: unknown
 ): void => {
   const now = dayjs();
-  const timestamp = now.valueOf();
-  const timestamp_str = now.format('YYYY-MM-DDTHH:mm:ss.SSSZ');
-
   const entry: SystemLogEntry = {
-    timestamp,
-    timestamp_str,
+    timestamp: now.valueOf(),
+    timestamp_str: now.format('YYYY-MM-DDTHH:mm:ss.SSSZ'),
     color,
     categoria,
     severidad,
@@ -246,30 +155,23 @@ export const log = (
   };
 
   const icon = getIconByColor(color);
-  const consoleMsg = `[${timestamp_str}] ${icon} [${categoria}] ${mensaje}`;
+  const consoleMsg = `[${entry.timestamp_str}] ${icon} [${categoria}] ${mensaje}`;
 
-  if (severidad === 'ERROR') {
-    _output.error(consoleMsg, metadata ?? '');
-  } else if (severidad === 'WARN') {
-    _output.warn(consoleMsg, metadata ?? '');
-  } else {
-    _output.info(consoleMsg, metadata ?? '');
-  }
+  if (severidad === 'ERROR') _output.error(consoleMsg, metadata ?? '');
+  else if (severidad === 'WARN') _output.warn(consoleMsg, metadata ?? '');
+  else _output.info(consoleMsg, metadata ?? '');
 
   if (dbInstance) {
-    void saveSystemLogToDb(entry);
+    dbInstance.runAsync(
+      `INSERT INTO system_logs (timestamp, timestamp_str, color, categoria, severidad, mensaje, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [entry.timestamp, entry.timestamp_str, entry.color, entry.categoria, entry.severidad, entry.mensaje, entry.metadata ?? null]
+    ).catch(e => {
+       _output.error('❌ Error saving system log:', e);
+       logQueue.push(entry);
+    });
   } else {
     logQueue.push(entry);
   }
 
-  // ======================================================
-  // BRIDGE UX → MODO PREMIUM SILENCIOSO
-  // ======================================================
-  // El bridge decide internamente si:
-  // - se muestra feedback,
-  // - qué tipo de feedback,
-  // - o si el evento debe quedarse silencioso.
-  // Esto preserva la auditoría forense sin inundar al usuario.
-  // ======================================================
   emitFeedbackFromLog(severidad, categoria, mensaje);
 };

@@ -1,14 +1,13 @@
 // src/context/LanguageContext.tsx
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { getDB } from '../database/db';
+import { ensureDbReady } from '../database/db';
 import { translations } from '../utils/i18n';
 import { Language } from '../types';
 
-// Definimos qué datos comparte este contexto
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => Promise<void>;
-  t: typeof translations['es']; // Tipado automático de las traducciones
+  t: typeof translations['es'];
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -16,11 +15,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('es');
 
-  // Cargar idioma guardado al iniciar la app
   useEffect(() => {
     const loadLang = async () => {
       try {
-        const db = getDB();
+        const db = await ensureDbReady();
         const res = await db.getFirstAsync<{ language: Language }>('SELECT language FROM settings WHERE id = 1');
         if (res?.language) {
           setLanguageState(res.language);
@@ -32,18 +30,16 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadLang();
   }, []);
 
-  // Función para cambiar idioma (Guarda en DB y actualiza Estado)
   const setLanguage = async (newLang: Language) => {
     try {
-      const db = getDB();
+      const db = await ensureDbReady();
       await db.runAsync('UPDATE settings SET language = ? WHERE id = 1', [newLang]);
-      setLanguageState(newLang); // Esto actualiza toda la UI inmediatamente
+      setLanguageState(newLang);
     } catch (e) {
       console.error("Error guardando idioma", e);
     }
   };
 
-  // Obtener el diccionario actual
   const t = translations[language];
 
   return (
@@ -53,7 +49,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-// Hook personalizado para usar el idioma fácil en cualquier pantalla
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
   if (!context) throw new Error("useLanguage debe usarse dentro de un LanguageProvider");
