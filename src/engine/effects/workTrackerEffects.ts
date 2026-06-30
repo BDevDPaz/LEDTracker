@@ -10,6 +10,7 @@ import {
 import { LocationService } from '../../services/LocationManager';
 import dayjs from '../../utils/dayjsSetup';
 import { log } from '../../utils/logger';
+import { securityAdapter } from '../../runtime/securityAdapter';
 
 export async function workTrackerEffects(
   event: EngineEvent,
@@ -48,7 +49,11 @@ export async function workTrackerEffects(
       }
 
       case 'START_SESSION_REQUEST': {
-        const coords = await LocationService.getCoordsFromAddress(event.address);
+                const sanitizedAddress = securityAdapter.sanitizeInput(event.address);
+        const sanitizedClient = event.client ? securityAdapter.sanitizeInput(event.client) : undefined;
+        const sanitizedNotes = event.notes ? securityAdapter.sanitizeInput(event.notes) : undefined;
+
+        const coords = await LocationService.getCoordsFromAddress(sanitizedAddress);
         if (!coords) {
           dispatch({ type: 'ERROR_OCCURRED', error: 'Address not found' });
           return;
@@ -58,7 +63,7 @@ export async function workTrackerEffects(
         const radius = currentSettings?.tolerance_radius || 200;
 
         await saveSession({
-          address: event.address,
+          address: sanitizedAddress,
           latitude: coords.latitude,
           longitude: coords.longitude,
           target_latitude: coords.latitude,
@@ -69,8 +74,8 @@ export async function workTrackerEffects(
           is_manual_edit: 0,
           lunch_taken: 0,
           date_string: dayjs().format('YYYY-MM-DD'),
-          client_name: event.client,
-          manual_note: event.notes,
+          client_name: sanitizedClient,
+          manual_note: sanitizedNotes,
         });
 
         // Monitor all pending sessions for today

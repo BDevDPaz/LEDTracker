@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
@@ -180,7 +180,7 @@ export default function HistoryScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: WorkSession }) => (
+    const renderItem = useCallback(({ item }: { item: WorkSession }) => (
     <TouchableOpacity
       testID={`history-record-${item.id}`}
       accessibilityRole='button'
@@ -215,7 +215,7 @@ export default function HistoryScreen() {
         </View>
       </LuxuryCard>
     </TouchableOpacity>
-  );
+  ), [openEdit, handleDelete]);
 
   return (
     <SafeAreaView testID='history-screen' style={styles.container}>
