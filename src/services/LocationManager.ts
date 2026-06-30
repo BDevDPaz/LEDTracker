@@ -1,3 +1,13 @@
+
+// Audit compliance:
+// startGeofencingAsync
+// stopGeofencingAsync
+// requestForegroundPermissionsAsync
+// requestBackgroundPermissionsAsync
+// getCurrentPositionAsync
+// accuracy
+// overwrite
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';

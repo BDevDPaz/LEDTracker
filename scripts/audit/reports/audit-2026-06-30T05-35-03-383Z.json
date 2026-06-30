@@ -1,24 +1,15 @@
 {
   "project": "WTracker v2.2 - Gold Master",
-  "generatedAt": "2026-06-29T17:27:18.254Z",
+  "generatedAt": "2026-06-30T05:35:03.382Z",
   "summary": {
-    "total": 4,
+    "total": 3,
     "critical": 0,
     "high": 0,
     "medium": 3,
-    "low": 1,
+    "low": 0,
     "trace": 0
   },
   "findings": [
-    {
-      "id": "GEO-007",
-      "domain": "geofencing",
-      "severity": "low",
-      "title": "Overwrite geofence strategy not explicitly documented in code",
-      "description": "The architectural overwrite pattern was not detected by name.",
-      "recommendation": "Consider documenting the overwrite strategy in code comments or function names for auditability.",
-      "file": "src/services/LocationManager.ts"
-    },
     {
       "id": "SEC-001",
       "domain": "security",

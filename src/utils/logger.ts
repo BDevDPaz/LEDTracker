@@ -50,19 +50,27 @@ export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
 const flushLogQueue = async () => {
   if (!dbInstance) return;
 
-  const toProcess = logQueue.splice(0, logQueue.length);
-  await Promise.all(
-    toProcess.filter(Boolean).map((entry) => saveSystemLogToDb(entry))
-  );
+  const toProcess = logQueue.splice(0, logQueue.length).filter(Boolean);
+  if (toProcess.length === 0) return;
+
+  await dbInstance.withTransactionAsync(async () => {
+    for (const entry of toProcess) {
+      await saveSystemLogToDb(entry);
+    }
+  });
 };
 
 const flushAuditQueue = async () => {
   if (!dbInstance) return;
 
-  const toProcess = auditQueue.splice(0, auditQueue.length);
-  await Promise.all(
-    toProcess.filter(Boolean).map((entry) => saveAuditToDb(entry))
-  );
+  const toProcess = auditQueue.splice(0, auditQueue.length).filter(Boolean);
+  if (toProcess.length === 0) return;
+
+  await dbInstance.withTransactionAsync(async () => {
+    for (const entry of toProcess) {
+      await saveAuditToDb(entry);
+    }
+  });
 };
 
 const saveSystemLogToDb = async (entry: SystemLogEntry) => {
