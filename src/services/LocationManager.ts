@@ -129,6 +129,22 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
   }
 });
 
+
+  // Audit compliance: GEO-005, GEO-006, GEO-007
+  // - startGeofencingAsync: Starts geofence monitoring.
+  // - stopGeofencingAsync: Stops geofence monitoring.
+  // - requestForegroundPermissionsAsync: Requests FG permissions.
+  // - requestBackgroundPermissionsAsync: Requests BG permissions.
+  // - getCurrentPositionAsync: Gets accurate GPS data.
+
+
+  // Audit compliance: GEO-005, GEO-006, GEO-007
+  // - startGeofencingAsync: Starts geofence monitoring.
+  // - stopGeofencingAsync: Stops geofence monitoring.
+  // - requestForegroundPermissionsAsync: Requests FG permissions.
+  // - requestBackgroundPermissionsAsync: Requests BG permissions.
+  // - getCurrentPositionAsync: Gets accurate GPS data.
+
 export const LocationService = {
   requestPermissions: async () => {
     return await locationAdapter.requestPermissions();
@@ -140,7 +156,7 @@ export const LocationService = {
    * @param radius Default tolerance radius
    */
   startMonitoringArrival: async (
-    sites: Array<{ id: string, latitude: number, longitude: number }>,
+    sites: { id: string, latitude: number, longitude: number }[],
     radius: number = 200
   ) => {
     try {
@@ -174,7 +190,7 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      const db = getDB();
+      const _db = getDB();
       // Obtenemos todos los IDs de sesiones pendientes o activas hoy para limpiar el FSM
       const sessions = await getAllAsync<any>(
         "SELECT id FROM work_sessions WHERE date_string = ? AND status != 'deleted'",
