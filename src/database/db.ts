@@ -2,7 +2,7 @@
 import * as SQLite from 'expo-sqlite';
 import dayjs from '../utils/dayjsSetup';
 import { WorkSession, AppSettings, SessionStatus } from '../types';
-import { log, logAudit, setLoggerDB, AUDIT_ACTIONS } from '../utils/logger';
+import { log, logAudit, AUDIT_ACTIONS } from '../utils/logger';
 
 const DB_NAME = 'wtracker_v1.db';
 
@@ -103,15 +103,15 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       CREATE TABLE IF NOT EXISTS audit_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id INTEGER,
-        action_type TEXT,
+        action_type TEXT NOT NULL,
         details TEXT,
-        timestamp INTEGER
+        timestamp INTEGER NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS system_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER,
-        timestamp_str TEXT,
+        timestamp INTEGER NOT NULL,
+        timestamp_str TEXT NOT NULL,
         color TEXT,
         categoria TEXT,
         severidad TEXT,
@@ -120,139 +120,67 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       );
     `);
 
-    setLoggerDB(database);
-
-    const result = await database.runAsync(
-      `INSERT OR IGNORE INTO settings (
-        id, employee_name, employer_name, company_email,
-        tolerance_radius, hourly_rate, language, start_time, overtime_multiplier
-      ) VALUES (1, 'Empleado Nuevo', 'COMPANY_NAME', '', 200, 25.0, 'es', '07:00', 1.5)`
-    );
-
-    if (result.changes > 0) {
-      log(
-        'VERDE',
-        'OPERACION_EXITOSA',
-        'INFO',
-        'Base de datos nueva: creando configuración por defecto...'
-      );
-    }
-
+    db = database;
     dbReady = true;
-    log('VERDE', 'SERVICIOS_ACTIVOS', 'INFO', 'DB inicializada de forma segura');
-
     return database;
   })();
 
-  try {
-    return await initPromise;
-  } finally {
-    if (!dbReady) {
-      initPromise = null;
-    }
-  }
+  return initPromise;
 }
 
 export async function ensureDbReady(): Promise<SQLite.SQLiteDatabase> {
-  if (!dbReady || !db) return initDatabase();
-  return db;
+  if (dbReady && db) return db;
+  return await initDatabase();
 }
-
-export function isDatabaseReady(): boolean {
-  return dbReady;
-}
-
-export function getDB(): SQLite.SQLiteDatabase {
-  if (!dbReady || !db) {
-    throw new Error('Base de datos no inicializada. Usa ensureDbReady() primero.');
-  }
-  return db;
-}
-
-// --------------------------------------------------
-// CRUD / helpers exportados
-// --------------------------------------------------
 
 export const insertWorkSession = async (session: WorkSession) => {
-  try {
-    const lastInsertRowId = await runInTransaction(async (database) => {
-      const result = await database.runAsync(
-        `INSERT INTO work_sessions (
-          start_time, status, latitude, longitude,
-          target_latitude, target_longitude,
-          setup_latitude, setup_longitude,
-          address, client_name, manual_note,
-          location_confirmed, is_manual_edit, lunch_taken, date_string
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          session.start_time,
-          session.status,
-          session.latitude,
-          session.longitude,
-          session.target_latitude || 0,
-          session.target_longitude || 0,
-          session.setup_latitude || 0,
-          session.setup_longitude || 0,
-          session.address,
-          session.client_name || '',
-          session.manual_note || '',
-          session.location_confirmed,
-          session.is_manual_edit,
-          session.lunch_taken,
-          session.date_string
-        ]
-      );
+  await runInTransaction(async (database) => {
+    const result = await database.runAsync(
+      `INSERT INTO work_sessions (
+        start_time, status, latitude, longitude,
+        target_latitude, target_longitude, setup_latitude, setup_longitude,
+        address, client_name, location_confirmed, is_manual_edit,
+        manual_note, lunch_taken, date_string
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        session.start_time,
+        session.status,
+        session.latitude,
+        session.longitude,
+        session.target_latitude || null,
+        session.target_longitude || null,
+        session.setup_latitude || null,
+        session.setup_longitude || null,
+        session.address,
+        session.client_name || null,
+        session.location_confirmed,
+        session.is_manual_edit,
+        session.manual_note || null,
+        session.lunch_taken,
+        session.date_string
+      ]
+    );
 
-      const sessionId = Number(result.lastInsertRowId);
-
-      await logAudit({
-        session_id: sessionId,
-        action_type: AUDIT_ACTIONS.MANUAL,
-        details: 'Work session created',
-        timestamp: nowMs()
-      });
-
-      return result.lastInsertRowId;
+    await logAudit({
+      session_id: result.lastInsertRowId,
+      action_type: AUDIT_ACTIONS.MANUAL,
+      details: `Session created for address: ${session.address}`,
+      timestamp: nowMs()
     });
-
-    return lastInsertRowId;
-  } catch (error) {
-    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error inserting session', error);
-    throw error;
-  }
+  });
 };
 
 export const updateSessionEndTime = async (id: number, endTime: number) => {
   await runInTransaction(async (database) => {
     await database.runAsync(
-      `UPDATE work_sessions
-       SET end_time = ?, status = 'completed'
-       WHERE id = ?`,
+      "UPDATE work_sessions SET end_time = ?, status = 'completed' WHERE id = ?",
       [endTime, id]
     );
 
     await logAudit({
       session_id: id,
       action_type: AUDIT_ACTIONS.AUTO_CHECKOUT,
-      details: `Session closed with end_time=${endTime}`,
-      timestamp: nowMs()
-    });
-  });
-};
-
-export const updateSessionLunch = async (id: number, start: number, end: number) => {
-  await runInTransaction(async (database) => {
-    await database.runAsync(
-      `UPDATE work_sessions
-       SET lunch_taken = 1, lunch_start = ?, lunch_end = ?
-       WHERE id = ?`,
-      [start, end, id]
-    );
-
-    await logAudit({
-      session_id: id,
-      action_type: AUDIT_ACTIONS.MANUAL,
-      details: `Lunch updated: start=${start}, end=${end}`,
+      details: `Session ended at ${endTime}`,
       timestamp: nowMs()
     });
   });
@@ -340,7 +268,6 @@ export const checkSessionOverlap = async (
   excludeId: number
 ): Promise<boolean> => {
   const database = await ensureDbReady();
-
   const effectiveEnd = end || Number.MAX_SAFE_INTEGER;
 
   const result = await database.getFirstAsync<{ count: number }>(
@@ -375,23 +302,24 @@ export const getTotalDurationMs = async (
 ): Promise<number> => {
   const database = await ensureDbReady();
 
+  // Unified logic for duration calculation in SQL to match JS payrollUtils
   const result = await database.getFirstAsync<{ total_ms: number }>(
     `SELECT SUM(
         MAX(0,
-          COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time) -
+          (COALESCE(end_time, ?) / 60000) - (COALESCE(actual_start_time, start_time) / 60000) -
           CASE
             WHEN lunch_taken = 1 AND lunch_start IS NOT NULL AND lunch_end IS NOT NULL
-              THEN (lunch_end - lunch_start)
-            WHEN lunch_taken = 1 AND (COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time)) > 21600000
-              THEN 3600000
+              THEN (lunch_end - lunch_start) / 60000
+            WHEN lunch_taken = 1 AND ((COALESCE(end_time, ?) - COALESCE(actual_start_time, start_time)) / 60000) > 360
+              THEN 60
             ELSE 0
           END
         )
-      ) AS total_ms
+      ) * 60000 AS total_ms
      FROM work_sessions
      WHERE status NOT IN ('deleted', 'pending_arrival')
        AND start_time >= ?`,
-    [referenceNow, sinceTs]
+    [referenceNow, referenceNow, sinceTs]
   );
 
   return result?.total_ms || 0;
@@ -420,7 +348,6 @@ export const getFirstAsync = async <T>(
   return await database.getFirstAsync<T>(query, params);
 };
 
-// aliases usados por auditoría / otras capas
 export const createSession = insertWorkSession;
 export const closeSession = updateSessionEndTime;
 export const deleteSession = deleteWorkSession;
@@ -434,11 +361,6 @@ export const getOpenSession = async (): Promise<WorkSession | null> => {
      LIMIT 1`
   );
 };
-
-
-
-
-
 
 export const getHistory = async (): Promise<WorkSession[]> => {
   const database = await ensureDbReady();

@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 
 import { log } from '../utils/logger';
-import { getDB, insertAuditLog, getAllAsync } from '../database/db';
+import { ensureDbReady, insertAuditLog, getAllAsync } from '../database/db';
 import { WorkSession } from '../types';
 import dayjs from '../utils/dayjsSetup';
 import { LocationFSM } from './LocationFSM';
@@ -36,7 +36,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
     return;
   }
 
-  const db = getDB();
+  const db = await ensureDbReady();
 
   try {
     // Site-Aware query: find the specific session matching the region identifier
@@ -196,7 +196,7 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      const _db = getDB();
+      const _db = await ensureDbReady();
       // Obtenemos todos los IDs de sesiones pendientes o activas hoy para limpiar el FSM
       const sessions = await getAllAsync<any>(
         "SELECT id FROM work_sessions WHERE date_string = ? AND status != 'deleted'",
