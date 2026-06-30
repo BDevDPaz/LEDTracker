@@ -8,6 +8,6 @@ config.watchFolders = [
 ];
 
 // Aquí le decimos a Metro que ignore carpetas pesadas que no cambian
-config.resolver.blacklistRE = /node_modules\/.*\/node_modules/;
+config.resolver.blockList = /node_modules\/.*\/node_modules/;
 
 module.exports = config;
