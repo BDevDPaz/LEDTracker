@@ -32,6 +32,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.docs
 .env*.local
 
 # typescript
@@ -39,13 +40,18 @@ yarn-error.*
 
 app-example
 
-# generated native folders
+# generated native folders & testing and logs
 /ios
 /android
 .env
 .vscode/
-coverage/
-
-# Testing and logs
+.jules/
 coverage/
 *.log
+
+# artefactos de auditoría y temporales
+scripts/audit/reports/
+*.txt
+*.db-journal
+*.db-shm
+*.db-wal
