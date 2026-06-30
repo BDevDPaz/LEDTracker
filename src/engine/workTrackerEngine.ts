@@ -21,18 +21,27 @@ class WorkTrackerEngine {
    */
   async dispatch(event: EngineEvent) {
     const release = await this.acquireMutex();
+
+    // We execute the reducer and notify listeners inside the mutex
     try {
       log('BLANCO', 'ESTADO_SISTEMA', 'DEBUG', `Engine Dispatch: ${event.type}`);
       this.state = workTrackerReducer(this.state, event);
       this.notify();
+    } catch (err) {
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Critical error in engine reducer', err);
+      release();
+      return;
+    }
 
-      // Effects are run outside the state transition mutex but within their own try/catch in effects
-      // We pass the bound dispatch to allow effects to trigger new state transitions safely
+    // Release the mutex BEFORE running effects to avoid deadlocks
+    // when effects dispatch new events.
+    release();
+
+    try {
+      // Effects run outside the state transition mutex
       await workTrackerEffects(event, this.state, this.dispatch.bind(this));
     } catch (err) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Critical error in engine dispatch', err);
-    } finally {
-      release();
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Critical error in engine effects', err);
     }
   }
 

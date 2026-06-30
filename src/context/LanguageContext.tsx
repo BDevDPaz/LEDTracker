@@ -1,8 +1,8 @@
-// src/context/LanguageContext.tsx
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { ensureDbReady } from '../database/db';
 import { translations } from '../utils/i18n';
 import { Language } from '../types';
+import { log } from '../utils/logger';
 
 interface LanguageContextType {
   language: Language;
@@ -24,7 +24,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setLanguageState(res.language);
         }
       } catch (e) {
-        console.error("Error cargando idioma", e);
+        log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando idioma de la base de datos', e);
       }
     };
     loadLang();
@@ -36,7 +36,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await db.runAsync('UPDATE settings SET language = ? WHERE id = 1', [newLang]);
       setLanguageState(newLang);
     } catch (e) {
-      console.error("Error guardando idioma", e);
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error guardando idioma en la base de datos', e);
     }
   };
 

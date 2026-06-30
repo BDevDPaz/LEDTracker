@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,12 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withSequence,
+  FadeIn,
+  FadeInDown,
 } from 'react-native-reanimated';
 
 import { engine } from '../../src/engine/workTrackerEngine';
 import { selectActiveSession, selectIsLoading } from '../../src/engine/selectors/workTrackerSelectors';
-import { sessionStoreAdapter } from '../../src/runtime/sessionStoreAdapter';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
@@ -33,6 +34,9 @@ import { formatTime } from '../../src/utils/dateUtils';
 import { DailySetupModal } from '../../src/components/modals/DailySetupModal';
 import { LunchModal } from '../../src/components/modals/LunchModal';
 import { log } from '../../src/utils/logger';
+import { getHistory, getSettings } from '../../src/database/db';
+import { calculateSessionMinutes } from '../../src/utils/payrollUtils';
+import dayjs from '../../src/utils/dayjsSetup';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
@@ -43,16 +47,13 @@ export default function HomeScreen() {
   // Engine state
   const [engineState, setEngineState] = useState(engine.getState());
 
-  const activeSession = selectActiveSession(engineState);
-  const isProcessing = selectIsLoading(engineState);
+  const activeSession = useMemo(() => selectActiveSession(engineState), [engineState]);
+  const isProcessing = useMemo(() => selectIsLoading(engineState), [engineState]);
 
-  const [address, setAddress] = useState<string>('Cargando...');
   const [stats, setStats] = useState({ hours: 0, earnings: 0 });
-
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupMode, setSetupMode] = useState<'start' | 'transit'>('start');
   const [showLunchModal, setShowLunchModal] = useState(false);
-
   const [refreshing, setRefreshing] = useState(false);
 
   // Easter Egg
@@ -62,9 +63,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const unsubscribe = engine.subscribe(setEngineState);
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -73,30 +72,35 @@ export default function HomeScreen() {
 
   const loadStats = useCallback(async () => {
     try {
-      const history = await sessionStoreAdapter.getHistory();
-      const settings = await sessionStoreAdapter.getSettings();
+      const history = await getHistory();
+      const settings = await getSettings();
       const rate = settings?.hourly_rate || 0;
 
-      let totalH = 0;
+      let totalMinutes = 0;
+      const today = dayjs().format('YYYY-MM-DD');
+
       history.forEach((s) => {
-        if (s.start_time && s.end_time) {
-          totalH += (s.end_time - s.start_time) / 3600000;
+        if (s.date_string === today && s.status === 'completed' && s.start_time && s.end_time) {
+          totalMinutes += calculateSessionMinutes(
+            s.start_time,
+            s.end_time,
+            s.lunch_taken || 0,
+            s.lunch_start,
+            s.lunch_end
+          );
         }
       });
-      setStats({ hours: totalH, earnings: totalH * rate });
+
+      const hours = totalMinutes / 60;
+      setStats({ hours, earnings: hours * rate });
     } catch (_e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando estadísticas', _e);
     }
   }, []);
 
   useEffect(() => {
-    void loadStats();
-    if (activeSession) {
-      setAddress(activeSession.address);
-    } else {
-      setAddress(t.no_activity || 'No hay actividad registrada.');
-    }
-  }, [activeSession, loadStats, t.no_activity]);
+    loadStats();
+  }, [activeSession, loadStats]);
 
   useEffect(() => {
     if (params.showSetup === 'true') {
@@ -104,19 +108,20 @@ export default function HomeScreen() {
       setShowSetupModal(true);
     }
     if (params.showCheckoutPrompt === 'true') {
-      setShowLunchModal(true);
+       setShowLunchModal(true);
     }
   }, [params]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    engine.dispatch({ type: 'APP_INIT' });
+    await engine.dispatch({ type: 'APP_INIT' });
     await loadStats();
     setRefreshing(false);
   }, [loadStats]);
 
-  const handleSetupSubmit = async (addr: string, client: string, notes: string) => {
+  const handleSetupSubmit = (addr: string, client: string, notes: string) => {
     setShowSetupModal(false);
+    router.setParams({ showSetup: undefined });
     engine.dispatch({ type: 'START_SESSION_REQUEST', address: addr, client, notes });
   };
 
@@ -124,17 +129,20 @@ export default function HomeScreen() {
     setShowLunchModal(true);
   };
 
-  const completeSession = async (lunchMinutes: number) => {
+  const completeSession = (lunchMin: number) => {
     setShowLunchModal(false);
-    engine.dispatch({ type: 'STOP_SESSION_REQUEST', lunchMinutes });
+    router.setParams({ showCheckoutPrompt: undefined });
+    engine.dispatch({ type: 'STOP_SESSION_REQUEST', lunchMinutes: lunchMin });
     showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
   };
 
   const handleEasterEggTap = () => {
-    setTapCount((prev) => prev + 1);
+    const nextTap = tapCount + 1;
+    setTapCount(nextTap);
+
     iconScale.value = withSequence(withSpring(1.5), withSpring(1));
 
-    if (tapCount + 1 >= 7) {
+    if (nextTap >= 7) {
       setShowSpecialCard(true);
       setTapCount(0);
     }
@@ -144,19 +152,19 @@ export default function HomeScreen() {
     transform: [{ scale: iconScale.value }],
   }));
 
-  const getStatusColor = () => {
-    if (!activeSession) return COLORS.textSecondary;
-    if (activeSession.status === 'active') return COLORS.success;
-    if (activeSession.status === 'pending_arrival') return '#f59e0b';
-    return COLORS.gold;
+  const getStatusIcon = () => {
+    if (!activeSession) return 'power-outline';
+    if (activeSession.status === 'pending_arrival') return 'location-outline';
+    return 'briefcase-outline';
   };
 
-  const getStatusIcon = () => {
-    if (!activeSession) return 'pause-circle-outline';
-    if (activeSession.status === 'active') return 'checkmark-circle';
-    if (activeSession.status === 'pending_arrival') return 'navigate-circle';
-    return 'car-outline';
+  const getStatusColor = () => {
+    if (!activeSession) return COLORS.textSecondary;
+    if (activeSession.status === 'pending_arrival') return '#f59e0b';
+    return COLORS.success;
   };
+
+  const displayAddress = activeSession?.address || t.no_activity || 'No hay actividad registrada.';
 
   return (
     <SafeAreaView testID='home-screen' style={styles.container} edges={['top']}>
@@ -171,7 +179,7 @@ export default function HomeScreen() {
           />
         }
       >
-        <View testID='home-header' style={styles.header}>
+        <Animated.View entering={FadeIn} testID='home-header' style={styles.header}>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Text testID='home-title' style={styles.appTitle}>
@@ -215,9 +223,9 @@ export default function HomeScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        <View testID='home-card-wrapper'>
+        <Animated.View entering={FadeInDown.delay(100)} testID='home-card-wrapper'>
           <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
             {isProcessing ? (
               <ActivityIndicator testID='home-loading-indicator' size='large' color={COLORS.gold} />
@@ -246,7 +254,7 @@ export default function HomeScreen() {
                     activeSession && { color: '#FFF' },
                   ]}
                 >
-                  {address}
+                  {displayAddress}
                 </Text>
 
                 {activeSession && activeSession.status !== 'pending_arrival' && (
@@ -277,9 +285,9 @@ export default function HomeScreen() {
               </View>
             )}
           </LuxuryCard>
-        </View>
+        </Animated.View>
 
-        <View testID='home-primary-action-wrapper'>
+        <Animated.View entering={FadeInDown.delay(200)} testID='home-primary-action-wrapper'>
           <LuxuryButton
             testID='home-primary-action'
             style={{ marginBottom: 16 }}
@@ -302,9 +310,9 @@ export default function HomeScreen() {
               />
             }
           />
-        </View>
+        </Animated.View>
 
-        <View testID='home-stats-container' style={styles.statsContainer}>
+        <Animated.View entering={FadeInDown.delay(300)} testID='home-stats-container' style={styles.statsContainer}>
           <LuxuryCard style={styles.statBox}>
             <Text style={styles.statLabel}>{t.stats_hours}</Text>
             <Text testID='home-hours-value' style={styles.statValue}>
@@ -323,7 +331,7 @@ export default function HomeScreen() {
               ${stats.earnings.toFixed(0)}
             </Text>
           </LuxuryCard>
-        </View>
+        </Animated.View>
 
         <DailySetupModal
           visible={showSetupModal}

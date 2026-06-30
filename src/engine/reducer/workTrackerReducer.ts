@@ -25,6 +25,10 @@ export function workTrackerReducer(state: EngineState = initialState, event: Eng
     case 'ERROR_OCCURRED':
       return { ...state, error: event.error, isLoading: false };
 
+    case 'BACKGROUND_SESSION_TIMEOUT':
+      // This event shouldn't set loading because it's a background sync
+      return state;
+
     default:
       return state;
   }
