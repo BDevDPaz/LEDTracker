@@ -31,7 +31,6 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
-    "async-storage": "^0.1.0",
     "babel-preset-expo": "~54.0.10",
     "dayjs": "^1.11.21",
     "escape-html": "^1.0.3",
@@ -76,7 +75,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^13.3.3",
     "@types/escape-html": "^1.0.4",
     "@types/jest": "^29.5.12",

@@ -181,6 +181,9 @@ export default function HomeScreen() {
                 testID='home-easter-egg-trigger'
                 onPress={handleEasterEggTap}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Easter Egg"
+                accessibilityHint="Muestra información del desarrollador"
               >
                 <Animated.View style={animatedIconStyle}>
                   <Ionicons name='flash' size={18} color={COLORS.gold} />

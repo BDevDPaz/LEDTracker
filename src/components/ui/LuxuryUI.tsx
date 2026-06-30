@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ViewStyle } from 'react-native';
 import type { StyleProp, DimensionValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +10,7 @@ import { COLORS } from '../../constants/theme';
 import { log } from '../../utils/logger';
 
 // --- TARJETA ---
-export const LuxuryCard = ({ children, active, style }: { children: React.ReactNode, active?: boolean, style?: StyleProp<ViewStyle> }) => (
+export const LuxuryCard = memo(({ children, active, style }: { children: React.ReactNode, active?: boolean, style?: StyleProp<ViewStyle> }) => (
   <View style={[styles.cardContainer, style, active && styles.cardActive]}>
     <LinearGradient
       colors={active ? ['#1A1A1A', '#000000'] : ['#0A0A0A', '#050505']}
@@ -21,7 +21,7 @@ export const LuxuryCard = ({ children, active, style }: { children: React.ReactN
       {children}
     </LinearGradient>
   </View>
-);
+));
 
 // --- MODAL WRAPPER ---
 export const GlassModalWrapper = ({ visible, children }: { visible: boolean, children: React.ReactNode }) => (
@@ -36,14 +36,14 @@ export const GlassModalWrapper = ({ visible, children }: { visible: boolean, chi
 );
 
 // --- EMPTY STATE ---
-export const LuxuryEmptyState = ({ text, icon = "file-tray-outline" }: { text: string, icon?: any }) => (
+export const LuxuryEmptyState = memo(({ text, icon = "file-tray-outline" }: { text: string, icon?: any }) => (
   <View style={styles.emptyContainer}>
     <View style={styles.emptyIconBubble}>
       <Ionicons name={icon} size={32} color={COLORS.textSecondary} />
     </View>
     <Text style={styles.emptyText}>{text}</Text>
   </View>
-);
+));
 
 // --- SKELETON ---
 export const LuxurySkeleton = ({ width, height, style }: { width: DimensionValue, height: DimensionValue, style?: ViewStyle }) => {
@@ -63,6 +63,7 @@ export const LuxurySkeleton = ({ width, height, style }: { width: DimensionValue
 
 // --- BOTÓN ---
 interface LuxuryButtonProps {
+  accessibilityHint?: string;
   onPress: (e: any) => void;
   text: string;
   icon?: React.ReactNode;
@@ -72,7 +73,7 @@ interface LuxuryButtonProps {
   testID?: string;
 }
 
-export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disabled, style, testID }: LuxuryButtonProps) => {
+export const LuxuryButton = memo(({ onPress, text, icon, variant = 'primary', disabled, style, testID, accessibilityHint }: LuxuryButtonProps) => {
   let bgColors: readonly [string, string, ...string[]] = ['#D4AF37', '#8a7224']; // Gold (Primary)
   let textColor = '#000';
   let borderColor = 'transparent';
@@ -112,6 +113,7 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       accessibilityLabel={text}
+      accessibilityHint={accessibilityHint}
     >
       <LinearGradient
         colors={disabled ? ['#333', '#111'] : bgColors}
@@ -124,10 +126,12 @@ export const LuxuryButton = ({ onPress, text, icon, variant = 'primary', disable
       </LinearGradient>
     </TouchableOpacity>
   );
-};
+});
 
 // --- INPUT ---
 interface LuxuryInputProps {
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
   label?: string;
   icon?: React.ReactNode;
   containerStyle?: ViewStyle;
@@ -135,7 +139,7 @@ interface LuxuryInputProps {
   [key: string]: any;
 }
 
-export const LuxuryInput = ({ label, icon, containerStyle, error, ...props }: LuxuryInputProps) => (
+export const LuxuryInput = memo(({ label, icon, containerStyle, error, accessibilityLabel, accessibilityHint, ...props }: LuxuryInputProps) => (
   <View style={[styles.inputGroup, containerStyle]}>
     {label && <Text style={[styles.inputLabel, error && { color: '#FF3B30' }]}>{label}</Text>}
     <View style={[styles.inputWrapper, error && { borderColor: '#FF3B30' }]}>
@@ -143,12 +147,14 @@ export const LuxuryInput = ({ label, icon, containerStyle, error, ...props }: Lu
       <TextInput
         style={styles.input}
         placeholderTextColor="#444"
+        accessibilityLabel={accessibilityLabel || label}
+        accessibilityHint={accessibilityHint}
         {...props}
       />
     </View>
     {error && <Text style={styles.errorText}>{error}</Text>}
   </View>
-);
+));
 
 const styles = StyleSheet.create({
   cardContainer: { borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 20 },
@@ -170,3 +176,8 @@ const styles = StyleSheet.create({
   input: { flex: 1, color: '#FFF', fontFamily: 'Montserrat_400Regular', fontSize: 14 },
   errorText: { color: '#FF3B30', fontSize: 10, fontFamily: 'Montserrat_600SemiBold', marginTop: 4, marginLeft: 4 },
 });
+
+LuxuryCard.displayName = 'LuxuryCard';
+LuxuryEmptyState.displayName = 'LuxuryEmptyState';
+LuxuryButton.displayName = 'LuxuryButton';
+LuxuryInput.displayName = 'LuxuryInput';

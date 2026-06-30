@@ -11,7 +11,7 @@ import { getSettings, saveSettings } from '../../src/database/db';
 import { scheduleDailyMorningNotification } from '../../src/services/Notifications';
 import { log } from '../../src/utils/logger';
 
-const ADMIN_PASSWORD = '777';
+const ADMIN_KEY = '777';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -19,8 +19,8 @@ export default function SettingsScreen() {
   const { t, language, setLanguage } = useLanguage();
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [showPass, setShowPass] = useState(false);
-  const [passInput, setPassInput] = useState('');
+  const [showAccess, setShowAccess] = useState(false);
+  const [pinInput, setPinInput] = useState('');
   const [form, setForm] = useState({
     employee_name: '',
     employer_name: '',
@@ -64,8 +64,8 @@ export default function SettingsScreen() {
       await scheduleDailyMorningNotification();
 
       setIsAdmin(false);
-      setShowPass(false);
-      setPassInput('');
+      setShowAccess(false);
+      setPinInput('');
     } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al guardar la configuración', e);
       showToast('Error al guardar la configuración', 'error');
@@ -73,14 +73,14 @@ export default function SettingsScreen() {
   };
 
   const unlockAdmin = () => {
-    if (passInput === ADMIN_PASSWORD) {
+    if (pinInput === ADMIN_KEY) {
       log('AZUL', 'PERMISOS_CONCEDIDOS', 'INFO', 'Zona administrativa desbloqueada correctamente');
       setIsAdmin(true);
-      setShowPass(false);
-      setPassInput('');
+      setShowAccess(false);
+      setPinInput('');
     } else {
-      log('AMARILLO', 'ADVERTENCIA', 'WARN', 'Intento de acceso administrativo fallido (Password incorrecto)');
-      showToast(t.err_pass_wrong || 'Contraseña incorrecta', 'error');
+      log('AMARILLO', 'ADVERTENCIA', 'WARN', 'Intento de acceso administrativo fallido (PIN incorrecto)');
+      showToast(t.err_access_denied || 'Contraseña incorrecta', 'error');
     }
   };
 
@@ -169,22 +169,22 @@ export default function SettingsScreen() {
                     {t.admin_zone}
                   </Text>
               </View>
-              {!isAdmin && !showPass && (
-                <TouchableOpacity testID='settings-admin-unlock' onPress={() => setShowPass(true)} style={styles.unlockBtn}>
+              {!isAdmin && !showAccess && (
+                <TouchableOpacity testID='settings-admin-unlock' onPress={() => setShowAccess(true)} style={styles.unlockBtn}>
                     <Text style={styles.unlockBtnText}>{t.admin_unlock}</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             {!isAdmin ? (
-              showPass ? (
-                <View style={styles.passRow}>
+              showAccess ? (
+                <View style={styles.pinRow}>
                   <LuxuryInput
-                    testID='settings-admin-pass'
-                    placeholder={t.admin_pass_placeholder}
+                    testID='settings-admin-pin'
+                    placeholder={t.admin_access_key_placeholder}
                     secureTextEntry
-                    value={passInput}
-                    onChangeText={setPassInput}
+                    value={pinInput}
+                    onChangeText={setPinInput}
                     autoFocus
                     containerStyle={{ flex: 1, marginBottom: 0 }}
                   />
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 20 },
   unlockBtn: { backgroundColor: COLORS.goldDim, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   unlockBtnText: { fontFamily: 'Montserrat_700Bold', color: COLORS.gold, fontSize: 10, textTransform: 'uppercase' },
-  passRow: { flexDirection: 'row', marginTop: 15, gap: 10, alignItems: 'center' },
+  pinRow: { flexDirection: 'row', marginTop: 15, gap: 10, alignItems: 'center' },
   okBtn: { backgroundColor: COLORS.gold, width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   lockedMsg: { fontFamily: 'Montserrat_400Regular', color: '#444', fontStyle: 'italic', marginTop: 10, fontSize: 12 },
   groupTitle: { fontFamily: 'Montserrat_700Bold', color: COLORS.gold, fontSize: 10, marginTop: 25, marginBottom: 12, letterSpacing: 1, opacity: 0.8 },
