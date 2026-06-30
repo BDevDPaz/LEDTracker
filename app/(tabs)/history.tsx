@@ -142,7 +142,7 @@ export default function HistoryScreen() {
           'AMARILLO',
           'ADVERTENCIA',
           'WARN',
-          'Horario choca con otra sesión. Revisa la hora e inténtalo nuevamente.'
+          'Horario en conflicto con otra sesión. Por favor, verifica las horas.'
         );
         showToast('Horario en conflicto', 'error');
         return;

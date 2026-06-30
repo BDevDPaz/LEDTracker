@@ -18,7 +18,8 @@ export type EngineEvent =
   | { type: 'SETTINGS_UPDATE_REQUEST'; settings: AppSettings }
   | { type: 'ERROR_OCCURRED'; error: string }
   | { type: 'SET_LOADING'; isLoading: boolean }
-  | { type: 'BACKGROUND_SESSION_TIMEOUT' };
+  | { type: 'BACKGROUND_SESSION_TIMEOUT' }
+  | { type: 'SYNC_ACTIVE_SESSION' }; // New event for targeted re-sync
 
 export interface EngineEffect {
   run: (event: EngineEvent, state: EngineState, dispatch: (event: EngineEvent) => void) => Promise<void>;

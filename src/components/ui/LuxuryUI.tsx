@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, FadeIn, FadeOut } from 'react-native-reanimated';
 import { COLORS } from '../../constants/theme';
 import { log } from '../../utils/logger';
 
@@ -28,9 +28,9 @@ export const GlassModalWrapper = ({ visible, children }: { visible: boolean, chi
   <Modal visible={visible} transparent animationType="fade">
     <View style={styles.modalOverlay}>
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-      <View style={styles.modalContent}>
+      <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.modalContent}>
         {children}
-      </View>
+      </Animated.View>
     </View>
   </Modal>
 );
@@ -97,7 +97,7 @@ export const LuxuryButton = memo(({ onPress, text, icon, variant = 'primary', di
 
   const handlePress = (e: any) => {
     if (!disabled) {
-      log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', `UI: Botón presionado [${text}]`);
+      log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', `UI: Botón presionado [\${text}]`);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onPress(e);
     }

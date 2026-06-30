@@ -30,9 +30,9 @@ export default function ReportScreen() {
 
     if (pdfUri && settings) {
         await sendReportByEmail(pdfUri, settings);
-        showToast('Abriendo correo...', 'success');
+        showToast('Abriendo aplicación de correo...', 'success');
     } else {
-        showToast('Error al preparar correo', 'error');
+        showToast('No se pudo preparar el correo electrónico', 'error');
     }
     setIsProcessing(false);
   };

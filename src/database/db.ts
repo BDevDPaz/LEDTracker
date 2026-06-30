@@ -404,11 +404,11 @@ export const updateSessionStatus = async (
       );
     }
 
-    const lunchDetails = lunchMinutes > 0 ? " with " + lunchMinutes + "m lunch" : "";
+    const lunchDetails = lunchMinutes > 0 ?  ` con ${lunchMinutes}m de almuerzo` : "";
     await logAudit({
       session_id: id,
       action_type: status === 'completed' ? AUDIT_ACTIONS.AUTO_CHECKOUT : AUDIT_ACTIONS.MANUAL,
-      details: "Session status updated to " + status + lunchDetails,
+      details: `Estado de la sesión actualizado a ${status}${lunchDetails}`,
       timestamp: nowMs()
     });
   });

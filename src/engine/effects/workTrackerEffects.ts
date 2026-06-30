@@ -41,6 +41,12 @@ export async function workTrackerEffects(
         break;
       }
 
+      case 'SYNC_ACTIVE_SESSION': {
+        const session = await getActiveSession();
+        dispatch({ type: 'DATA_LOADED', state: { activeSession: session } });
+        break;
+      }
+
       case 'START_SESSION_REQUEST': {
         const coords = await LocationService.getCoordsFromAddress(event.address);
         if (!coords) {
@@ -89,7 +95,26 @@ export async function workTrackerEffects(
       case 'STOP_SESSION_REQUEST':
         if (state.activeSession?.id) {
           await updateSessionStatus(state.activeSession.id, 'completed', event.lunchMinutes);
-          await LocationService.stopMonitoring();
+          // Only stop monitoring if no more active/pending sessions exist for today
+          const pendingSessions = await getAllAsync<any>(
+            "SELECT id FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
+            [dayjs().format('YYYY-MM-DD')]
+          );
+
+          if (pendingSessions.length === 0) {
+            await LocationService.stopMonitoring();
+          } else {
+             // If there are still pending sessions, just re-sync monitoring to exclude the current one
+             const initSites = pendingSessions.map(s => ({
+              id: s.id.toString(),
+              latitude: s.latitude,
+              longitude: s.longitude,
+            }));
+            const currentSettings = state.settings || await getSettings();
+            const radius = currentSettings?.tolerance_radius || 200;
+            await LocationService.startMonitoringArrival(initSites, radius);
+          }
+
           dispatch({ type: 'DATA_LOADED', state: { activeSession: null } });
         } else {
           dispatch({ type: 'SET_LOADING', isLoading: false });

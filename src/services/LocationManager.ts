@@ -81,7 +81,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
         ]);
 
         // Trigger engine update
-        engine.dispatch({ type: 'APP_INIT' });
+        engine.dispatch({ type: 'SYNC_ACTIVE_SESSION' });
 
         log(
           'VERDE',
