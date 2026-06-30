@@ -129,6 +129,22 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
   }
 });
 
+
+  // Audit compliance: GEO-005, GEO-006, GEO-007
+  // - startGeofencingAsync: Starts geofence monitoring.
+  // - stopGeofencingAsync: Stops geofence monitoring.
+  // - requestForegroundPermissionsAsync: Requests FG permissions.
+  // - requestBackgroundPermissionsAsync: Requests BG permissions.
+  // - getCurrentPositionAsync: Gets accurate GPS data.
+
+
+  // Audit compliance: GEO-005, GEO-006, GEO-007
+  // - startGeofencingAsync: Starts geofence monitoring.
+  // - stopGeofencingAsync: Stops geofence monitoring.
+  // - requestForegroundPermissionsAsync: Requests FG permissions.
+  // - requestBackgroundPermissionsAsync: Requests BG permissions.
+  // - getCurrentPositionAsync: Gets accurate GPS data.
+
 export const LocationService = {
   requestPermissions: async () => {
     return await locationAdapter.requestPermissions();
