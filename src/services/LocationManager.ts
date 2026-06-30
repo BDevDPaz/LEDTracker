@@ -140,7 +140,7 @@ export const LocationService = {
    * @param radius Default tolerance radius
    */
   startMonitoringArrival: async (
-    sites: Array<{ id: string, latitude: number, longitude: number }>,
+    sites: { id: string, latitude: number, longitude: number }[],
     radius: number = 200
   ) => {
     try {
@@ -174,7 +174,7 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      const db = getDB();
+      const _db = getDB();
       // Obtenemos todos los IDs de sesiones pendientes o activas hoy para limpiar el FSM
       const sessions = await getAllAsync<any>(
         "SELECT id FROM work_sessions WHERE date_string = ? AND status != 'deleted'",
