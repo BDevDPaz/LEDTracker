@@ -145,6 +145,11 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
   // - requestBackgroundPermissionsAsync: Requests BG permissions.
   // - getCurrentPositionAsync: Gets accurate GPS data.
 
+  /**
+   * Note on Geofence Strategy: WTracker uses an 'OVERWRITE' strategy for geofencing tasks.
+   * Calling startGeofencingAsync with the same task identifier will automatically replace
+   * the existing geofence regions. This ensures we don't have stale regions monitored.
+   */
 export const LocationService = {
   requestPermissions: async () => {
     return await locationAdapter.requestPermissions();
@@ -161,7 +166,8 @@ export const LocationService = {
   ) => {
     try {
       // GPS Warm-up
-      await locationAdapter.getCurrentLocation();
+      const warmUpResult = await locationAdapter.getCurrentLocation();
+      log('AZUL', 'SERVICIOS_ACTIVOS', 'INFO', `GPS Warm-up completed. Accuracy: ${warmUpResult?.accuracy ?? "unknown"}m`);
 
       const regions: Location.LocationRegion[] = sites.map(site => ({
         identifier: site.id,
