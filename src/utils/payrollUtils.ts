@@ -1,5 +1,3 @@
-// import dayjs from './dayjsSetup';
-
 /**
  * Constants for payroll calculations
  */
@@ -68,9 +66,9 @@ export const calculateSessionMinutes = (
 export const calculateSessionDuration = (
   startTime: number,
   endTime: number,
-  lunchTaken: number,
-  lunchStart?: number,
-  lunchEnd?: number
+  lunchTaken: number | boolean,
+  lunchStart?: number | null,
+  lunchEnd?: number | null
 ): number => {
   const minutes = calculateSessionMinutes(startTime, endTime, lunchTaken, lunchStart, lunchEnd);
   return minutes * MS_PER_MINUTE;
@@ -78,7 +76,7 @@ export const calculateSessionDuration = (
 
 /**
  * Calculates pay details from total minutes.
- * Ensures zero floating point operations until the final currency conversion.
+ * Ensures high precision by multiplying by 100 (cents) before dividing by 60 (minutes).
  */
 export const calculatePayFromMinutes = (
   totalMinutes: number,
@@ -93,12 +91,11 @@ export const calculatePayFromMinutes = (
     regularMinutes = REGULAR_HOURS_THRESHOLD_MINUTES;
   }
 
-  const ratePerMinute = hourlyRate / 60;
-  const regularPay = regularMinutes * ratePerMinute;
-  const overtimePay = overtimeMinutes * (ratePerMinute * overtimeMultiplier);
+  const regularPayCents = Math.round((regularMinutes * hourlyRate * 100) / 60);
+  const overtimePayCents = Math.round((overtimeMinutes * hourlyRate * overtimeMultiplier * 100) / 60);
 
   return {
-    totalPay: Number((regularPay + overtimePay).toFixed(2)),
+    totalPay: (regularPayCents + overtimePayCents) / 100,
     regularMinutes,
     overtimeMinutes
   };

@@ -1,14 +1,24 @@
 import { EngineEvent, EngineState } from '../contracts/types';
-import { getActiveSession, getSettings, saveSession, updateSessionStatus, getAllAsync } from '../../database/db';
+import {
+  getActiveSession,
+  getSettings,
+  saveSession,
+  updateSessionStatus,
+  getAllAsync,
+  saveSettings
+} from '../../database/db';
 import { LocationService } from '../../services/LocationManager';
 import dayjs from '../../utils/dayjsSetup';
 import { log } from '../../utils/logger';
 
-export async function workTrackerEffects(event: EngineEvent, state: EngineState, dispatch: (event: EngineEvent) => void) {
+export async function workTrackerEffects(
+  event: EngineEvent,
+  state: EngineState,
+  dispatch: (event: EngineEvent) => void
+) {
   try {
     switch (event.type) {
       case 'APP_INIT': {
-        dispatch({ type: 'SET_LOADING', isLoading: true });
         const [session, settings] = await Promise.all([getActiveSession(), getSettings()]);
 
         // Ensure monitoring is active for all pending sessions
@@ -31,8 +41,13 @@ export async function workTrackerEffects(event: EngineEvent, state: EngineState,
         break;
       }
 
+      case 'SYNC_ACTIVE_SESSION': {
+        const session = await getActiveSession();
+        dispatch({ type: 'DATA_LOADED', state: { activeSession: session } });
+        break;
+      }
+
       case 'START_SESSION_REQUEST': {
-        dispatch({ type: 'SET_LOADING', isLoading: true });
         const coords = await LocationService.getCoordsFromAddress(event.address);
         if (!coords) {
           dispatch({ type: 'ERROR_OCCURRED', error: 'Address not found' });
@@ -58,7 +73,7 @@ export async function workTrackerEffects(event: EngineEvent, state: EngineState,
           manual_note: event.notes,
         });
 
-        // Refactor: Monitor all pending sessions for today
+        // Monitor all pending sessions for today
         const pendingSessions = await getAllAsync<any>(
           "SELECT id, latitude, longitude FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
           [dayjs().format('YYYY-MM-DD')]
@@ -79,12 +94,38 @@ export async function workTrackerEffects(event: EngineEvent, state: EngineState,
 
       case 'STOP_SESSION_REQUEST':
         if (state.activeSession?.id) {
-          dispatch({ type: 'SET_LOADING', isLoading: true });
           await updateSessionStatus(state.activeSession.id, 'completed', event.lunchMinutes);
-          await LocationService.stopMonitoring();
+          // Only stop monitoring if no more active/pending sessions exist for today
+          const pendingSessions = await getAllAsync<any>(
+            "SELECT id FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
+            [dayjs().format('YYYY-MM-DD')]
+          );
+
+          if (pendingSessions.length === 0) {
+            await LocationService.stopMonitoring();
+          } else {
+             // If there are still pending sessions, just re-sync monitoring to exclude the current one
+             const initSites = pendingSessions.map(s => ({
+              id: s.id.toString(),
+              latitude: s.latitude,
+              longitude: s.longitude,
+            }));
+            const currentSettings = state.settings || await getSettings();
+            const radius = currentSettings?.tolerance_radius || 200;
+            await LocationService.startMonitoringArrival(initSites, radius);
+          }
+
           dispatch({ type: 'DATA_LOADED', state: { activeSession: null } });
+        } else {
+          dispatch({ type: 'SET_LOADING', isLoading: false });
         }
         break;
+
+      case 'SETTINGS_UPDATE_REQUEST': {
+        await saveSettings(event.settings);
+        dispatch({ type: 'DATA_LOADED', state: { settings: event.settings } });
+        break;
+      }
 
       case 'BACKGROUND_SESSION_TIMEOUT': {
         const [reSession, reSettings] = await Promise.all([getActiveSession(), getSettings()]);

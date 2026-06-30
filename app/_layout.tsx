@@ -1,4 +1,3 @@
-// --- app/_layout.tsx ---
 import React, { useEffect, useState, useCallback } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -10,7 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Servicios
 import '../src/services/LocationManager';
 import { BackgroundTasks } from '../src/services/BackgroundTasks';
-import { log } from '../src/utils/logger';
+import { log, setLoggerDB } from '../src/utils/logger';
 
 // Contextos
 import { LanguageProvider } from '../src/context/LanguageContext';
@@ -65,7 +64,8 @@ export default function RootLayout() {
     async function prepare() {
       try {
         log('AZUL', 'ESTADO_SISTEMA', 'INFO', 'Iniciando Base de Datos...');
-        await initDatabase();
+        const database = await initDatabase();
+        setLoggerDB(database);
 
         log(
           'AZUL',
@@ -137,4 +137,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
