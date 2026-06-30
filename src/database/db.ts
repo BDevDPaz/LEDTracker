@@ -118,6 +118,9 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
         mensaje TEXT,
         metadata TEXT
       );
+
+      INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, language)
+      VALUES (1, 'USER_NAME', 'COMPANY_NAME', 'admin@company.com', 'es');
     `);
 
     db = database;

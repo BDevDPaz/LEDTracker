@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Servicios
 import '../src/services/LocationManager';
 import { BackgroundTasks } from '../src/services/BackgroundTasks';
+import { setupNotifications, scheduleDailyMorningNotification } from '../src/services/Notifications';
 import { log, setLoggerDB } from '../src/utils/logger';
 
 // Contextos
@@ -74,6 +75,8 @@ export default function RootLayout() {
           'Registrando Servicios de Fondo (Auto-Checkout)...'
         );
         await BackgroundTasks.register();
+        await setupNotifications();
+        await scheduleDailyMorningNotification();
 
         log('AZUL', 'ESTADO_SISTEMA', 'INFO', 'Sistema Listo. Cargando UI...');
       } catch (e) {
