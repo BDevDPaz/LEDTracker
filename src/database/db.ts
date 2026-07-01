@@ -1,6 +1,7 @@
 // --- src/database/db.ts ---
 import * as SQLite from 'expo-sqlite';
 import dayjs from '../utils/dayjsSetup';
+import { validateSession } from "../utils/payrollUtils";
 import { WorkSession, AppSettings, SessionStatus } from '../types';
 import { log, logAudit, AUDIT_ACTIONS } from '../utils/logger';
 
@@ -145,6 +146,8 @@ export async function ensureDbReady(): Promise<SQLite.SQLiteDatabase> {
 }
 
 export const insertWorkSession = async (session: WorkSession) => {
+  const error = validateSession(session.start_time, session.end_time || null, session.lunch_start, session.lunch_end);
+  if (error) throw new Error(error);
   await runInTransaction(async (database) => {
     const result = await database.runAsync(
       `INSERT INTO work_sessions (
@@ -256,6 +259,8 @@ export const updateWorkSessionManual = async (
   endTime: number | null,
   note: string
 ) => {
+  const error = validateSession(startTime, endTime, null, null); // Lunch validation could be added if passed
+  if (error) throw new Error(error);
   await runInTransaction(async (database) => {
     await database.runAsync(
       `UPDATE work_sessions

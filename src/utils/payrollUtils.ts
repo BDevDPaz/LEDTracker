@@ -7,6 +7,8 @@ export const LUNCH_THRESHOLD_MINUTES = 360; // 6 hours
 export const DEFAULT_LUNCH_MINUTES = 60;
 // Daily threshold: > 8 hours (California-style rule)
 export const REGULAR_HOURS_THRESHOLD_MINUTES = 480; // 8 hours
+// Max shift duration: 16 hours to prevent data entry errors
+export const MAX_SHIFT_MINUTES = 960;
 
 /**
  * Pure function to calculate duration between two points in time (as minutes of day).
@@ -17,6 +19,49 @@ export const calculateDuration = (startMinutes: number, endMinutes: number): num
     return (MINUTES_IN_DAY - startMinutes) + endMinutes;
   }
   return endMinutes - startMinutes;
+};
+
+/**
+ * Validates a work session for potential errors.
+ * Returns null if valid, or an error message if invalid.
+ */
+export const validateSession = (
+  startTimeMs: number,
+  endTimeMs: number | null,
+  lunchStartMs?: number | null,
+  lunchEndMs?: number | null
+): string | null => {
+  if (!endTimeMs) return null;
+
+  const startMin = Math.floor(startTimeMs / MS_PER_MINUTE);
+  const endMin = Math.floor(endTimeMs / MS_PER_MINUTE);
+
+  if (endMin < startMin) {
+    return "La hora de finalización no puede ser anterior a la de inicio";
+  }
+
+  const duration = endMin - startMin;
+  if (duration > MAX_SHIFT_MINUTES) {
+    return "La duración del turno excede el límite permitido (16 horas)";
+  }
+
+  if (lunchStartMs && lunchEndMs) {
+    const lStartMin = Math.floor(lunchStartMs / MS_PER_MINUTE);
+    const lEndMin = Math.floor(lunchEndMs / MS_PER_MINUTE);
+
+    if (lStartMin < startMin || lEndMin > endMin) {
+      return "El tiempo de almuerzo debe estar dentro del rango del turno";
+    }
+    if (lEndMin < lStartMin) {
+      return "La hora de fin del almuerzo no puede ser anterior a la de inicio";
+    }
+    const lunchDuration = lEndMin - lStartMin;
+    if (lunchDuration >= duration) {
+      return "El tiempo de almuerzo no puede exceder la duración del turno";
+    }
+  }
+
+  return null;
 };
 
 /**
@@ -45,8 +90,11 @@ export const calculateSessionMinutes = (
 
       // Validate break is within shift range
       if (lStartMin >= startMin && lEndMin <= endMin && lEndMin >= lStartMin) {
-        totalMinutes -= (lEndMin - lStartMin);
-        deductionApplied = true;
+        const lunchDuration = lEndMin - lStartMin;
+        if (lunchDuration < totalMinutes) {
+          totalMinutes -= lunchDuration;
+          deductionApplied = true;
+        }
       }
     }
 

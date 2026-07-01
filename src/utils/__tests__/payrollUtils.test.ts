@@ -1,4 +1,4 @@
-import { calculateSessionDuration, calculatePay } from '../payrollUtils';
+import { calculateSessionDuration, calculatePay, validateSession } from '../payrollUtils';
 
 describe('payrollUtils', () => {
   // ==========================================
@@ -40,6 +40,56 @@ describe('payrollUtils', () => {
       const end = Date.UTC(2026, 4, 30, 8, 0, 0);
       const duration = calculateSessionDuration(start, end, 0);
       expect(duration).toBe(0);
+    });
+  });
+
+  // ==========================================
+  // PRUEBAS DE VALIDACIÓN
+  // ==========================================
+  describe('validateSession', () => {
+    const MS_PER_HOUR = 3600000;
+
+    it('debe validar una sesión correcta', () => {
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 16, 0, 0);
+      expect(validateSession(start, end)).toBeNull();
+    });
+
+    it('debe rechazar fin anterior al inicio', () => {
+      const start = Date.UTC(2026, 4, 30, 10, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 8, 0, 0);
+      expect(validateSession(start, end)).toBe("La hora de finalización no puede ser anterior a la de inicio");
+    });
+
+    it('debe rechazar turnos de más de 16 horas', () => {
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = start + 17 * MS_PER_HOUR;
+      expect(validateSession(start, end)).toBe("La duración del turno excede el límite permitido (16 horas)");
+    });
+
+    it('debe rechazar almuerzo fuera del turno', () => {
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 16, 0, 0);
+      const lStart = Date.UTC(2026, 4, 30, 7, 0, 0);
+      const lEnd = Date.UTC(2026, 4, 30, 8, 0, 0);
+      expect(validateSession(start, end, lStart, lEnd)).toBe("El tiempo de almuerzo debe estar dentro del rango del turno");
+    });
+
+    it('debe rechazar almuerzo con fin anterior a inicio', () => {
+      const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+      const end = Date.UTC(2026, 4, 30, 16, 0, 0);
+      const lStart = Date.UTC(2026, 4, 30, 13, 0, 0);
+      const lEnd = Date.UTC(2026, 4, 30, 12, 0, 0);
+      expect(validateSession(start, end, lStart, lEnd)).toBe("La hora de fin del almuerzo no puede ser anterior a la de inicio");
+    });
+
+    it('debe rechazar almuerzo que excede la duración del turno', () => {
+        const start = Date.UTC(2026, 4, 30, 8, 0, 0);
+        const end = Date.UTC(2026, 4, 30, 9, 0, 0);
+        const lStart = Date.UTC(2026, 4, 30, 8, 0, 0);
+        const lEnd = Date.UTC(2026, 4, 30, 9, 30, 0); // Excede fin turno
+        // Aquí la validación de rango saltará primero si está bien implementada
+        expect(validateSession(start, end, lStart, lEnd)).toBe("El tiempo de almuerzo debe estar dentro del rango del turno");
     });
   });
 
