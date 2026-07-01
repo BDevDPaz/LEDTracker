@@ -7,7 +7,7 @@ import * as Notifications from 'expo-notifications';
 import { getSettings, getAllAsync } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
-import { log } from '../utils/logger';
+import { log, logStructured } from '../utils/logger';
 import dayjs from '../utils/dayjsSetup';
 import { formatDate, formatTime } from '../utils/dateUtils';
 import { calculateSessionDuration, calculatePay } from '../utils/payrollUtils';
@@ -16,20 +16,52 @@ const formatCurrency = (amount: number) => {
   return `$${amount.toFixed(2)}`;
 };
 
+// ======================================================
+// OPTIMIZATION CONSTANTS (Proposal 2)
+// ======================================================
+
+const SESSIONS_PER_PAGE = 30;
+const AUDIT_LOGS_PER_SECTION = 100;
+
+interface ReportGenerationOptions {
+  shouldShare: boolean;
+  customRange?: { start: number; end: number };
+  paginate?: boolean;
+}
+
+// ======================================================
+// DELIVERY GUARANTEE TYPES (Proposal 5)
+// ======================================================
+
+const PENDING_REPORTS_KEY = 'PENDING_REPORTS_DELIVERY';
+
+export interface PendingReportRecord {
+  weekId: string;
+  pdfUri: string;
+  createdAt: number;
+  attemptCount: number;
+  lastAttemptAt?: number;
+}
+
+// ======================================================
+// CORE GENERATION (Proposal 2)
+// ======================================================
+
 export const generateWeeklyReport = async (
   shouldShare: boolean = true,
   customRange?: { start: number; end: number }
+): Promise<string | null> => {
+  return generateWeeklyReportOptimized({ shouldShare, customRange });
+};
+
+export const generateWeeklyReportOptimized = async (
+  options: ReportGenerationOptions
 ): Promise<string | null> => {
   try {
     const settings = await getSettings();
 
     if (!settings) {
-      log(
-        'ROJO',
-        'ERROR_CRITICO',
-        'ERROR',
-        'No se encontró la configuración (Settings) al generar reporte'
-      );
+      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'No se encontró la configuración (Settings) al generar reporte');
       return null;
     }
 
@@ -37,51 +69,65 @@ export const generateWeeklyReport = async (
     let endTs: number;
     let rangeTitle = '';
 
-    if (customRange) {
-      startTs = customRange.start;
-      endTs = customRange.end;
+    if (options.customRange) {
+      startTs = options.customRange.start;
+      endTs = options.customRange.end;
       rangeTitle = `${formatDate(startTs)} - ${formatDate(endTs)}`;
     } else {
-      // Cálculo preciso e inmutable del inicio y fin de semana usando dayjs
       const start = dayjs().startOf('week');
       const end = dayjs().endOf('week');
-
       startTs = start.valueOf();
       endTs = end.valueOf();
       rangeTitle = 'Semana Actual';
     }
 
+    // Query with LIMIT to prevent memory spike
     const sessions = await getAllAsync<WorkSession>(
       `SELECT * FROM work_sessions
        WHERE start_time >= ? AND start_time <= ?
-       ORDER BY start_time ASC`,
+       ORDER BY start_time ASC
+       LIMIT ${SESSIONS_PER_PAGE * 5}`,
       [startTs, endTs]
     );
 
     const logs = await getAllAsync<AuditLog>(
       `SELECT * FROM audit_logs
        WHERE timestamp >= ? AND timestamp <= ?
-       ORDER BY timestamp DESC`,
+       ORDER BY timestamp DESC
+       LIMIT ${AUDIT_LOGS_PER_SECTION * 3}`,
       [startTs, endTs]
     );
 
+    if (sessions.length > SESSIONS_PER_PAGE * 2) {
+      logStructured('WARN', 'ADVERTENCIA',
+        `Large report detected (${sessions.length} sessions). Esto puede tomar más tiempo.`
+      );
+    }
+
+    const html = buildReportHtml(sessions, logs, settings, rangeTitle);
+    const { uri } = await Print.printToFileAsync({ html, base64: false });
+
+    if (options.shouldShare) {
+      log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Reporte PDF generado y listo para compartir');
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    }
+
+    return uri;
+  } catch (error) {
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo al generar el reporte PDF semanal', error);
+    return null;
+  }
+};
+
+function buildReportHtml(
+  sessions: WorkSession[],
+  logs: AuditLog[],
+  settings: AppSettings,
+  rangeTitle: string
+): string {
     let totalHours = 0;
     let totalOvertime = 0;
     let totalEarnings = 0;
-    type ReportRow = {
-    date: string;
-    client: string;
-    address: string;
-    notes: string;
-    start: string;
-    end: string;
-    lunch: string;
-    total: string;
-    pay: string;
-    status: string;
-    isGeofenceIn: boolean;
-    isGeofenceOut: boolean;
-  };
 
     const autoCheckoutSessionIds = new Set(
       logs
@@ -89,11 +135,10 @@ export const generateWeeklyReport = async (
         .map((l: AuditLog) => l.session_id)
     );
 
-    const rows: ReportRow[] = sessions.map((session: WorkSession) => {
+    const rows = sessions.map((session: WorkSession) => {
       const startTime = session.actual_start_time || session.start_time;
       const endTime = session.end_time || dayjs().valueOf();
 
-      // Delegamos el cálculo a nuestra utilidad centralizada
       const durationMs = calculateSessionDuration(
         startTime,
         endTime,
@@ -103,20 +148,17 @@ export const generateWeeklyReport = async (
       );
 
       const hours = durationMs / (1000 * 60 * 60);
-
-      // Calculamos nómina exacta incluyendo horas extra (OT)
-      const { totalPay: pay, overtimeHours: otHours } = calculatePay(
+      const { totalPay, overtimeHours } = calculatePay(
         hours,
         settings.hourly_rate,
         settings.overtime_multiplier
       );
 
       totalHours += hours;
-      totalOvertime += otHours;
-      totalEarnings += pay;
+      totalOvertime += overtimeHours;
+      totalEarnings += totalPay;
 
-      // ✅ Busca auto-checkout usando el nombre actual de auditoría (Optimizado O(1))
-      const fueAutoCheckout = session.id ? autoCheckoutSessionIds.has(session.id) : false;
+      const fueAutoCheckout = autoCheckoutSessionIds.has(session.id!);
 
       return {
         date: formatDate(startTime),
@@ -127,14 +169,14 @@ export const generateWeeklyReport = async (
         end: session.end_time ? formatTime(session.end_time) : 'En curso',
         lunch: session.lunch_taken ? 'Sí' : 'No',
         total: hours.toFixed(2),
-        pay: formatCurrency(pay),
+        pay: formatCurrency(totalPay),
         status: session.status,
         isGeofenceIn: Boolean(session.actual_start_time),
         isGeofenceOut: fueAutoCheckout
       };
     });
 
-    const html = `
+    return `
       <html>
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
@@ -143,34 +185,28 @@ export const generateWeeklyReport = async (
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #D4AF37; padding-bottom: 15px; }
             .title { font-size: 26px; font-weight: 800; color: #000; letter-spacing: 2px; text-transform: uppercase; }
             .subtitle { font-size: 11px; color: #D4AF37; text-transform: uppercase; margin-top: 5px; letter-spacing: 1px; }
-
             .info-grid { display: flex; justify-content: space-between; margin-bottom: 30px; background: #f8f8f8; padding: 15px; border-radius: 8px; }
             .info-col { width: 48%; }
             .info-label { font-size: 9px; color: #999; text-transform: uppercase; font-weight: bold; margin-bottom: 2px; }
             .info-value { font-size: 13px; color: #000; font-weight: 600; margin-bottom: 10px; }
-
             .stats-box { display: flex; justify-content: space-between; margin-bottom: 30px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
             .stat-item { flex: 1; text-align: center; padding: 15px; border-right: 1px solid #eee; }
             .stat-item:last-child { border-right: none; background: #fffcf2; }
             .stat-num { font-size: 22px; font-weight: bold; color: #000; }
             .stat-desc { font-size: 9px; color: #666; text-transform: uppercase; margin-top: 5px; }
-
             table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 11px; }
             th { text-align: left; border-bottom: 2px solid #000; padding: 10px; text-transform: uppercase; font-size: 9px; color: #666; }
             td { border-bottom: 1px solid #eee; padding: 12px 10px; vertical-align: top; }
             .row-active { background-color: #fff8e1; }
-
             .client-badge { background: #000; color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; }
             .notes { font-style: italic; color: #666; font-size: 10px; display: block; margin-top: 4px; }
             .geo-badge-in { color: #2ecc71; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
             .geo-badge-out { color: #e67e22; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
             .lunch-badge { color: #e67e22; font-size: 9px; }
-
             .audit-section { margin-top: 20px; border-top: 3px solid #eee; padding-top: 20px; page-break-inside: avoid; }
             .audit-title { font-size: 12px; font-weight: bold; color: #000; text-transform: uppercase; margin-bottom: 15px; }
             .log-item { font-size: 9px; color: #555; margin-bottom: 6px; border-left: 2px solid #ddd; padding-left: 10px; }
             .log-alert { border-left-color: #D4AF37; color: #000; background: #fffcf0; padding: 5px 10px; }
-
             .footer { margin-top: 50px; text-align: center; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
           </style>
         </head>
@@ -179,7 +215,6 @@ export const generateWeeklyReport = async (
             <div class="title">WTracker</div>
             <div class="subtitle">Reporte Oficial de Nómina y Auditoría</div>
           </div>
-
           <div class="info-grid">
             <div class="info-col">
               <div class="info-label">Empleado</div>
@@ -194,7 +229,6 @@ export const generateWeeklyReport = async (
               <div class="info-value">${rangeTitle}</div>
             </div>
           </div>
-
           <div class="stats-box">
             <div class="stat-item">
               <div class="stat-num">${totalHours.toFixed(2)}</div>
@@ -209,7 +243,6 @@ export const generateWeeklyReport = async (
               <div class="stat-desc">Pago Estimado</div>
             </div>
           </div>
-
           <table>
             <thead>
               <tr>
@@ -221,9 +254,7 @@ export const generateWeeklyReport = async (
               </tr>
             </thead>
             <tbody>
-              ${rows
-                .map(
-                  (row: ReportRow) => `
+              ${rows.map(row => `
                 <tr class="${row.status === 'active' ? 'row-active' : ''}">
                   <td>
                     <strong>${row.date}</strong>
@@ -242,29 +273,18 @@ export const generateWeeklyReport = async (
                   <td><strong>${row.total}</strong></td>
                   <td>${row.pay}</td>
                 </tr>
-              `
-                )
-                .join('')}
+              `).join('')}
             </tbody>
           </table>
-
           <div class="audit-section">
             <div class="audit-title">Registro de Eventos Críticos (GPS & Sistema)</div>
-            ${
-              logs.length === 0
-                ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>'
-                : logs
-                  .map(
-                    (auditLog: AuditLog) => `
+            ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' :
+               logs.map(auditLog => `
                 <div class="log-item ${auditLog.action_type.includes('AUTO') || auditLog.action_type.includes('EXIT') ? 'log-alert' : ''}">
                   <strong>${formatTime(auditLog.timestamp)}</strong> — <span style="font-weight:bold">[${auditLog.action_type}]</span> ${escapeHtml(auditLog.details)}
                 </div>
-              `
-                  )
-                  .join('')
-            }
+              `).join('')}
           </div>
-
           <div class="footer">
             Documento generado electrónicamente por WTracker App.<br>
             Certificado digitalmente: ${dayjs().format('YYYY-MM-DD HH:mm:ss Z')}
@@ -272,33 +292,112 @@ export const generateWeeklyReport = async (
         </body>
       </html>
     `;
+}
 
-    const { uri } = await Print.printToFileAsync({ html, base64: false });
+// ======================================================
+// DELIVERY GUARANTEE (Proposal 5)
+// ======================================================
 
-    if (shouldShare) {
-      log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Reporte PDF compartido con éxito');
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+export const sendReportByEmail = async (pdfUri: string, settings: AppSettings, weekId?: string) => {
+  try {
+    const isAvailable = await MailComposer.isAvailableAsync();
+
+    if (isAvailable) {
+      const result = await MailComposer.composeAsync({
+        recipients: [settings.company_email],
+        subject: `Nómina Semanal - ${settings.employee_name}`,
+        body: `Hola,\n\nAdjunto encontrarás mi reporte de horas y actividades detallado.\n\nPeriodo finalizado.\n\nAtentamente,\n${settings.employee_name}`,
+        attachments: [pdfUri]
+      });
+
+      if (result.status === MailComposer.MailComposerStatus.SENT && weekId) {
+        await removePendingReport(weekId);
+      }
+    } else {
+      await Sharing.shareAsync(pdfUri);
+      if (weekId) await removePendingReport(weekId);
     }
-
-    return uri;
   } catch (error) {
-    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo al generar el reporte PDF semanal', error);
-    return null;
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al enviar reporte por email', error);
   }
 };
 
-export const sendReportByEmail = async (pdfUri: string, settings: AppSettings) => {
-  const isAvailable = await MailComposer.isAvailableAsync();
+export const checkAndDeliverPendingReports = async () => {
+  try {
+    const pending = await AsyncStorage.getItem(PENDING_REPORTS_KEY);
+    if (!pending) return;
 
-  if (isAvailable) {
-    await MailComposer.composeAsync({
-      recipients: [settings.company_email],
-      subject: `Nómina Semanal - ${settings.employee_name}`,
-      body: `Hola,\n\nAdjunto encontrarás mi reporte de horas y actividades detallado.\n\nPeriodo finalizado.\n\nAtentamente,\n${settings.employee_name}`,
-      attachments: [pdfUri]
-    });
-  } else {
-    await Sharing.shareAsync(pdfUri);
+    const reports: PendingReportRecord[] = JSON.parse(pending);
+    const now = dayjs().valueOf();
+    const updated: PendingReportRecord[] = [];
+
+    for (const report of reports) {
+      const age = now - report.createdAt;
+      const hoursOld = age / (1000 * 60 * 60);
+
+      if (hoursOld < 7 * 24) {
+        const shouldRetry = !report.lastAttemptAt ||
+                           (now - report.lastAttemptAt) > 6 * 60 * 60 * 1000;
+
+        if (shouldRetry && report.attemptCount < 5) {
+          const settings = await getSettings();
+          if (settings) {
+            log('AZUL', 'BACKGROUND_TASK', 'INFO', `Reintentando envío de reporte pendiente para ${report.weekId}...`);
+            await sendReportByEmail(report.pdfUri, settings, report.weekId);
+            report.attemptCount++;
+            report.lastAttemptAt = now;
+            updated.push(report);
+          }
+        } else {
+          updated.push(report);
+        }
+      }
+    }
+
+    if (updated.length > 0) {
+      await AsyncStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(updated));
+    } else {
+      await AsyncStorage.removeItem(PENDING_REPORTS_KEY);
+    }
+  } catch (error) {
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Pending reports check failed', error);
+  }
+};
+
+export const trackPendingReport = async (weekId: string, pdfUri: string) => {
+  try {
+    const pending = await AsyncStorage.getItem(PENDING_REPORTS_KEY);
+    const reports: PendingReportRecord[] = pending ? JSON.parse(pending) : [];
+
+    const exists = reports.some(r => r.weekId === weekId);
+    if (!exists) {
+      reports.push({
+        weekId,
+        pdfUri,
+        createdAt: dayjs().valueOf(),
+        attemptCount: 0
+      });
+      await AsyncStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(reports));
+      log('AZUL', 'ESTADO_SISTEMA', 'DEBUG', `Reporte trackeado como pendiente: ${weekId}`);
+    }
+  } catch (error) {
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Failed to track pending report', error);
+  }
+};
+
+const removePendingReport = async (weekId: string) => {
+  try {
+    const pending = await AsyncStorage.getItem(PENDING_REPORTS_KEY);
+    if (!pending) return;
+    const reports: PendingReportRecord[] = JSON.parse(pending);
+    const filtered = reports.filter(r => r.weekId !== weekId);
+    if (filtered.length > 0) {
+      await AsyncStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(filtered));
+    } else {
+      await AsyncStorage.removeItem(PENDING_REPORTS_KEY);
+    }
+  } catch (error) {
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Failed to remove pending report', error);
   }
 };
 
@@ -307,23 +406,22 @@ export const LAST_SUCCESSFUL_REPORT_KEY = 'LAST_SUCCESSFUL_REPORT_TIMESTAMP';
 export const ensureWeeklyReportExists = async () => {
   const lastReport = await AsyncStorage.getItem(LAST_SUCCESSFUL_REPORT_KEY);
   const now = dayjs();
-
   const lastReportDate = lastReport ? dayjs(parseInt(lastReport, 10)) : null;
 
-  // If no report this week, generate it
   if (!lastReportDate || !lastReportDate.isSame(now, 'week')) {
     log('AZUL', 'BACKGROUND_TASK', 'INFO', 'Verificando reporte semanal pendiente...');
     const pdfUri = await generateWeeklyReport(false);
 
     if (pdfUri) {
+      const currentWeekId = now.startOf('isoWeek').format('YYYY-MM-DD');
+      await trackPendingReport(currentWeekId, pdfUri);
       await AsyncStorage.setItem(LAST_SUCCESSFUL_REPORT_KEY, now.valueOf().toString());
 
-      // Schedule notification to actually send it
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '📄 Reporte Semanal Pendiente',
           body: 'Toca para enviar tu nómina por correo.',
-          data: { action: 'SHOW_REPORT_PROMPT', pdfUri },
+          data: { action: 'SHOW_REPORT_PROMPT', pdfUri, weekId: currentWeekId },
           sound: true,
         },
         trigger: null,

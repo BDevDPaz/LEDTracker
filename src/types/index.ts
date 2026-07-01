@@ -1,4 +1,3 @@
-
 // Definición de idiomas soportados
 export type Language = 'es' | 'en';
 
@@ -83,6 +82,7 @@ export type LogCategory =
   | 'REINICIO_MONITOREO' 
   | 'MODOS_ESPECIALES' 
   | 'PERMISOS_CONCEDIDOS' 
+  | 'PERMISOS_DENEGADOS'
   | 'ESTADO_SISTEMA' 
   | 'BACKGROUND_TASK' 
   | 'SIN_CAMBIOS' 
@@ -113,3 +113,28 @@ export interface SystemLogEntry {
   mensaje: string;
   metadata?: string;
 }
+
+// ======================================================
+// UI FEEDBACK TYPES
+// ======================================================
+
+export type ToastType = 'success' | 'error' | 'info';
+export type ToastPriority = 'high' | 'normal' | 'low';
+
+export interface ToastItem {
+  id: string;
+  msg: string;
+  type: ToastType;
+  durationMs: number;
+  priority: ToastPriority;
+}
+
+// ======================================================
+// NOTIFICATION TYPES
+// ======================================================
+
+export type NotificationAction =
+  | 'OPEN_DAILY_SETUP'
+  | 'GENERATE_REPORT_PROMPT'
+  | 'SHOW_REPORT_PROMPT'
+  | 'CHECKOUT_DECISION';
