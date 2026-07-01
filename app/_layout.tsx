@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View } from 'react-native';
+import { View, AppState } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Servicios
 import '../src/services/LocationManager';
-import { BackgroundTasks } from '../src/services/BackgroundTasks';
+import { BackgroundTasks, runFailsafeCheck } from '../src/services/BackgroundTasks';
+import { ensureWeeklyReportExists } from '../src/services/ReportGenerator';
 import { setupNotifications, scheduleDailyMorningNotification } from '../src/services/Notifications';
 import { log, setLoggerDB } from '../src/utils/logger';
 
@@ -31,6 +33,8 @@ Notifications.setNotificationHandler({
 
 void SplashScreen.preventAutoHideAsync();
 
+const LAST_FAILSAFE_CHECK_KEY = 'LAST_FAILSAFE_CHECK_TIMESTAMP';
+
 function handleNotificationAction(
   router: ReturnType<typeof useRouter>,
   data: Record<string, unknown>
@@ -41,7 +45,7 @@ function handleNotificationAction(
     return;
   }
 
-  if (data.action === 'GENERATE_REPORT_PROMPT') {
+  if (data.action === 'GENERATE_REPORT_PROMPT' || data.action === 'SHOW_REPORT_PROMPT') {
     router.push('/(tabs)/report');
     return;
   }
@@ -87,6 +91,34 @@ export default function RootLayout() {
     }
 
     void prepare();
+  }, []);
+
+  // ✅ NEW: AppState Listener for Failsafe and Reports (Proposals 3 & 5)
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        try {
+          const lastCheck = await AsyncStorage.getItem(LAST_FAILSAFE_CHECK_KEY);
+          const now = Date.now();
+          const lastCheckTime = lastCheck ? parseInt(lastCheck, 10) : 0;
+
+          // If > 1 hour since last check, run robust checks
+          if (now - lastCheckTime > 60 * 60 * 1000) {
+            log('AZUL', 'ESTADO_SISTEMA', 'DEBUG', 'Ejecutando verificaciones de respaldo (Failsafe + Reportes)...');
+            await Promise.all([
+              runFailsafeCheck(),
+              ensureWeeklyReportExists()
+            ]);
+            await AsyncStorage.setItem(LAST_FAILSAFE_CHECK_KEY, now.toString());
+          }
+        } catch (e) {
+          log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo en verificaciones de respaldo', e);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {

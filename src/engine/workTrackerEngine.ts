@@ -29,12 +29,18 @@ class WorkTrackerEngine {
       this.notify();
     } catch (err) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Critical error in engine reducer', err);
-      release();
+      // Release the mutex BEFORE running effects to avoid deadlocks
+    // when effects dispatch new events. This prevents race conditions
+    // between state transitions and long-running side effects.
+    release();
       return;
     }
 
     // Release the mutex BEFORE running effects to avoid deadlocks
     // when effects dispatch new events.
+    // Release the mutex BEFORE running effects to avoid deadlocks
+    // when effects dispatch new events. This prevents race conditions
+    // between state transitions and long-running side effects.
     release();
 
     try {

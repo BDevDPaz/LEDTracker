@@ -93,6 +93,16 @@ export type LogCategory =
 
 export type LogSeverity = 'INFO' | 'WARN' | 'EVENT' | 'DEBUG' | 'ERROR';
 
+export interface LogMetadata {
+  sessionId?: number;
+  userId?: string;
+  duration?: number; // ms
+  geoAccuracy?: number;
+  errorCode?: string;
+  stackTrace?: string;
+  [key: string]: any;
+}
+
 export interface SystemLogEntry {
   id?: number;
   timestamp: number;
@@ -103,4 +113,3 @@ export interface SystemLogEntry {
   mensaje: string;
   metadata?: string;
 }
-

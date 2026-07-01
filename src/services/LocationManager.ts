@@ -3,18 +3,21 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 
-import { log } from '../utils/logger';
+import { log, logStructured } from '../utils/logger';
 import { ensureDbReady, insertAuditLog, getAllAsync } from '../database/db';
 import { WorkSession } from '../types';
 import dayjs from '../utils/dayjsSetup';
 import { LocationFSM } from './LocationFSM';
 import { locationAdapter } from '../runtime/locationAdapter';
 import { engine } from '../engine/workTrackerEngine';
+import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
 
 export const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
 export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 
 const fsm = new LocationFSM(AsyncStorage);
+
+const MIN_ACCURACY_METERS = 50;
 
 interface GeofenceTaskData {
   eventType: Location.GeofencingEventType;
@@ -30,16 +33,30 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
   const { eventType, region } = data as GeofenceTaskData;
   const siteId = region?.identifier;
 
-  // 🛡️ Cláusula de Salvaguarda (Type Narrowing) para asegurar estabilidad en runtime y tipado estricto
   if (!siteId) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', "Geofencing event aborted: missing 'region.identifier' in task payload.");
+    return;
+  }
+
+  // ✅ NEW: Validate GPS accuracy
+  const currentPos = await locationAdapter.getCurrentLocation();
+
+  if (!currentPos) {
+    log('AMARILLO', 'GPS_DEBIL', 'WARN', 'No GPS signal, ignoring geofence event');
+    return;
+  }
+
+  if (currentPos.accuracy && currentPos.accuracy > MIN_ACCURACY_METERS) {
+    logStructured('WARN', 'GPS_DEBIL', `GPS accuracy ${currentPos.accuracy}m > ${MIN_ACCURACY_METERS}m, ignoring event`, {
+      geoAccuracy: currentPos.accuracy ?? undefined,
+      sessionId: parseInt(siteId, 10)
+    });
     return;
   }
 
   const db = await ensureDbReady();
 
   try {
-    // Site-Aware query: find the specific session matching the region identifier
     const session = await db.getFirstAsync<WorkSession>(
       "SELECT * FROM work_sessions WHERE id = ?",
       [parseInt(siteId, 10)]
@@ -48,6 +65,23 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
     if (!session) {
       log('AMARILLO', 'ADVERTENCIA', 'WARN', `Geocerca detectada para sitio desconocido ID: ${siteId}`);
       return;
+    }
+
+    // ✅ NEW: Validate speed consistency (basic check)
+    if (session.latitude && session.longitude) {
+      const distanceM = getDistanceFromLatLonInMeters(
+        session.latitude, session.longitude,
+        currentPos.latitude, currentPos.longitude
+      );
+
+      // Basic heuristic: if we are too far from the center for an 'Enter' event or
+      // suddenly jumped huge distance, log it.
+      if (eventType === Location.GeofencingEventType.Enter && distanceM > (region.radius + 100)) {
+         logStructured('WARN', 'EVENTO_GEOCERCA', `Suspicious Enter event: distance ${Math.round(distanceM)}m from center`, {
+           sessionId: session.id,
+           geoAccuracy: currentPos.accuracy ?? undefined
+         });
+      }
     }
 
     const eventName = eventType === Location.GeofencingEventType.Enter ? 'Enter' : 'Exit';
@@ -80,7 +114,6 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
           }),
         ]);
 
-        // Trigger engine update
         engine.dispatch({ type: 'SYNC_ACTIVE_SESSION' });
 
         log(
@@ -95,12 +128,10 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
     else if (transition === 'EXITED') {
       log(
         'NARANJA',
-        'EVENTO_GEOCERCA',
-        'EVENT',
+        'EVENTO_GEOCERCA', 'EVENT',
         `Geocerca: SALIDA validada para sitio ${siteId} (Hysteresis). Iniciando temporizador.`
       );
 
-      // Solo marcamos salida si esta es la sesión activa
       if (session.status === 'active') {
         const now = dayjs().valueOf();
 
@@ -129,54 +160,34 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
   }
 });
 
-
-  // Audit compliance: GEO-005, GEO-006, GEO-007
-  // - startGeofencingAsync: Starts geofence monitoring.
-  // - stopGeofencingAsync: Stops geofence monitoring.
-  // - requestForegroundPermissionsAsync: Requests FG permissions.
-  // - requestBackgroundPermissionsAsync: Requests BG permissions.
-  // - getCurrentPositionAsync: Gets accurate GPS data.
-
-
-  // Audit compliance: GEO-005, GEO-006, GEO-007
-  // - startGeofencingAsync: Starts geofence monitoring.
-  // - stopGeofencingAsync: Stops geofence monitoring.
-  // - requestForegroundPermissionsAsync: Requests FG permissions.
-  // - requestBackgroundPermissionsAsync: Requests BG permissions.
-  // - getCurrentPositionAsync: Gets accurate GPS data.
-
-  /**
-   * Note on Geofence Strategy: WTracker uses an 'OVERWRITE' strategy for geofencing tasks.
-   * Calling startGeofencingAsync with the same task identifier will automatically replace
-   * the existing geofence regions. This ensures we don't have stale regions monitored.
-   */
 export const LocationService = {
   requestPermissions: async () => {
     return await locationAdapter.requestPermissions();
   },
 
-  /**
-   * Refactored to support multi-site monitoring.
-   * @param sites Array of { id, latitude, longitude }
-   * @param radius Default tolerance radius
-   */
   startMonitoringArrival: async (
     sites: { id: string, latitude: number, longitude: number }[],
     radius: number = 200
   ) => {
     try {
+      // Type-safe region management (Proposal 7)
+      const regions: Location.LocationRegion[] = sites.map(site => {
+        if (!site.id || Number.isNaN(site.latitude) || Number.isNaN(site.longitude)) {
+          throw new Error(`Invalid site data for geofencing: ${JSON.stringify(site)}`);
+        }
+        return {
+          identifier: site.id,
+          latitude: site.latitude,
+          longitude: site.longitude,
+          radius,
+          notifyOnEnter: true,
+          notifyOnExit: true,
+        };
+      });
+
       // GPS Warm-up
       const warmUpResult = await locationAdapter.getCurrentLocation();
       log('AZUL', 'SERVICIOS_ACTIVOS', 'INFO', `GPS Warm-up completed. Accuracy: ${warmUpResult?.accuracy ?? "unknown"}m`);
-
-      const regions: Location.LocationRegion[] = sites.map(site => ({
-        identifier: site.id,
-        latitude: site.latitude,
-        longitude: site.longitude,
-        radius,
-        notifyOnEnter: true,
-        notifyOnExit: true,
-      }));
 
       await locationAdapter.startGeofencing(GEOFENCE_TASK, regions);
 
@@ -196,8 +207,6 @@ export const LocationService = {
 
   stopMonitoring: async () => {
     try {
-      const _db = await ensureDbReady();
-      // Obtenemos todos los IDs de sesiones pendientes o activas hoy para limpiar el FSM
       const sessions = await getAllAsync<any>(
         "SELECT id FROM work_sessions WHERE date_string = ? AND status != 'deleted'",
         [dayjs().format('YYYY-MM-DD')]
@@ -220,4 +229,3 @@ export const LocationService = {
     return await locationAdapter.geocodeAddress(address);
   },
 };
-

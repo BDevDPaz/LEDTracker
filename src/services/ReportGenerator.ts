@@ -2,6 +2,8 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as MailComposer from 'expo-mail-composer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { getSettings, getAllAsync } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
@@ -265,7 +267,7 @@ export const generateWeeklyReport = async (
 
           <div class="footer">
             Documento generado electrónicamente por WTracker App.<br>
-            Certificado digitalmente: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss Z')}
+            Certificado digitalmente: ${dayjs().format('YYYY-MM-DD HH:mm:ss Z')}
           </div>
         </body>
       </html>
@@ -300,3 +302,34 @@ export const sendReportByEmail = async (pdfUri: string, settings: AppSettings) =
   }
 };
 
+export const LAST_SUCCESSFUL_REPORT_KEY = 'LAST_SUCCESSFUL_REPORT_TIMESTAMP';
+
+export const ensureWeeklyReportExists = async () => {
+  const lastReport = await AsyncStorage.getItem(LAST_SUCCESSFUL_REPORT_KEY);
+  const now = dayjs();
+
+  const lastReportDate = lastReport ? dayjs(parseInt(lastReport, 10)) : null;
+
+  // If no report this week, generate it
+  if (!lastReportDate || !lastReportDate.isSame(now, 'week')) {
+    log('AZUL', 'BACKGROUND_TASK', 'INFO', 'Verificando reporte semanal pendiente...');
+    const pdfUri = await generateWeeklyReport(false);
+
+    if (pdfUri) {
+      await AsyncStorage.setItem(LAST_SUCCESSFUL_REPORT_KEY, now.valueOf().toString());
+
+      // Schedule notification to actually send it
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📄 Reporte Semanal Pendiente',
+          body: 'Toca para enviar tu nómina por correo.',
+          data: { action: 'SHOW_REPORT_PROMPT', pdfUri },
+          sound: true,
+        },
+        trigger: null,
+      });
+      return true;
+    }
+  }
+  return false;
+};
