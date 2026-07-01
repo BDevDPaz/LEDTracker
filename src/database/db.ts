@@ -120,7 +120,7 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       );
 
       INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, language)
-      VALUES (1, 'USER_NAME', 'COMPANY_NAME', 'admin@company.com', 'es');
+      VALUES (1, 'Alex León', 'WTracker Corp', 'nomina@wtracker.app', 'es');
     `);
 
     db = database;

@@ -362,9 +362,9 @@ export default function HomeScreen() {
             <View style={styles.eggDivider} />
             <Text style={styles.eggText}>
               Para uso restringido de{"\n"}
-              <Text style={{ color: '#FFF' }}>USER_NAME</Text>
+              <Text style={{ color: '#FFF' }}>Alex León</Text>
               {"\n"}
-              CEO de COMPANY_NAME
+              CEO de WTracker Corp
             </Text>
             <LuxuryButton
               testID='home-special-card-close'
