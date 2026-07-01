@@ -31,6 +31,7 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
+    "async-lock": "^1.4.1",
     "babel-preset-expo": "~54.0.10",
     "dayjs": "^1.11.21",
     "escape-html": "^1.0.3",
@@ -74,6 +75,7 @@
   },
   "devDependencies": {
     "@testing-library/react-native": "^13.3.3",
+    "@types/async-lock": "^1.4.2",
     "@types/escape-html": "^1.0.4",
     "@types/jest": "^29.5.12",
     "@types/react": "~19.1.0",

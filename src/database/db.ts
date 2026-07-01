@@ -119,6 +119,14 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
         metadata TEXT
       );
 
+      -- Performance indexes
+      CREATE INDEX IF NOT EXISTS idx_sessions_by_date ON work_sessions(date_string, status);
+      CREATE INDEX IF NOT EXISTS idx_sessions_active ON work_sessions(status) WHERE status IN ("active", "pending_arrival");
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_by_session ON audit_logs(session_id, timestamp);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_by_timestamp ON audit_logs(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_logs_by_time ON system_logs(timestamp DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_active_session ON work_sessions(date_string, status) WHERE status IN ("pending_arrival", "active");
+
       INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, language)
       VALUES (1, 'Alex León', 'WTracker Corp', 'nomina@wtracker.app', 'es');
     `);

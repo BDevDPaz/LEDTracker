@@ -5,6 +5,7 @@ import {
   LogCategory,
   LogSeverity,
   SystemLogEntry,
+  LogMetadata,
 } from '../types';
 import dayjs from './dayjsSetup';
 import { emitFeedbackFromLog } from '../feedback/logBridge';
@@ -135,6 +136,25 @@ function getIconByColor(color: LogColor): string {
   };
   return icons[color] || '•';
 }
+
+function levelToColor(level: LogSeverity): LogColor {
+  switch (level) {
+    case 'ERROR': return 'ROJO';
+    case 'WARN': return 'AMARILLO';
+    case 'EVENT': return 'NARANJA';
+    case 'DEBUG': return 'BLANCO';
+    default: return 'AZUL';
+  }
+}
+
+export const logStructured = (
+  level: LogSeverity,
+  category: LogCategory,
+  message: string,
+  metadata?: LogMetadata
+): void => {
+  log(levelToColor(level), category, level, message, metadata);
+};
 
 export const log = (
   color: LogColor,
