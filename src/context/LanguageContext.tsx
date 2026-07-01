@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, memo } from 'react';
 import { ensureDbReady } from '../database/db';
 import { translations } from '../utils/i18n';
 import { Language } from '../types';
@@ -12,7 +12,7 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const LanguageProvider = memo(({ children }: { children: React.ReactNode }) => {
   const [language, setLanguageState] = useState<Language>('es');
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando idioma de la base de datos', e);
       }
     };
-    loadLang();
+    void loadLang();
   }, []);
 
   const setLanguage = async (newLang: Language) => {
@@ -47,7 +47,9 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       {children}
     </LanguageContext.Provider>
   );
-};
+});
+
+LanguageProvider.displayName = 'LanguageProvider';
 
 export const useLanguage = () => {
   const context = useContext(LanguageContext);

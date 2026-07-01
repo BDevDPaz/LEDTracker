@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { memo, useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
@@ -27,7 +27,7 @@ import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { historyEditSchema } from '../../src/utils/validation';
 import { z } from 'zod';
 
-export default function HistoryScreen() {
+function HistoryScreenComponent() {
   const router = useRouter();
   const { showToast, showDialog } = useLuxuryUI();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
@@ -440,3 +440,5 @@ const styles = StyleSheet.create({
   },
   closeBtn: { padding: 5 },
 });
+
+export default memo(HistoryScreenComponent);

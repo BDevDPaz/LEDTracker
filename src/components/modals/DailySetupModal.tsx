@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { View, Text, StyleSheet, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
@@ -15,7 +15,7 @@ interface DailySetupModalProps {
   mode?: 'start' | 'transit';
 }
 
-export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: DailySetupModalProps) => {
+export const DailySetupModal = memo(({ visible, onClose, onStart, mode = 'start' }: DailySetupModalProps) => {
   const { t } = useLanguage();
   const [address, setAddress] = useState('');
   const [client, setClient] = useState('');
@@ -132,7 +132,9 @@ export const DailySetupModal = ({ visible, onClose, onStart, mode = 'start' }: D
       </TouchableWithoutFeedback>
     </GlassModalWrapper>
   );
-};
+});
+
+DailySetupModal.displayName = 'DailySetupModal';
 
 const styles = StyleSheet.create({
   inner: { alignItems: 'center' },
