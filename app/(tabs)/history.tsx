@@ -22,6 +22,7 @@ import { WorkSession } from '../../src/engine/contracts/types';
 import { formatDate, formatTime } from '../../src/utils/dateUtils';
 import { log } from '../../src/utils/logger';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
+import { calculateSessionMinutes, calculatePayFromMinutes } from '../../src/utils/payrollUtils';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { historyEditSchema } from '../../src/utils/validation';
 import { z } from 'zod';
@@ -48,15 +49,28 @@ export default function HistoryScreen() {
       const settings = await getSettings();
       const rate = settings?.hourly_rate || 0;
 
-      let hours = 0;
+      let totalMinutes = 0;
+      let totalEstPay = 0;
+      const otMultiplier = settings?.overtime_multiplier || 1.5;
+
       data.forEach((s: WorkSession) => {
         if (s.start_time && s.end_time) {
-          const diff = (s.end_time - s.start_time) / 3600000;
-          hours += diff;
+          const sessionMinutes = calculateSessionMinutes(
+            s.start_time,
+            s.end_time,
+            s.lunch_taken,
+            s.lunch_start,
+            s.lunch_end
+          );
+          totalMinutes += sessionMinutes;
+
+          const { totalPay } = calculatePayFromMinutes(sessionMinutes, rate, otMultiplier);
+          totalEstPay += totalPay;
         }
       });
-      setTotalHours(hours);
-      setEstEarnings(hours * rate);
+
+      setTotalHours(totalMinutes / 60);
+      setEstEarnings(totalEstPay);
     } catch (_e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando historial', _e);
     }
@@ -206,7 +220,7 @@ export default function HistoryScreen() {
           </View>
         </View>
 
-        <Text style={styles.address}>{item.address}</Text>
+        <Text style={styles.address} numberOfLines={1} ellipsizeMode="tail">{item.address}</Text>
 
         <View style={styles.timeContainer}>
           <Text style={styles.time}>{formatTime(item.start_time)}</Text>

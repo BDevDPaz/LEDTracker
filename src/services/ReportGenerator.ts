@@ -187,7 +187,7 @@ export const generateWeeklyReport = async (
             </div>
             <div class="info-col" style="text-align: right;">
               <div class="info-label">Empresa</div>
-              <div class="info-value">${escapeHtml(settings.employer_name || "COMPANY_NAME")}</div>
+              <div class="info-value">${escapeHtml(settings.employer_name || "WTracker Corp")}</div>
               <div class="info-label">Rango del Reporte</div>
               <div class="info-value">${rangeTitle}</div>
             </div>
