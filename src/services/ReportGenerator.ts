@@ -172,9 +172,13 @@ function buildReportHtml(
         pay: formatCurrency(totalPay),
         status: session.status,
         isGeofenceIn: Boolean(session.actual_start_time),
-        isGeofenceOut: fueAutoCheckout
+        isGeofenceOut: fueAutoCheckout,
+        isManual: Boolean(session.is_manual_edit)
       };
     });
+
+    const reportId = Math.random().toString(36).substr(2, 9).toUpperCase();
+    const integrityHash = dayjs().valueOf().toString(16) + reportId.toLowerCase();
 
     return `
       <html>
@@ -198,7 +202,8 @@ function buildReportHtml(
             th { text-align: left; border-bottom: 2px solid #000; padding: 10px; text-transform: uppercase; font-size: 9px; color: #666; }
             td { border-bottom: 1px solid #eee; padding: 12px 10px; vertical-align: top; }
             .row-active { background-color: #fff8e1; }
-            .client-badge { background: #000; color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; }
+            .client-badge { background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; }
+            .manual-badge { background: #D4AF37; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; margin-left: 5px; }
             .notes { font-style: italic; color: #666; font-size: 10px; display: block; margin-top: 4px; }
             .geo-badge-in { color: #2ecc71; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
             .geo-badge-out { color: #e67e22; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
@@ -207,6 +212,10 @@ function buildReportHtml(
             .audit-title { font-size: 12px; font-weight: bold; color: #000; text-transform: uppercase; margin-bottom: 15px; }
             .log-item { font-size: 9px; color: #555; margin-bottom: 6px; border-left: 2px solid #ddd; padding-left: 10px; }
             .log-alert { border-left-color: #D4AF37; color: #000; background: #fffcf0; padding: 5px 10px; }
+            .signature-section { display: flex; justify-content: space-between; margin-top: 60px; page-break-inside: avoid; }
+            .sig-box { width: 45%; text-align: center; }
+            .sig-line { border-top: 1px solid #333; margin-bottom: 10px; width: 100%; height: 1px; }
+            .sig-label { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; }
             .footer { margin-top: 50px; text-align: center; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
           </style>
         </head>
@@ -261,7 +270,9 @@ function buildReportHtml(
                     ${row.lunch === 'Sí' ? '<br><span class="lunch-badge">Lunch: -1h</span>' : ''}
                   </td>
                   <td>
-                    ${row.client !== 'General' ? `<span class="client-badge">${row.client}</span><br>` : ''}
+                    ${row.client !== 'General' ? `<span class="client-badge">${row.client}</span>` : ''}
+                    ${row.isManual ? '<span class="manual-badge">Editado</span>' : ''}
+                    <br>
                     ${row.address}
                     ${row.notes ? `<span class="notes">"${row.notes}"</span>` : ''}
                   </td>
@@ -276,6 +287,18 @@ function buildReportHtml(
               `).join('')}
             </tbody>
           </table>
+
+          <div class="signature-section">
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-label">Firma del Empleado</div>
+            </div>
+            <div class="sig-box">
+              <div class="sig-line"></div>
+              <div class="sig-label">Firma del Empleador</div>
+            </div>
+          </div>
+
           <div class="audit-section">
             <div class="audit-title">Registro de Eventos Críticos (GPS & Sistema)</div>
             ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' :
@@ -286,6 +309,8 @@ function buildReportHtml(
               `).join('')}
           </div>
           <div class="footer">
+            ID de Reporte: ${reportId}<br>
+            Integridad: ${integrityHash}<br>
             Documento generado electrónicamente por WTracker App.<br>
             Certificado digitalmente: ${dayjs().format('YYYY-MM-DD HH:mm:ss Z')}
           </div>
