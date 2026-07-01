@@ -1,5 +1,3 @@
----
-
 # 📊 INVENTARIO EXHAUSTIVO DE SISTEMAS - LEDTracker
 ## Análisis Completo del Repositorio
 

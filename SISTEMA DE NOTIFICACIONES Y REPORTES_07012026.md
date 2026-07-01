@@ -1,5 +1,3 @@
----
-
 # 📬 ANÁLISIS EXHAUSTIVO DEL SISTEMA DE NOTIFICACIONES Y REPORTES
 ## LEDTracker - WTracker Auto-Check In/Out System
 

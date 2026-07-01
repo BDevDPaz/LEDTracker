@@ -1,5 +1,3 @@
----
-
 # 💰 ANÁLISIS EXHAUSTIVO DEL SISTEMA DE CÁLCULO DE NÓMINA E INFORMES
 ## LEDTracker - WTracker Auto-Check In/Out System
 

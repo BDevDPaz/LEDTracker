@@ -1,5 +1,3 @@
----
-
 # 📊 ANÁLISIS EXHAUSTIVO DEL SISTEMA DE GEOLOCALIZACIÓN Y GEOFENCING
 ## LEDTracker - WTracker Auto-Check In/Out System
 
