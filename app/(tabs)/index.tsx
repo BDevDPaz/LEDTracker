@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,7 @@ import { getHistory, getSettings } from '../../src/database/db';
 import { calculateSessionMinutes } from '../../src/utils/payrollUtils';
 import dayjs from '../../src/utils/dayjsSetup';
 
-export default function HomeScreen() {
+function HomeScreenComponent() {
   const { t } = useLanguage();
   const { showToast } = useLuxuryUI();
   const router = useRouter();
@@ -495,3 +495,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+
+export default memo(HomeScreenComponent);

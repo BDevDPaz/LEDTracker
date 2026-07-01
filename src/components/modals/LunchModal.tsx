@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../context/LanguageContext';
@@ -8,13 +8,13 @@ import { log } from '../../utils/logger';
 import { lunchSchema } from '../../utils/validation';
 import { z } from 'zod';
 
-interface Props {
+interface LunchModalProps {
     visible: boolean;
     onConfirm: (minutes: number) => void;
     onCancel: () => void;
 }
 
-export function LunchModal({ visible, onConfirm, onCancel }: Props) {
+const LunchModalComponent = ({ visible, onConfirm, onCancel }: LunchModalProps) => {
   const { t } = useLanguage();
   const [durationStr, setDurationStr] = useState('60');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -77,6 +77,9 @@ export function LunchModal({ visible, onConfirm, onCancel }: Props) {
     </GlassModalWrapper>
   );
 }
+
+export const LunchModal = memo(LunchModalComponent);
+LunchModal.displayName = 'LunchModal';
 
 const styles = StyleSheet.create({
   iconHeader: { marginBottom: 16, padding: 10, backgroundColor: 'rgba(212,175,55,0.1)', borderRadius: 50 },

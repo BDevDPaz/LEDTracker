@@ -26,12 +26,8 @@ let isTaskRunning = false;
 
 TaskManager.defineTask(TASK_NAME, async () => {
   if (isTaskRunning) {
-    log(
-      'BLANCO',
-      'SIN_CAMBIOS',
-      'DEBUG',
-      'Mutex bloqueado: Tarea omitida por ejecución concurrente.'
-    );
+    log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Mutex bloqueado: Tarea omitida por ejecución concurrente.');
+    log('BLANCO', 'SIN_CAMBIOS', 'EVENT', 'MUTEX_SKIPPED');
     return BackgroundTask.BackgroundTaskResult.Success;
   }
 

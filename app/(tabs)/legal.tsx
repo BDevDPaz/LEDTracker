@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,7 +7,7 @@ import * as Notifications from 'expo-notifications';
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton } from '../../src/components/ui/LuxuryUI';
 
-export default function LegalScreen() {
+function LegalScreenComponent() {
   const router = useRouter();
   const [gpsStatus, setGpsStatus] = useState('Checking...');
   const [notifStatus, setNotifStatus] = useState('Checking...');
@@ -122,3 +122,5 @@ const styles = StyleSheet.create({
   bodyText: { fontFamily: 'Montserrat_400Regular', color: '#AAA', fontSize: 14, lineHeight: 22, marginBottom: 8 },
   legalText: { fontFamily: 'Montserrat_400Regular', color: '#666', fontSize: 12, lineHeight: 18, fontStyle: 'italic' }
 });
+
+export default memo(LegalScreenComponent);

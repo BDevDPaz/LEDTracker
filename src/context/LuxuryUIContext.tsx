@@ -1,5 +1,3 @@
-// --- src/context/LuxuryUIContext.tsx ---
-import dayjs from 'dayjs';
 import React, {
   createContext,
   useContext,
@@ -7,67 +5,72 @@ import React, {
   useCallback,
   useRef,
   useEffect,
-  type ReactNode,
+  ReactNode,
+  memo
 } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+
+} from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import dayjs from 'dayjs';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { COLORS } from '../constants/theme';
 
-// ======================================================
-// TIPOS
-// ======================================================
+// --- TIPOS ---
 
 export type ToastType = 'success' | 'error' | 'info';
 
-export interface DialogOptions {
-  title: string;
-  message: string;
-  confirmText?: string;
-  cancelText?: string;
-  isDestructive?: boolean;
-  onConfirm: () => void;
-  onCancel?: () => void;
-}
-
-interface ToastItem {
+export interface ToastItem {
   id: string;
   msg: string;
   type: ToastType;
   durationMs: number;
 }
 
-interface LuxuryContextProps {
+export interface DialogOptions {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  isDestructive?: boolean;
+}
+
+interface LuxuryUIContextType {
   showToast: (msg: string, type?: ToastType) => void;
   showDialog: (options: DialogOptions) => void;
-
-  // Controles de Reporte
   isWeeklyReportVisible: boolean;
   openWeeklyReport: () => void;
   closeWeeklyReport: () => void;
 }
 
-const LuxuryUIContext = createContext<LuxuryContextProps | undefined>(undefined);
+// --- CONFIGURACIÓN ---
 
-// ======================================================
-// CONFIG PRO MAX
-// ======================================================
+const DEFAULT_TOAST_DURATION_MS = 3000;
+const MAX_TOAST_QUEUE_SIZE = 3;
+const TOAST_DUPLICATE_WINDOW_MS = 2000;
+const DIALOG_DUPLICATE_WINDOW_MS = 1000;
 
-const DEFAULT_TOAST_DURATION_MS = 2800;
-const TOAST_DUPLICATE_WINDOW_MS = 1800;
-const DIALOG_DUPLICATE_WINDOW_MS = 2500;
-const MAX_TOAST_QUEUE_SIZE = 5;
+// --- CONTEXTO ---
 
-function createToastKey(msg: string, type: ToastType) {
-  return `${type}:${msg.trim()}`;
+const LuxuryUIContext = createContext<LuxuryUIContextType | undefined>(undefined);
+
+function createToastKey(msg: string, type: string) {
+  return `${type}::${msg.trim().toLowerCase()}`;
 }
 
 function createDialogKey(options: DialogOptions) {
   return `${options.title.trim()}::${options.message.trim()}`;
 }
 
-export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
+export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => {
   // -------------------------
   // Estado visible
   // -------------------------
@@ -349,7 +352,9 @@ export const LuxuryUIProvider = ({ children }: { children: ReactNode }) => {
       </Modal>
     </LuxuryUIContext.Provider>
   );
-};
+});
+
+LuxuryUIProvider.displayName = 'LuxuryUIProvider';
 
 export const useLuxuryUI = () => {
   const context = useContext(LuxuryUIContext);
@@ -456,4 +461,3 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_700Bold',
   },
 });
-

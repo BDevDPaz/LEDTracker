@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -13,7 +13,7 @@ import { log } from '../../src/utils/logger';
 
 const ADMIN_KEY = '777';
 
-export default function SettingsScreen() {
+function SettingsScreenComponent() {
   const router = useRouter();
   const { showToast } = useLuxuryUI();
   const { t, language, setLanguage } = useLanguage();
@@ -313,3 +313,5 @@ const styles = StyleSheet.create({
   lockBtn: { alignItems: 'center', padding: 15, marginTop: 10 },
   lockBtnText: { fontFamily: 'Montserrat_700Bold', color: '#444', fontSize: 10, letterSpacing: 1 }
 });
+
+export default memo(SettingsScreenComponent);
