@@ -15,6 +15,7 @@ import { LanguageProvider } from '../src/context/LanguageContext';
 import { LuxuryUIProvider } from '../src/context/LuxuryUIContext';
 import { useLogFeedback } from '../src/feedback/useLogFeedback';
 import { initDatabase } from '../src/database/db';
+import dayjs from '../src/utils/dayjsSetup';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -57,7 +58,7 @@ export default function RootLayout() {
       if (nextAppState === 'active') {
         try {
           const lastCheck = await AsyncStorage.getItem(LAST_FAILSAFE_CHECK_KEY);
-          const now = Date.now();
+          const now = dayjs().valueOf();
           const lastCheckTime = lastCheck ? parseInt(lastCheck, 10) : 0;
           if (now - lastCheckTime > 60 * 60 * 1000) {
             log('AZUL', 'ESTADO_SISTEMA', 'DEBUG', 'Ejecutando verificaciones de respaldo (Failsafe + Reportes + Envíos)...');

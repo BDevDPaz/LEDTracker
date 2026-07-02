@@ -1,10 +1,9 @@
-// --- src/services/BackgroundTasks.ts ---
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundTask from 'expo-background-task';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AsyncLock from 'async-lock';
-import { log } from '../utils/logger';
+import { log, logStructured } from '../utils/logger';
 import { ensureDbReady, insertAuditLog, updateSessionEndTime } from '../database/db';
 import { WorkSession } from '../types';
 import { generateWeeklyReport, checkAndDeliverPendingReports } from './ReportGenerator';
@@ -47,36 +46,41 @@ export const runFailsafeCheck = async () => {
 
 TaskManager.defineTask(TASK_NAME, async () => {
   return await bgLock.acquire('bg-database-work', async () => {
-    log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Tarea iniciada por el sistema...');
-    let newDataProcessed = false;
+    logStructured('DEBUG', 'ESTADO_SISTEMA', 'MUTEX_LOCK: bg-database-work');
     try {
-      await checkAndDeliverPendingReports();
-      const failsafeProcessed = await runFailsafeCheck();
-      if (failsafeProcessed) newDataProcessed = true;
+      log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Tarea iniciada por el sistema...');
+      let newDataProcessed = false;
       try {
-        const currentDate = dayjs();
-        const day = currentDate.day();
-        const isReportWindow = (day === 0 && currentDate.hour() >= 20) || day === 1 || day === 2;
-        if (isReportWindow) {
-          const targetWeek = day === 0 ? currentDate : currentDate.subtract(1, 'week');
-          const startTs = targetWeek.startOf('isoWeek').valueOf();
-          const endTs = targetWeek.endOf('isoWeek').valueOf();
-          const currentWeekId = targetWeek.startOf('isoWeek').format('YYYY-MM-DD');
-          const lastReported = await AsyncStorage.getItem(REPORT_STORAGE_KEY);
-          if (lastReported !== currentWeekId) {
-            const pdfUri = await generateWeeklyReport(false, { start: startTs, end: endTs });
-            if (pdfUri) {
-              await Notifications.scheduleNotificationAsync({ content: { title: '📄 Reporte Semanal Listo', body: 'Toca para revisar y enviar tu nómina.', data: { action: 'GENERATE_REPORT_PROMPT' }, sound: true }, trigger: null });
-              await AsyncStorage.setItem(REPORT_STORAGE_KEY, currentWeekId);
-              newDataProcessed = true;
+        await checkAndDeliverPendingReports();
+        const failsafeProcessed = await runFailsafeCheck();
+        if (failsafeProcessed) newDataProcessed = true;
+        try {
+          const currentDate = dayjs();
+          const day = currentDate.day();
+          const isReportWindow = (day === 0 && currentDate.hour() >= 20) || day === 1 || day === 2;
+          if (isReportWindow) {
+            const targetWeek = day === 0 ? currentDate : currentDate.subtract(1, 'week');
+            const startTs = targetWeek.startOf('isoWeek').valueOf();
+            const endTs = targetWeek.endOf('isoWeek').valueOf();
+            const currentWeekId = targetWeek.startOf('isoWeek').format('YYYY-MM-DD');
+            const lastReported = await AsyncStorage.getItem(REPORT_STORAGE_KEY);
+            if (lastReported !== currentWeekId) {
+              const pdfUri = await generateWeeklyReport(false, { start: startTs, end: endTs });
+              if (pdfUri) {
+                await Notifications.scheduleNotificationAsync({ content: { title: '📄 Reporte Semanal Listo', body: 'Toca para revisar y enviar tu nómina.', data: { action: 'GENERATE_REPORT_PROMPT' }, sound: true }, trigger: null });
+                await AsyncStorage.setItem(REPORT_STORAGE_KEY, currentWeekId);
+                newDataProcessed = true;
+              }
             }
           }
-        }
-      } catch (reportError) { log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error en Reporte', reportError); }
-      if (newDataProcessed) { log('BLANCO', 'BACKGROUND_TASK', 'INFO', 'Tarea completada con trabajo útil.'); }
-      else { log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Tarea completada sin cambios.'); }
-      return BackgroundTask.BackgroundTaskResult.Success;
-    } catch (criticalError) { log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error Crítico General en BackgroundTasks', criticalError); return BackgroundTask.BackgroundTaskResult.Failed; }
+        } catch (reportError) { log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error en Reporte', reportError); }
+        if (newDataProcessed) { log('BLANCO', 'BACKGROUND_TASK', 'INFO', 'Tarea completada con trabajo útil.'); }
+        else { log('BLANCO', 'SIN_CAMBIOS', 'DEBUG', 'Tarea completada sin cambios.'); }
+        return BackgroundTask.BackgroundTaskResult.Success;
+      } catch (criticalError) { log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error Crítico General en BackgroundTasks', criticalError); return BackgroundTask.BackgroundTaskResult.Failed; }
+    } finally {
+      logStructured('DEBUG', 'ESTADO_SISTEMA', 'MUTEX_UNLOCK: bg-database-work');
+    }
   });
 });
 
