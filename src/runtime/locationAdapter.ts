@@ -6,6 +6,7 @@ export interface LocationCoordinates {
   latitude: number;
   longitude: number;
   accuracy?: number | null;
+  speed?: number | null;
 }
 
 export const locationAdapter = {
@@ -23,6 +24,7 @@ export const locationAdapter = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
+        speed: position.coords.speed,
       };
     } catch (e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error getting current location', e);

@@ -62,7 +62,7 @@ export default function RootLayout() {
           const lastCheckTime = lastCheck ? parseInt(lastCheck, 10) : 0;
           if (now - lastCheckTime > 60 * 60 * 1000) {
             log('AZUL', 'ESTADO_SISTEMA', 'DEBUG', 'Ejecutando verificaciones de respaldo (Failsafe + Reportes + Envíos)...');
-            await Promise.all([runFailsafeCheck(), ensureWeeklyReportExists(), checkAndDeliverPendingReports()]);
+            await Promise.all([runFailsafeCheck(), ensureWeeklyReportExists(), checkAndDeliverPendingReports(), scheduleDailyMorningNotification()]);
             await AsyncStorage.setItem(LAST_FAILSAFE_CHECK_KEY, now.toString());
           }
         } catch (e) { log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo en verificaciones de respaldo', e); }

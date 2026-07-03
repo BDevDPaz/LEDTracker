@@ -1,16 +1,17 @@
-// --- src/services/ReportGenerator.ts ---
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as MailComposer from 'expo-mail-composer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
-import { getSettings, getAllAsync } from '../database/db';
+
+import { getSettings, getAllAsync, ensureDbReady } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
-import { log, logStructured } from '../utils/logger';
+import { log } from '../utils/logger';
 import dayjs from '../utils/dayjsSetup';
 import { formatDate, formatTime } from '../utils/dateUtils';
-import { calculateSessionDuration, calculatePay } from '../utils/payrollUtils';
+import { calculatePay } from '../utils/payrollUtils';
+import { getReportHtml } from './templates/ReportTemplate';
+import { NotificationDispatcher } from './NotificationDispatcher';
 
 const formatCurrency = (amount: number) => {
   return `$${amount.toFixed(2)}`;
@@ -19,9 +20,6 @@ const formatCurrency = (amount: number) => {
 // ======================================================
 // OPTIMIZATION CONSTANTS (Proposal 2)
 // ======================================================
-
-const SESSIONS_PER_PAGE = 30;
-const AUDIT_LOGS_PER_SECTION = 100;
 
 interface ReportGenerationOptions {
   shouldShare: boolean;
@@ -32,8 +30,6 @@ interface ReportGenerationOptions {
 // ======================================================
 // DELIVERY GUARANTEE TYPES (Proposal 5)
 // ======================================================
-
-const PENDING_REPORTS_KEY = 'PENDING_REPORTS_DELIVERY';
 
 export interface PendingReportRecord {
   weekId: string;
@@ -59,94 +55,41 @@ export const generateWeeklyReportOptimized = async (
 ): Promise<string | null> => {
   try {
     const settings = await getSettings();
+    if (!settings) throw new Error('No settings found');
 
-    if (!settings) {
-      log('ROJO', 'ERROR_CRITICO', 'ERROR', 'No se encontró la configuración (Settings) al generar reporte');
+    const now = dayjs();
+    const startRange = options.customRange?.start ?? now.startOf('isoWeek').valueOf();
+    const endRange = options.customRange?.end ?? now.endOf('isoWeek').valueOf();
+    const rangeTitle = `${formatDate(startRange)} - ${formatDate(endRange)}`;
+
+    const sessions = await getAllAsync<WorkSession>(
+      "SELECT * FROM work_sessions WHERE start_time >= ? AND start_time <= ? AND status != 'deleted' ORDER BY start_time ASC",
+      [startRange, endRange]
+    );
+
+    if (sessions.length === 0) {
+      log('AMARILLO', 'ADVERTENCIA', 'WARN', 'No hay sesiones para el reporte semanal.');
       return null;
     }
 
-    let startTs: number;
-    let endTs: number;
-    let rangeTitle = '';
-
-    if (options.customRange) {
-      startTs = options.customRange.start;
-      endTs = options.customRange.end;
-      rangeTitle = `${formatDate(startTs)} - ${formatDate(endTs)}`;
-    } else {
-      const start = dayjs().startOf('week');
-      const end = dayjs().endOf('week');
-      startTs = start.valueOf();
-      endTs = end.valueOf();
-      rangeTitle = 'Semana Actual';
-    }
-
-    // Query with LIMIT to prevent memory spike
-    const sessions = await getAllAsync<WorkSession>(
-      `SELECT * FROM work_sessions
-       WHERE start_time >= ? AND start_time <= ?
-       ORDER BY start_time ASC
-       LIMIT ${SESSIONS_PER_PAGE * 5}`,
-      [startTs, endTs]
-    );
-
+    const sessionIds = sessions.map(s => s.id!);
     const logs = await getAllAsync<AuditLog>(
-      `SELECT * FROM audit_logs
-       WHERE timestamp >= ? AND timestamp <= ?
-       ORDER BY timestamp DESC
-       LIMIT ${AUDIT_LOGS_PER_SECTION * 3}`,
-      [startTs, endTs]
+      `SELECT * FROM audit_logs WHERE session_id IN (${sessionIds.join(',')}) OR (session_id IS NULL AND timestamp >= ? AND timestamp <= ?) ORDER BY timestamp ASC`,
+      [startRange, endRange]
     );
 
-    if (sessions.length > SESSIONS_PER_PAGE * 2) {
-      logStructured('WARN', 'ADVERTENCIA',
-        `Large report detected (${sessions.length} sessions). Esto puede tomar más tiempo.`
-      );
-    }
+    const autoCheckoutLogs = await getAllAsync<any>(
+      `SELECT session_id FROM audit_logs WHERE action_type = 'AUTO_CHECKOUT_GPS' AND session_id IN (${sessionIds.join(',')})`
+    );
+    const autoCheckoutSessionIds = new Set(autoCheckoutLogs.map(l => l.session_id));
 
-    const html = buildReportHtml(sessions, logs, settings, rangeTitle);
-    const { uri } = await Print.printToFileAsync({ html, base64: false });
-
-    if (options.shouldShare) {
-      log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Reporte PDF generado y listo para compartir');
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-    }
-
-    return uri;
-  } catch (error) {
-    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Fallo al generar el reporte PDF semanal', error);
-    return null;
-  }
-};
-
-function buildReportHtml(
-  sessions: WorkSession[],
-  logs: AuditLog[],
-  settings: AppSettings,
-  rangeTitle: string
-): string {
     let totalHours = 0;
     let totalOvertime = 0;
     let totalEarnings = 0;
 
-    const autoCheckoutSessionIds = new Set(
-      logs
-        .filter((l: AuditLog) => l.action_type.includes('AUTO_CHECKOUT') && l.session_id)
-        .map((l: AuditLog) => l.session_id)
-    );
-
-    const rows = sessions.map((session: WorkSession) => {
+    const rows = sessions.map(session => {
       const startTime = session.actual_start_time || session.start_time;
-      const endTime = session.end_time || dayjs().valueOf();
-
-      const durationMs = calculateSessionDuration(
-        startTime,
-        endTime,
-        session.lunch_taken || 0,
-        session.lunch_start,
-        session.lunch_end
-      );
-
+      const durationMs = (session.end_time || now.valueOf()) - startTime;
       const hours = durationMs / (1000 * 60 * 60);
       const { totalPay, overtimeHours } = calculatePay(
         hours,
@@ -180,144 +123,32 @@ function buildReportHtml(
     const reportId = Math.random().toString(36).substr(2, 9).toUpperCase();
     const integrityHash = dayjs().valueOf().toString(16) + reportId.toLowerCase();
 
-    return `
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-          <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #333; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #D4AF37; padding-bottom: 15px; }
-            .title { font-size: 26px; font-weight: 800; color: #000; letter-spacing: 2px; text-transform: uppercase; }
-            .subtitle { font-size: 11px; color: #D4AF37; text-transform: uppercase; margin-top: 5px; letter-spacing: 1px; }
-            .info-grid { display: flex; justify-content: space-between; margin-bottom: 30px; background: #f8f8f8; padding: 15px; border-radius: 8px; }
-            .info-col { width: 48%; }
-            .info-label { font-size: 9px; color: #999; text-transform: uppercase; font-weight: bold; margin-bottom: 2px; }
-            .info-value { font-size: 13px; color: #000; font-weight: 600; margin-bottom: 10px; }
-            .stats-box { display: flex; justify-content: space-between; margin-bottom: 30px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
-            .stat-item { flex: 1; text-align: center; padding: 15px; border-right: 1px solid #eee; }
-            .stat-item:last-child { border-right: none; background: #fffcf2; }
-            .stat-num { font-size: 22px; font-weight: bold; color: #000; }
-            .stat-desc { font-size: 9px; color: #666; text-transform: uppercase; margin-top: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 11px; }
-            th { text-align: left; border-bottom: 2px solid #000; padding: 10px; text-transform: uppercase; font-size: 9px; color: #666; }
-            td { border-bottom: 1px solid #eee; padding: 12px 10px; vertical-align: top; }
-            .row-active { background-color: #fff8e1; }
-            .client-badge { background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; }
-            .manual-badge { background: #D4AF37; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; margin-left: 5px; }
-            .notes { font-style: italic; color: #666; font-size: 10px; display: block; margin-top: 4px; }
-            .geo-badge-in { color: #2ecc71; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
-            .geo-badge-out { color: #e67e22; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
-            .lunch-badge { color: #e67e22; font-size: 9px; }
-            .audit-section { margin-top: 20px; border-top: 3px solid #eee; padding-top: 20px; page-break-inside: avoid; }
-            .audit-title { font-size: 12px; font-weight: bold; color: #000; text-transform: uppercase; margin-bottom: 15px; }
-            .log-item { font-size: 9px; color: #555; margin-bottom: 6px; border-left: 2px solid #ddd; padding-left: 10px; }
-            .log-alert { border-left-color: #D4AF37; color: #000; background: #fffcf0; padding: 5px 10px; }
-            .signature-section { display: flex; justify-content: space-between; margin-top: 60px; page-break-inside: avoid; }
-            .sig-box { width: 45%; text-align: center; }
-            .sig-line { border-top: 1px solid #333; margin-bottom: 10px; width: 100%; height: 1px; }
-            .sig-label { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; }
-            .footer { margin-top: 50px; text-align: center; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="title">WTracker</div>
-            <div class="subtitle">Reporte Oficial de Nómina y Auditoría</div>
-          </div>
-          <div class="info-grid">
-            <div class="info-col">
-              <div class="info-label">Empleado</div>
-              <div class="info-value">${escapeHtml(settings.employee_name || 'No especificado')}</div>
-              <div class="info-label">ID Sistema</div>
-              <div class="info-value">EMP-#${settings.id.toString().padStart(4, '0')}</div>
-            </div>
-            <div class="info-col" style="text-align: right;">
-              <div class="info-label">Empresa</div>
-              <div class="info-value">${escapeHtml(settings.employer_name || "WTracker Corp")}</div>
-              <div class="info-label">Rango del Reporte</div>
-              <div class="info-value">${rangeTitle}</div>
-            </div>
-          </div>
-          <div class="stats-box">
-            <div class="stat-item">
-              <div class="stat-num">${totalHours.toFixed(2)}</div>
-              <div class="stat-desc">Horas Totales</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-num">${totalOvertime.toFixed(2)}</div>
-              <div class="stat-desc">Horas Extra (OT)</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-num" style="color: #D4AF37;">${formatCurrency(totalEarnings)}</div>
-              <div class="stat-desc">Pago Estimado</div>
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th width="15%">Fecha</th>
-                <th width="40%">Actividad / Cliente</th>
-                <th width="25%">Horario</th>
-                <th width="10%">Hrs</th>
-                <th width="10%">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map(row => `
-                <tr class="${row.status === 'active' ? 'row-active' : ''}">
-                  <td>
-                    <strong>${row.date}</strong>
-                    ${row.lunch === 'Sí' ? '<br><span class="lunch-badge">Lunch: -1h</span>' : ''}
-                  </td>
-                  <td>
-                    ${row.client !== 'General' ? `<span class="client-badge">${row.client}</span>` : ''}
-                    ${row.isManual ? '<span class="manual-badge">Editado</span>' : ''}
-                    <br>
-                    ${row.address}
-                    ${row.notes ? `<span class="notes">"${row.notes}"</span>` : ''}
-                  </td>
-                  <td>
-                    ${row.start} - ${row.end}
-                    ${row.isGeofenceIn ? '<span class="geo-badge-in">✓ Auto Check-in (GPS)</span>' : ''}
-                    ${row.isGeofenceOut ? '<span class="geo-badge-out">⚠ Auto Check-out (GPS)</span>' : ''}
-                  </td>
-                  <td><strong>${row.total}</strong></td>
-                  <td>${row.pay}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+    const html = getReportHtml(
+      settings,
+      rows,
+      logs,
+      rangeTitle,
+      totalHours,
+      totalOvertime,
+      totalEarnings,
+      formatCurrency,
+      formatTime,
+      reportId,
+      integrityHash
+    );
 
-          <div class="signature-section">
-            <div class="sig-box">
-              <div class="sig-line"></div>
-              <div class="sig-label">Firma del Empleado</div>
-            </div>
-            <div class="sig-box">
-              <div class="sig-line"></div>
-              <div class="sig-label">Firma del Empleador</div>
-            </div>
-          </div>
+    const { uri } = await Print.printToFileAsync({ html, base64: false });
 
-          <div class="audit-section">
-            <div class="audit-title">Registro de Eventos Críticos (GPS & Sistema)</div>
-            ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' :
-               logs.map(auditLog => `
-                <div class="log-item ${auditLog.action_type.includes('AUTO') || auditLog.action_type.includes('EXIT') ? 'log-alert' : ''}">
-                  <strong>${formatTime(auditLog.timestamp)}</strong> — <span style="font-weight:bold">[${auditLog.action_type}]</span> ${escapeHtml(auditLog.details)}
-                </div>
-              `).join('')}
-          </div>
-          <div class="footer">
-            ID de Reporte: ${reportId}<br>
-            Integridad: ${integrityHash}<br>
-            Documento generado electrónicamente por WTracker App.<br>
-            Certificado digitalmente: ${dayjs().format('YYYY-MM-DD HH:mm:ss Z')}
-          </div>
-        </body>
-      </html>
-    `;
-}
+    if (options.shouldShare) {
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    }
+
+    return uri;
+  } catch (error) {
+    log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error generando reporte optimizado', error);
+    return null;
+  }
+};
 
 // ======================================================
 // DELIVERY GUARANTEE (Proposal 5)
@@ -349,12 +180,13 @@ export const sendReportByEmail = async (pdfUri: string, settings: AppSettings, w
 
 export const checkAndDeliverPendingReports = async () => {
   try {
-    const pending = await AsyncStorage.getItem(PENDING_REPORTS_KEY);
-    if (!pending) return;
+    const db = await ensureDbReady();
+    const reports: PendingReportRecord[] = await db.getAllAsync<any>(
+      "SELECT week_id as weekId, pdf_uri as pdfUri, created_at as createdAt, attempt_count as attemptCount, last_attempt_at as lastAttemptAt FROM report_queue WHERE status = 'pending'"
+    );
+    if (reports.length === 0) return;
 
-    const reports: PendingReportRecord[] = JSON.parse(pending);
     const now = dayjs().valueOf();
-    const updated: PendingReportRecord[] = [];
 
     for (const report of reports) {
       const age = now - report.createdAt;
@@ -369,20 +201,16 @@ export const checkAndDeliverPendingReports = async () => {
           if (settings) {
             log('AZUL', 'BACKGROUND_TASK', 'INFO', `Reintentando envío de reporte pendiente para ${report.weekId}...`);
             await sendReportByEmail(report.pdfUri, settings, report.weekId);
-            report.attemptCount++;
-            report.lastAttemptAt = now;
-            updated.push(report);
-          }
-        } else {
-          updated.push(report);
-        }
-      }
-    }
 
-    if (updated.length > 0) {
-      await AsyncStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(updated));
-    } else {
-      await AsyncStorage.removeItem(PENDING_REPORTS_KEY);
+            await db.runAsync(
+              "UPDATE report_queue SET attempt_count = attempt_count + 1, last_attempt_at = ? WHERE week_id = ?",
+              [now, report.weekId]
+            );
+          }
+        }
+      } else {
+        await db.runAsync("UPDATE report_queue SET status = 'failed' WHERE week_id = ?", [report.weekId]);
+      }
     }
   } catch (error) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Pending reports check failed', error);
@@ -391,20 +219,12 @@ export const checkAndDeliverPendingReports = async () => {
 
 export const trackPendingReport = async (weekId: string, pdfUri: string) => {
   try {
-    const pending = await AsyncStorage.getItem(PENDING_REPORTS_KEY);
-    const reports: PendingReportRecord[] = pending ? JSON.parse(pending) : [];
-
-    const exists = reports.some(r => r.weekId === weekId);
-    if (!exists) {
-      reports.push({
-        weekId,
-        pdfUri,
-        createdAt: dayjs().valueOf(),
-        attemptCount: 0
-      });
-      await AsyncStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(reports));
-      log('AZUL', 'ESTADO_SISTEMA', 'DEBUG', `Reporte trackeado como pendiente: ${weekId}`);
-    }
+    const db = await ensureDbReady();
+    await db.runAsync(
+      "INSERT OR IGNORE INTO report_queue (week_id, pdf_uri, created_at) VALUES (?, ?, ?)",
+      [weekId, pdfUri, dayjs().valueOf()]
+    );
+    log('AZUL', 'ESTADO_SISTEMA', 'DEBUG', `Reporte trackeado como pendiente en SQLite: ${weekId}`);
   } catch (error) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Failed to track pending report', error);
   }
@@ -412,15 +232,9 @@ export const trackPendingReport = async (weekId: string, pdfUri: string) => {
 
 const removePendingReport = async (weekId: string) => {
   try {
-    const pending = await AsyncStorage.getItem(PENDING_REPORTS_KEY);
-    if (!pending) return;
-    const reports: PendingReportRecord[] = JSON.parse(pending);
-    const filtered = reports.filter(r => r.weekId !== weekId);
-    if (filtered.length > 0) {
-      await AsyncStorage.setItem(PENDING_REPORTS_KEY, JSON.stringify(filtered));
-    } else {
-      await AsyncStorage.removeItem(PENDING_REPORTS_KEY);
-    }
+    const db = await ensureDbReady();
+    await db.runAsync("UPDATE report_queue SET status = 'sent' WHERE week_id = ?", [weekId]);
+    log('VERDE', 'OPERACION_EXITOSA', 'INFO', `Reporte marcado como enviado: ${weekId}`);
   } catch (error) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Failed to remove pending report', error);
   }
@@ -442,14 +256,9 @@ export const ensureWeeklyReportExists = async () => {
       await trackPendingReport(currentWeekId, pdfUri);
       await AsyncStorage.setItem(LAST_SUCCESSFUL_REPORT_KEY, now.valueOf().toString());
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '📄 Reporte Semanal Pendiente',
-          body: 'Toca para enviar tu nómina por correo.',
-          data: { action: 'SHOW_REPORT_PROMPT', pdfUri, weekId: currentWeekId },
-          sound: true,
-        },
-        trigger: null,
+      await NotificationDispatcher.dispatch('ON_PENDING_REPORT_REMINDER', {
+        customBody: 'Toca para enviar tu nómina por correo.',
+        data: { action: 'SHOW_REPORT_PROMPT', pdfUri, weekId: currentWeekId }
       });
       return true;
     }

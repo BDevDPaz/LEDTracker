@@ -46,8 +46,20 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: { data: any, error
     return;
   }
 
-  if (currentPos.accuracy && currentPos.accuracy > MIN_ACCURACY_METERS) {
-    logStructured('WARN', 'GPS_DEBIL', `GPS accuracy ${currentPos.accuracy}m > ${MIN_ACCURACY_METERS}m, ignoring event`, {
+
+  // ✅ NEW: Dynamic GPS accuracy threshold based on speed (Proposal 9.1)
+  // Higher speeds require more relaxed accuracy to capture points quickly.
+  let dynamicAccuracy = MIN_ACCURACY_METERS;
+  const speed = currentPos.speed ?? 0;
+
+  if (speed > 10) { // > 36 km/h
+    dynamicAccuracy = 100;
+  } else if (speed > 5) { // > 18 km/h
+    dynamicAccuracy = 75;
+  }
+
+  if (currentPos.accuracy && currentPos.accuracy > dynamicAccuracy) {
+    logStructured('WARN', 'GPS_DEBIL', `GPS accuracy ${currentPos.accuracy}m > ${dynamicAccuracy}m (Speed: ${Math.round(speed*3.6)}km/h), ignoring event`, {
       geoAccuracy: currentPos.accuracy ?? undefined,
       sessionId: parseInt(siteId, 10)
     });
