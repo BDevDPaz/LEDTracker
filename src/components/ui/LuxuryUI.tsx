@@ -37,7 +37,7 @@ export const GlassModalWrapper = ({ visible, children }: { visible: boolean, chi
 
 // --- EMPTY STATE ---
 export const LuxuryEmptyState = memo(({ text, icon = "file-tray-outline" }: { text: string, icon?: any }) => (
-  <View style={styles.emptyContainer}>
+  <View style={styles.emptyContainer} accessible={true} accessibilityRole="text" accessibilityLabel={text}>
     <View style={styles.emptyIconBubble}>
       <Ionicons name={icon} size={32} color={COLORS.textSecondary} />
     </View>
