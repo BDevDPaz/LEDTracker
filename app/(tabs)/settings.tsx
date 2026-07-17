@@ -11,7 +11,7 @@ import { getSettings, saveSettings } from '../../src/database/db';
 import { scheduleDailyMorningNotification } from '../../src/services/Notifications';
 import { log } from '../../src/utils/logger';
 
-const ADMIN_KEY = '777';
+const ADMIN_KEY = process.env.EXPO_PUBLIC_ADMIN_PIN;
 
 function SettingsScreenComponent() {
   const router = useRouter();
@@ -73,7 +73,7 @@ function SettingsScreenComponent() {
   };
 
   const unlockAdmin = () => {
-    if (pinInput === ADMIN_KEY) {
+    if (ADMIN_KEY && pinInput === ADMIN_KEY) {
       log('AZUL', 'PERMISOS_CONCEDIDOS', 'INFO', 'Zona administrativa desbloqueada correctamente');
       setIsAdmin(true);
       setShowAccess(false);
