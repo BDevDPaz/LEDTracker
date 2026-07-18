@@ -1,5 +1,5 @@
-// --- src/utils/logger.ts ---
 import * as SQLite from 'expo-sqlite';
+
 import {
   LogColor,
   LogCategory,
@@ -8,7 +8,6 @@ import {
   LogMetadata,
 } from '../types';
 import dayjs from './dayjsSetup';
-import { emitFeedbackFromLog } from '../feedback/logBridge';
 
 // Queue for when DB is not yet ready
 const logQueue: SystemLogEntry[] = [];
@@ -17,11 +16,23 @@ const auditQueue: AuditLogEntry[] = [];
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 let isFlushing = false;
 
+type LogFeedbackSink = (
+  severity: LogSeverity,
+  category: LogCategory,
+  message: string
+) => void;
+
+let logFeedbackSink: LogFeedbackSink | null = null;
+
+export const setLogFeedbackSink = (sink: LogFeedbackSink | null): void => {
+  logFeedbackSink = sink;
+};
+
 // Internal Diagnostic Channel
 const _output = {
   info: console.log.bind(console),
   warn: console.warn.bind(console),
-  error: console.error.bind(console)
+  error: console.error.bind(console),
 };
 
 export const AUDIT_ACTIONS = {
@@ -35,7 +46,7 @@ export const AUDIT_ACTIONS = {
   PAYROLL: 'PAYROLL',
   GEOFENCE_EXIT: 'GEOFENCE_EXIT',
   AUTO_CHECKIN_GPS: 'AUTO_CHECKIN_GPS',
-  AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_GPS'
+  AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_GPS',
 } as const;
 
 export interface AuditLogEntry {
@@ -52,12 +63,14 @@ export const setLoggerDB = (db: SQLite.SQLiteDatabase) => {
 
 const flushQueues = async () => {
   if (!dbInstance || isFlushing) return;
+
   isFlushing = true;
 
   try {
     if (logQueue.length > 0) {
       const toProcess = logQueue.splice(0, logQueue.length);
       const CHUNK_SIZE = 50;
+
       for (let i = 0; i < toProcess.length; i += CHUNK_SIZE) {
         const chunk = toProcess.slice(i, i + CHUNK_SIZE);
         const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
@@ -70,6 +83,7 @@ const flushQueues = async () => {
           entry.mensaje,
           entry.metadata ?? null,
         ]);
+
         await dbInstance.runAsync(
           `INSERT INTO system_logs (timestamp, timestamp_str, color, categoria, severidad, mensaje, metadata) VALUES ${placeholders}`,
           values as any
@@ -80,6 +94,7 @@ const flushQueues = async () => {
     if (auditQueue.length > 0) {
       const toProcess = auditQueue.splice(0, auditQueue.length);
       const CHUNK_SIZE = 100;
+
       for (let i = 0; i < toProcess.length; i += CHUNK_SIZE) {
         const chunk = toProcess.slice(i, i + CHUNK_SIZE);
         const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(', ');
@@ -89,6 +104,7 @@ const flushQueues = async () => {
           entry.details,
           entry.timestamp,
         ]);
+
         await dbInstance.runAsync(
           `INSERT INTO audit_logs (session_id, action_type, details, timestamp) VALUES ${placeholders}`,
           values as any
@@ -120,10 +136,20 @@ export const logAudit = async (entry: AuditLogEntry): Promise<void> => {
 
 function safeSerializeMetadata(metadata: unknown): string | undefined {
   if (metadata === undefined) return undefined;
+
   try {
     if (metadata instanceof Error) {
-      return JSON.stringify({ name: metadata.name, message: metadata.message, stack: metadata.stack }, null, 0);
+      return JSON.stringify(
+        {
+          name: metadata.name,
+          message: metadata.message,
+          stack: metadata.stack,
+        },
+        null,
+        0
+      );
     }
+
     return JSON.stringify(metadata);
   } catch {
     return '[unserializable-metadata]';
@@ -132,18 +158,29 @@ function safeSerializeMetadata(metadata: unknown): string | undefined {
 
 function getIconByColor(color: LogColor): string {
   const icons: Record<LogColor, string> = {
-    'VERDE': '🟢', 'AMARILLO': '🟡', 'NARANJA': '🟠', 'AZUL': '🔵', 'BLANCO': '⚪️', 'ROJO': '🔴'
+    VERDE: '🟢',
+    AMARILLO: '🟡',
+    NARANJA: '🟠',
+    AZUL: '🔵',
+    BLANCO: '⚪️',
+    ROJO: '🔴',
   };
+
   return icons[color] || '•';
 }
 
 function levelToColor(level: LogSeverity): LogColor {
   switch (level) {
-    case 'ERROR': return 'ROJO';
-    case 'WARN': return 'AMARILLO';
-    case 'EVENT': return 'NARANJA';
-    case 'DEBUG': return 'BLANCO';
-    default: return 'AZUL';
+    case 'ERROR':
+      return 'ROJO';
+    case 'WARN':
+      return 'AMARILLO';
+    case 'EVENT':
+      return 'NARANJA';
+    case 'DEBUG':
+      return 'BLANCO';
+    default:
+      return 'AZUL';
   }
 }
 
@@ -164,6 +201,7 @@ export const log = (
   metadata?: unknown
 ): void => {
   const now = dayjs();
+
   const entry: SystemLogEntry = {
     timestamp: now.valueOf(),
     timestamp_str: now.format('YYYY-MM-DDTHH:mm:ss.SSSZ'),
@@ -177,21 +215,42 @@ export const log = (
   const icon = getIconByColor(color);
   const consoleMsg = `[${entry.timestamp_str}] ${icon} [${categoria}] ${mensaje}`;
 
-  if (severidad === 'ERROR') _output.error(consoleMsg, metadata ?? '');
-  else if (severidad === 'WARN') _output.warn(consoleMsg, metadata ?? '');
-  else _output.info(consoleMsg, metadata ?? '');
+  if (severidad === 'ERROR') {
+    _output.error(consoleMsg, metadata ?? '');
+  } else if (severidad === 'WARN') {
+    _output.warn(consoleMsg, metadata ?? '');
+  } else {
+    _output.info(consoleMsg, metadata ?? '');
+  }
 
   if (dbInstance) {
-    dbInstance.runAsync(
-      `INSERT INTO system_logs (timestamp, timestamp_str, color, categoria, severidad, mensaje, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [entry.timestamp, entry.timestamp_str, entry.color, entry.categoria, entry.severidad, entry.mensaje, entry.metadata ?? null]
-    ).catch(e => {
-       _output.error('❌ Error saving system log:', e);
-       logQueue.push(entry);
-    });
+    dbInstance
+      .runAsync(
+        `INSERT INTO system_logs (timestamp, timestamp_str, color, categoria, severidad, mensaje, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.timestamp,
+          entry.timestamp_str,
+          entry.color,
+          entry.categoria,
+          entry.severidad,
+          entry.mensaje,
+          entry.metadata ?? null,
+        ]
+      )
+      .catch((e) => {
+        _output.error('❌ Error saving system log:', e);
+        logQueue.push(entry);
+      });
   } else {
     logQueue.push(entry);
   }
 
-  emitFeedbackFromLog(severidad, categoria, mensaje);
+  if (logFeedbackSink) {
+    try {
+      logFeedbackSink(severidad, categoria, mensaje);
+    } catch (e) {
+      _output.warn('⚠️ Error emitting log feedback:', e);
+    }
+  }
 };
+
