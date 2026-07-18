@@ -46,6 +46,7 @@ app-example
 .env
 .vscode/
 .jules/
+.Jules/
 coverage/
 *.log
 
