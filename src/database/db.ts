@@ -128,6 +128,9 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       CREATE INDEX IF NOT EXISTS idx_system_logs_by_time ON system_logs(timestamp DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_active_session ON work_sessions(date_string, status) WHERE status IN ("pending_arrival", "active");
 
+      -- ⚡ Bolt Optimization: Add index for frequent sorting by start_time DESC
+      CREATE INDEX IF NOT EXISTS idx_sessions_start_time ON work_sessions(start_time DESC);
+
       INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, language)
       VALUES (1, 'Alex León', 'WTracker Corp', 'nomina@wtracker.app', 'es');
     `);
