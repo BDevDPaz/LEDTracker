@@ -277,6 +277,10 @@ function HistoryScreenComponent() {
         contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
         ListEmptyComponent={<LuxuryEmptyState text='No hay actividad reciente' icon='time-outline' />}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       <GlassModalWrapper visible={editModalVisible}>

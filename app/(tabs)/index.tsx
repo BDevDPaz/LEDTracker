@@ -34,7 +34,7 @@ import { formatTime } from '../../src/utils/dateUtils';
 import { DailySetupModal } from '../../src/components/modals/DailySetupModal';
 import { LunchModal } from '../../src/components/modals/LunchModal';
 import { log } from '../../src/utils/logger';
-import { getHistory, getSettings } from '../../src/database/db';
+import { getDailyCompletedSessions, getSettings } from '../../src/database/db';
 import { calculateSessionMinutes } from '../../src/utils/payrollUtils';
 import dayjs from '../../src/utils/dayjsSetup';
 
@@ -72,15 +72,21 @@ function HomeScreenComponent() {
 
   const loadStats = useCallback(async () => {
     try {
-      const history = await getHistory();
-      const settings = await getSettings();
+      const today = dayjs().format('YYYY-MM-DD');
+
+      // ⚡ Bolt Optimization: Fetch only completed sessions for today instead of full history
+      // This prevents loading all history records into memory just to filter them
+      const [dailySessions, settings] = await Promise.all([
+        getDailyCompletedSessions(today),
+        getSettings()
+      ]);
+
       const rate = settings?.hourly_rate || 0;
 
       let totalMinutes = 0;
-      const today = dayjs().format('YYYY-MM-DD');
 
-      history.forEach((s) => {
-        if (s.date_string === today && s.status === 'completed' && s.start_time && s.end_time) {
+      dailySessions.forEach((s) => {
+        if (s.start_time && s.end_time) {
           totalMinutes += calculateSessionMinutes(
             s.start_time,
             s.end_time,

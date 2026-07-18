@@ -1,4 +1,4 @@
-import React, { useEffect, memo } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ViewStyle } from 'react-native';
 import type { StyleProp, DimensionValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,7 +37,7 @@ export const GlassModalWrapper = ({ visible, children }: { visible: boolean, chi
 
 // --- EMPTY STATE ---
 export const LuxuryEmptyState = memo(({ text, icon = "file-tray-outline" }: { text: string, icon?: any }) => (
-  <View style={styles.emptyContainer}>
+  <View style={styles.emptyContainer} accessible={true} accessibilityRole="text" accessibilityLabel={text}>
     <View style={styles.emptyIconBubble}>
       <Ionicons name={icon} size={32} color={COLORS.textSecondary} />
     </View>
@@ -139,22 +139,38 @@ interface LuxuryInputProps {
   [key: string]: any;
 }
 
-export const LuxuryInput = memo(({ label, icon, containerStyle, error, accessibilityLabel, accessibilityHint, ...props }: LuxuryInputProps) => (
-  <View style={[styles.inputGroup, containerStyle]}>
-    {label && <Text style={[styles.inputLabel, error && { color: '#FF3B30' }]}>{label}</Text>}
-    <View style={[styles.inputWrapper, error && { borderColor: '#FF3B30' }]}>
-      {icon && <View style={styles.inputIconWrapper}>{icon}</View>}
-      <TextInput
-        style={styles.input}
-        placeholderTextColor="#444"
-        accessibilityLabel={accessibilityLabel || label}
-        accessibilityHint={accessibilityHint}
-        {...props}
-      />
+export const LuxuryInput = memo(({ label, icon, containerStyle, error, accessibilityLabel, accessibilityHint, ...props }: LuxuryInputProps) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <View style={[styles.inputGroup, containerStyle]}>
+      {label && <Text style={[styles.inputLabel, error && { color: '#FF3B30' }]}>{label}</Text>}
+      <View style={[
+        styles.inputWrapper,
+        isFocused && { borderColor: COLORS.gold, shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 2 },
+        error && { borderColor: '#FF3B30' }
+      ]}>
+        {icon && <View style={styles.inputIconWrapper}>{icon}</View>}
+        <TextInput
+          style={styles.input}
+          placeholderTextColor="#444"
+          accessibilityLabel={accessibilityLabel || label}
+          accessibilityHint={accessibilityHint}
+          {...props}
+          onFocus={(e) => {
+            setIsFocused(true);
+            if (props.onFocus) props.onFocus(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            if (props.onBlur) props.onBlur(e);
+          }}
+        />
+      </View>
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
-    {error && <Text style={styles.errorText}>{error}</Text>}
-  </View>
-));
+  );
+});
 
 const styles = StyleSheet.create({
   cardContainer: { borderRadius: 24, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 20 },
