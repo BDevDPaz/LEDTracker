@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 import { useRouter } from 'expo-router';
@@ -62,9 +63,15 @@ function HistoryScreenComponent() {
             s.lunch_start,
             s.lunch_end
           );
+
           totalMinutes += sessionMinutes;
 
-          const { totalPay } = calculatePayFromMinutes(sessionMinutes, rate, otMultiplier);
+          const { totalPay } = calculatePayFromMinutes(
+            sessionMinutes,
+            rate,
+            otMultiplier
+          );
+
           totalEstPay += totalPay;
         }
       });
@@ -82,39 +89,44 @@ function HistoryScreenComponent() {
 
   const formatTimeInput = (text: string, setter: (val: string) => void) => {
     let clean = text.replace(/[^0-9]/g, '');
+
     if (clean.length >= 3) {
-      clean = clean.substring(0, 2) + ':' + clean.substring(2, 4);
+      clean = `${clean.substring(0, 2)}:${clean.substring(2, 4)}`;
     }
+
     setter(clean);
   };
 
-  const handleDelete = (id: number) => {
-    showDialog({
-      title: 'BORRAR REGISTRO',
-      message: '¿Estás seguro de que deseas eliminar permanentemente esta sesión?',
-      confirmText: 'ELIMINAR',
-      isDestructive: true,
-      onConfirm: async () => {
-        try {
-          await deleteWorkSession(id);
-          log('NARANJA', 'ACCION_DESTRUCTIVA', 'EVENT', `Registro eliminado manualmente ID: ${id}`);
-          showToast('Registro eliminado', 'success');
-          void loadHistory();
-        } catch (_e) {
-          log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', _e);
-        }
-      },
-    });
-  };
+  const handleDelete = useCallback(
+    (id: number) => {
+      showDialog({
+        title: 'BORRAR REGISTRO',
+        message: '¿Estás seguro de que deseas eliminar permanentemente esta sesión?',
+        confirmText: 'ELIMINAR',
+        isDestructive: true,
+        onConfirm: async () => {
+          try {
+            await deleteWorkSession(id);
+            log('NARANJA', 'ACCION_DESTRUCTIVA', 'EVENT', `Registro eliminado manualmente ID: ${id}`);
+            showToast('Registro eliminado', 'success');
+            void loadHistory();
+          } catch (_e) {
+            log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error al borrar registro', _e);
+          }
+        },
+      });
+    },
+    [showDialog, showToast]
+  );
 
-  const openEdit = (item: WorkSession) => {
+  const openEdit = useCallback((item: WorkSession) => {
     setSelectedSession(item);
     setEditNote(item.manual_note || '');
     setEditTimeIn(dayjs(item.start_time).format('HH:mm'));
     setEditTimeOut(item.end_time ? dayjs(item.end_time).format('HH:mm') : '');
     setErrors({});
     setEditModalVisible(true);
-  };
+  }, []);
 
   const saveEdit = async () => {
     if (!selectedSession || !selectedSession.id) return;
@@ -135,9 +147,11 @@ function HistoryScreenComponent() {
         .millisecond(0);
 
       let newEnd = null;
+
       if (validated.timeOut && validated.timeOut.length === 5) {
         const hOut = Number(validated.timeOut.substring(0, 2));
         const mOut = Number(validated.timeOut.substring(3, 5));
+
         newEnd = dayjs(selectedSession.start_time)
           .hour(hOut)
           .minute(mOut)
@@ -175,6 +189,7 @@ function HistoryScreenComponent() {
         'WARN',
         `Registro modificado manualmente ID: ${selectedSession.id}`
       );
+
       setEditModalVisible(false);
       showToast('Cambios guardados', 'success');
       setErrors({});
@@ -182,11 +197,13 @@ function HistoryScreenComponent() {
     } catch (e) {
       if (e instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
+
         e.issues.forEach((err) => {
           if (err.path[0]) {
             fieldErrors[err.path[0] as string] = err.message;
           }
         });
+
         setErrors(fieldErrors);
       } else {
         log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error editando registro', e);
@@ -194,45 +211,59 @@ function HistoryScreenComponent() {
     }
   };
 
-    const renderItem = useCallback(({ item }: { item: WorkSession }) => (
-    <TouchableOpacity
-      testID={`history-record-${item.id}`}
-      accessibilityRole='button'
-      accessibilityLabel='Editar registro'
-      accessibilityHint='Mantén presionado para eliminar el registro'
-      onPress={() => openEdit(item)}
-      onLongPress={() => handleDelete(item.id!)}
-      activeOpacity={0.7}
-    >
-      <LuxuryCard style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.date}>{formatDate(item.start_time)}</Text>
-          <View style={styles.statusBadge}>
-            {item.is_manual_edit === 1 && (
-              <Ionicons name='pencil' size={12} color={COLORS.gold} style={{ marginRight: 6 }} />
-            )}
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: item.status === 'active' ? COLORS.success : '#666' },
-              ]}
-            />
+  const renderItem = useCallback(
+    ({ item }: { item: WorkSession }) => (
+      <TouchableOpacity
+        testID={`history-record-${item.id}`}
+        accessibilityRole="button"
+        accessibilityLabel="Editar registro"
+        accessibilityHint="Mantén presionado para eliminar el registro"
+        onPress={() => openEdit(item)}
+        onLongPress={() => handleDelete(item.id!)}
+        activeOpacity={0.7}
+      >
+        <LuxuryCard style={styles.card}>
+          <View style={styles.row}>
+            <Text style={styles.date}>{formatDate(item.start_time)}</Text>
+
+            <View style={styles.statusBadge}>
+              {item.is_manual_edit === 1 && (
+                <Ionicons
+                  name="pencil"
+                  size={12}
+                  color={COLORS.gold}
+                  style={{ marginRight: 6 }}
+                />
+              )}
+
+              <View
+                style={[
+                  styles.dot,
+                  { backgroundColor: item.status === 'active' ? COLORS.success : '#666' },
+                ]}
+              />
+            </View>
           </View>
-        </View>
 
-        <Text style={styles.address} numberOfLines={1} ellipsizeMode="tail">{item.address}</Text>
+          <Text style={styles.address} numberOfLines={1} ellipsizeMode="tail">
+            {item.address}
+          </Text>
 
-        <View style={styles.timeContainer}>
-          <Text style={styles.time}>{formatTime(item.start_time)}</Text>
-          <Ionicons name='arrow-forward' size={12} color={COLORS.gold} />
-          <Text style={styles.time}>{item.end_time ? formatTime(item.end_time) : '...'}</Text>
-        </View>
-      </LuxuryCard>
-    </TouchableOpacity>
-  ), [openEdit, handleDelete]);
+          <View style={styles.timeContainer}>
+            <Text style={styles.time}>{formatTime(item.start_time)}</Text>
+            <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
+            <Text style={styles.time}>
+              {item.end_time ? formatTime(item.end_time) : '...'}
+            </Text>
+          </View>
+        </LuxuryCard>
+      </TouchableOpacity>
+    ),
+    [openEdit, handleDelete]
+  );
 
   return (
-    <SafeAreaView testID='history-screen' style={styles.container}>
+    <SafeAreaView testID="history-screen" style={styles.container} edges={['top']}>
       <View style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => router.push('/(tabs)')}
@@ -246,36 +277,38 @@ function HistoryScreenComponent() {
 
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <TouchableOpacity
-            testID='history-pdf-button'
-            accessibilityRole='button'
-            accessibilityLabel='Generar reporte PDF'
+            testID="history-pdf-button"
+            accessibilityRole="button"
+            accessibilityLabel="Generar reporte PDF"
             style={styles.pdfBtn}
             onPress={() => {
               log('VERDE', 'OPERACION_EXITOSA', 'INFO', 'Generando reporte en PDF manualmente');
               void generateWeeklyReport(true);
             }}
           >
-            <Ionicons name='document-text' size={16} color='#000' />
+            <Ionicons name="document-text" size={16} color="#000" />
             <Text style={styles.pdfText}>PDF</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.summaryContainer}>
-          <Text style={styles.header}>HISTORIAL</Text>
-          <Text style={styles.subHeader}>
-            ESTA SEMANA: <Text style={{ color: '#FFF' }}>{totalHours.toFixed(1)}h</Text> •{' '}
-            <Text style={{ color: COLORS.gold }}>${estEarnings.toFixed(0)}</Text>
-          </Text>
+        <Text style={styles.header}>HISTORIAL</Text>
+        <Text style={styles.subHeader}>
+          ESTA SEMANA: <Text style={{ color: '#FFF' }}>{totalHours.toFixed(1)}h</Text> •{' '}
+          <Text style={{ color: COLORS.gold }}>${estEarnings.toFixed(0)}</Text>
+        </Text>
       </View>
 
       <FlatList
-        testID='history-list'
+        testID="history-list"
         data={sessions}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
-        ListEmptyComponent={<LuxuryEmptyState text='No hay actividad reciente' icon='time-outline' />}
+        ListEmptyComponent={
+          <LuxuryEmptyState text="No hay actividad reciente" icon="time-outline" />
+        }
         showsVerticalScrollIndicator={false}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
@@ -286,75 +319,85 @@ function HistoryScreenComponent() {
       <GlassModalWrapper visible={editModalVisible}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>EDITAR REGISTRO</Text>
+
           <TouchableOpacity
-            testID='history-edit-close'
-            accessibilityRole='button'
-            accessibilityLabel='Cerrar modal de edición'
+            testID="history-edit-close"
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar modal de edición"
             onPress={() => setEditModalVisible(false)}
             style={styles.closeBtn}
           >
-            <Ionicons name='close' size={20} color={COLORS.textSecondary} />
+            <Ionicons name="close" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
 
         <LuxuryInput
-          label='ENTRADA (HH:MM)'
-          testID='history-edit-time-in'
+          label="ENTRADA (HH:MM)"
+          testID="history-edit-time-in"
           value={editTimeIn}
           onChangeText={(t: string) => {
             formatTimeInput(t, setEditTimeIn);
-            if (errors.timeIn) setErrors(prev => {
-              const next = {...prev};
-              delete next.timeIn;
-              return next;
-            });
+
+            if (errors.timeIn) {
+              setErrors((prev) => {
+                const next = { ...prev };
+                delete next.timeIn;
+                return next;
+              });
+            }
           }}
-          keyboardType='number-pad'
+          keyboardType="number-pad"
           maxLength={5}
-          placeholder='00:00'
+          placeholder="00:00"
           error={errors.timeIn}
         />
 
         <LuxuryInput
-          label='SALIDA (HH:MM)'
-          testID='history-edit-time-out'
+          label="SALIDA (HH:MM)"
+          testID="history-edit-time-out"
           value={editTimeOut}
           onChangeText={(t: string) => {
             formatTimeInput(t, setEditTimeOut);
-            if (errors.timeOut) setErrors(prev => {
-              const next = {...prev};
-              delete next.timeOut;
-              return next;
-            });
+
+            if (errors.timeOut) {
+              setErrors((prev) => {
+                const next = { ...prev };
+                delete next.timeOut;
+                return next;
+              });
+            }
           }}
-          placeholder='En progreso...'
-          keyboardType='number-pad'
+          placeholder="En progreso..."
+          keyboardType="number-pad"
           maxLength={5}
           error={errors.timeOut}
         />
 
         <LuxuryInput
-          label='NOTA AUDITORÍA'
-          testID='history-edit-note'
+          label="NOTA AUDITORÍA"
+          testID="history-edit-note"
           value={editNote}
           onChangeText={(t: string) => {
             setEditNote(t);
-            if (errors.note) setErrors(prev => {
-              const next = {...prev};
-              delete next.note;
-              return next;
-            });
+
+            if (errors.note) {
+              setErrors((prev) => {
+                const next = { ...prev };
+                delete next.note;
+                return next;
+              });
+            }
           }}
-          placeholder='Razón del cambio...'
+          placeholder="Razón del cambio..."
           error={errors.note}
         />
 
         <View style={{ gap: 8, marginTop: 10 }}>
-          <LuxuryButton text='GUARDAR CAMBIOS' onPress={saveEdit} variant='primary' />
+          <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} variant="primary" />
           <LuxuryButton
-            text='CANCELAR'
+            text="CANCELAR"
             onPress={() => setEditModalVisible(false)}
-            variant='outline'
+            variant="outline"
           />
         </View>
       </GlassModalWrapper>
@@ -369,7 +412,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     paddingBottom: 0,
-    gap: 16
+    gap: 16,
   },
   backBtn: {
     flexDirection: 'row',
@@ -390,7 +433,11 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
   },
-  header: { fontFamily: 'Montserrat_300Light', fontSize: 32, color: '#FFF' },
+  header: {
+    fontFamily: 'Montserrat_300Light',
+    fontSize: 32,
+    color: '#FFF',
+  },
   subHeader: {
     fontFamily: 'Montserrat_700Bold',
     fontSize: 11,
@@ -407,12 +454,33 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 25,
   },
-  pdfText: { fontFamily: 'Montserrat_700Bold', color: '#000', fontSize: 10 },
-  card: { marginBottom: 16 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  date: { fontFamily: 'Montserrat_400Regular', color: COLORS.textSecondary, fontSize: 12 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  pdfText: {
+    fontFamily: 'Montserrat_700Bold',
+    color: '#000',
+    fontSize: 10,
+  },
+  card: {
+    marginBottom: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  date: {
+    fontFamily: 'Montserrat_400Regular',
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   address: {
     fontFamily: 'Montserrat_600SemiBold',
     color: '#FFF',
@@ -429,7 +497,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
-  time: { fontFamily: 'Montserrat_400Regular', color: '#DDD', fontSize: 13 },
+  time: {
+    fontFamily: 'Montserrat_400Regular',
+    color: '#DDD',
+    fontSize: 13,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -442,7 +514,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 1,
   },
-  closeBtn: { padding: 5 },
+  closeBtn: {
+    padding: 5,
+  },
 });
 
 export default memo(HistoryScreenComponent);
+

@@ -1,9 +1,11 @@
 import React, { memo, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+
 import { COLORS } from '../../src/constants/theme';
 import { LuxuryCard, LuxuryButton } from '../../src/components/ui/LuxuryUI';
 
@@ -16,7 +18,12 @@ function LegalScreenComponent() {
     const checkPermissions = async () => {
       const { status: locStatus } = await Location.getForegroundPermissionsAsync();
       const { status: bgLocStatus } = await Location.getBackgroundPermissionsAsync();
-      setGpsStatus(locStatus === 'granted' && bgLocStatus === 'granted' ? 'CONCEDIDO' : 'LIMITADO');
+
+      setGpsStatus(
+        locStatus === 'granted' && bgLocStatus === 'granted'
+          ? 'CONCEDIDO'
+          : 'LIMITADO'
+      );
 
       const { status: nStatus } = await Notifications.getPermissionsAsync();
       setNotifStatus(nStatus === 'granted' ? 'CONCEDIDO' : 'DENEGADO');
@@ -26,7 +33,7 @@ function LegalScreenComponent() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => router.push('/(tabs)')}
@@ -37,25 +44,40 @@ function LegalScreenComponent() {
           <Ionicons name="chevron-back" size={24} color={COLORS.gold} />
           <Text style={styles.backText}>INICIO</Text>
         </TouchableOpacity>
+
         <Text style={styles.header}>LEGAL & SOPORTE</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <LuxuryCard>
           <Text style={styles.sectionTitle}>ESTADO DE PERMISOS</Text>
+
           <View style={styles.permRow}>
-            <Ionicons name="location" size={20} color={gpsStatus === 'CONCEDIDO' ? COLORS.success : '#FF3B30'} />
+            <Ionicons
+              name="location"
+              size={20}
+              color={gpsStatus === 'CONCEDIDO' ? COLORS.success : '#FF3B30'}
+            />
             <Text style={styles.permText}>GPS (Siempre): {gpsStatus}</Text>
           </View>
+
           <View style={styles.permRow}>
-            <Ionicons name="notifications" size={20} color={notifStatus === 'CONCEDIDO' ? COLORS.success : '#FF3B30'} />
+            <Ionicons
+              name="notifications"
+              size={20}
+              color={notifStatus === 'CONCEDIDO' ? COLORS.success : '#FF3B30'}
+            />
             <Text style={styles.permText}>Notificaciones: {notifStatus}</Text>
           </View>
         </LuxuryCard>
 
         <LuxuryCard>
           <Text style={styles.sectionTitle}>SOPORTE TÉCNICO</Text>
-          <Text style={styles.bodyText}>Si experimentas problemas con el rastreo en segundo plano o el cálculo de nómina, contacta a nuestro equipo.</Text>
+          <Text style={styles.bodyText}>
+            Si experimentas problemas con el rastreo en segundo plano o el cálculo de
+            nómina, contacta a nuestro equipo.
+          </Text>
+
           <LuxuryButton
             text="CONTACTAR SOPORTE"
             onPress={() => Linking.openURL('mailto:support@wtracker.com')}
@@ -67,7 +89,9 @@ function LegalScreenComponent() {
         <LuxuryCard>
           <Text style={styles.sectionTitle}>CRÉDITOS & LICENCIA</Text>
           <Text style={styles.bodyText}>WTracker Professional Edition</Text>
-          <Text style={styles.bodyText}>Developer: <Text style={{ color: COLORS.gold }}>BDevDPaz</Text></Text>
+          <Text style={styles.bodyText}>
+            Developer: <Text style={{ color: COLORS.gold }}>BDevDPaz</Text>
+          </Text>
           <Text style={styles.bodyText}>Versión: 1.0.0 (Luxury Glass Dark)</Text>
           <Text style={styles.bodyText}>© 2026 Todos los derechos reservados.</Text>
         </LuxuryCard>
@@ -75,7 +99,12 @@ function LegalScreenComponent() {
         <LuxuryCard>
           <Text style={styles.sectionTitle}>AVISO LEGAL</Text>
           <Text style={styles.legalText}>
-            WTracker utiliza servicios de ubicación en segundo plano para garantizar la precisión de los registros de entrada y salida del lugar de trabajo. Los datos se almacenan localmente encriptados y solo se transmiten cuando el usuario decide generar y enviar un reporte. Al utilizar esta aplicación, usted acepta el monitoreo de su ubicación durante las horas de jornada configuradas para fines de auditoría y nómina.
+            WTracker utiliza servicios de ubicación en segundo plano para garantizar la
+            precisión de los registros de entrada y salida del lugar de trabajo. Los datos se
+            almacenan localmente encriptados y solo se transmiten cuando el usuario decide
+            generar y enviar un reporte. Al utilizar esta aplicación, usted acepta el monitoreo
+            de su ubicación durante las horas de jornada configuradas para fines de auditoría
+            y nómina.
           </Text>
         </LuxuryCard>
 
@@ -86,12 +115,15 @@ function LegalScreenComponent() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 24,
-    gap: 16
+    gap: 16,
   },
   backBtn: {
     flexDirection: 'row',
@@ -107,20 +139,48 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
   },
-  header: { fontFamily: 'Montserrat_300Light', fontSize: 24, color: '#FFF' },
-  scroll: { padding: 24 },
+  header: {
+    fontFamily: 'Montserrat_300Light',
+    fontSize: 24,
+    color: '#FFF',
+  },
+  scroll: {
+    padding: 24,
+  },
   sectionTitle: {
     fontFamily: 'Montserrat_700Bold',
     color: COLORS.gold,
     fontSize: 12,
     letterSpacing: 1,
     marginBottom: 16,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
   },
-  permRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  permText: { fontFamily: 'Montserrat_600SemiBold', color: '#FFF', fontSize: 14 },
-  bodyText: { fontFamily: 'Montserrat_400Regular', color: '#AAA', fontSize: 14, lineHeight: 22, marginBottom: 8 },
-  legalText: { fontFamily: 'Montserrat_400Regular', color: '#666', fontSize: 12, lineHeight: 18, fontStyle: 'italic' }
+  permRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  permText: {
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#FFF',
+    fontSize: 14,
+  },
+  bodyText: {
+    fontFamily: 'Montserrat_400Regular',
+    color: '#AAA',
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  legalText: {
+    fontFamily: 'Montserrat_400Regular',
+    color: '#666',
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
 });
 
 export default memo(LegalScreenComponent);
+
