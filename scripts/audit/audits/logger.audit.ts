@@ -43,14 +43,18 @@ export async function runLoggerAudit(): Promise<AuditFinding[]> {
 
   const expectedEvents = [
     'AUTO_CHECKIN',
+    'AUTO_CHECKIN_GPS',
     'AUTO_CHECKOUT',
+    'AUTO_CHECKOUT_GPS',
+    'AUTO_CHECKOUT_FAILSAFE',
     'MANUAL',
+    'MANUAL_CHECKOUT',
     'OVERLAP',
     'MUTEX',
     'LOCATION',
     'PDF',
     'PAYROLL',
-    'DB'
+    'GEOFENCE_EXIT'
   ];
 
   for (const event of expectedEvents) {
@@ -65,6 +69,67 @@ export async function runLoggerAudit(): Promise<AuditFinding[]> {
         recommendation:
           'Consider standardizing action_type constants for all critical forensic operations.',
         file: loggerFile
+      });
+    }
+  }
+
+  const expectedCheckoutActions = [
+    'MANUAL_CHECKOUT',
+    'AUTO_CHECKOUT_GPS',
+    'AUTO_CHECKOUT_FAILSAFE'
+  ];
+
+  for (const checkoutAction of expectedCheckoutActions) {
+    if (!content.includes(checkoutAction)) {
+      findings.push({
+        id: 'LOG-005',
+        domain: 'logger',
+        severity: 'high',
+        title: `Checkout semantic action missing: ${checkoutAction}`,
+        description:
+          `The logger does not clearly define the checkout action "${checkoutAction}".`,
+        recommendation:
+          'Define MANUAL_CHECKOUT, AUTO_CHECKOUT_GPS and AUTO_CHECKOUT_FAILSAFE as first-class audit actions.',
+        file: loggerFile,
+        evidence: checkoutAction
+      });
+    }
+  }
+
+  if (!content.includes('CHECKOUT_AUDIT_ACTIONS')) {
+    findings.push({
+      id: 'LOG-006',
+      domain: 'logger',
+      severity: 'medium',
+      title: 'Central checkout audit action list missing',
+      description:
+        'The logger does not clearly expose CHECKOUT_AUDIT_ACTIONS.',
+      recommendation:
+        'Expose a central list/helper for checkout audit actions to avoid fragile substring matching.',
+      file: loggerFile,
+      evidence: 'CHECKOUT_AUDIT_ACTIONS'
+    });
+  }
+
+  const helperNames = [
+    'isCheckoutAuditAction',
+    'isOfficialCheckoutAuditAction',
+    'getCheckoutMethodLabel'
+  ];
+
+  for (const helperName of helperNames) {
+    if (!content.includes(helperName)) {
+      findings.push({
+        id: 'LOG-007',
+        domain: 'logger',
+        severity: 'medium',
+        title: `Checkout helper missing: ${helperName}`,
+        description:
+          `The logger does not clearly expose "${helperName}", which helps keep checkout semantics centralized.`,
+        recommendation:
+          'Centralize checkout detection and labeling helpers in logger.ts or update this audit if the helpers moved.',
+        file: loggerFile,
+        evidence: helperName
       });
     }
   }
@@ -90,3 +155,4 @@ export async function runLoggerAudit(): Promise<AuditFinding[]> {
 
   return findings;
 }
+

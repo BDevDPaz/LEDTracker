@@ -99,5 +99,127 @@ export async function runDatabaseAudit(): Promise<AuditFinding[]> {
     }
   }
 
+  const expectedCheckoutSemantics = [
+    'MANUAL_CHECKOUT',
+    'AUTO_CHECKOUT_GPS',
+    'AUTO_CHECKOUT_FAILSAFE'
+  ];
+
+  for (const checkoutAction of expectedCheckoutSemantics) {
+    if (!content.includes(checkoutAction)) {
+      findings.push({
+        id: 'DB-006',
+        domain: 'database',
+        severity: 'high',
+        title: `Checkout semantic action not detected in database layer: ${checkoutAction}`,
+        description:
+          `The database layer does not clearly reference "${checkoutAction}". Completed sessions should be closed with explicit checkout semantics.`,
+        recommendation:
+          'Ensure session completion paths receive and persist MANUAL_CHECKOUT, AUTO_CHECKOUT_GPS or AUTO_CHECKOUT_FAILSAFE explicitly.',
+        file: dbFile,
+        evidence: checkoutAction
+      });
+    }
+  }
+
+  const ambiguousCompletedInferencePatterns = [
+    "status === 'completed' ? AUDIT_ACTIONS.AUTO_CHECKOUT : AUDIT_ACTIONS.MANUAL",
+    'status === "completed" ? AUDIT_ACTIONS.AUTO_CHECKOUT : AUDIT_ACTIONS.MANUAL',
+    "status === 'completed' ? AUDIT_ACTIONS.AUTO_CHECKOUT",
+    'status === "completed" ? AUDIT_ACTIONS.AUTO_CHECKOUT'
+  ];
+
+  for (const pattern of ambiguousCompletedInferencePatterns) {
+    if (content.includes(pattern)) {
+      findings.push({
+        id: 'DB-007',
+        domain: 'database',
+        severity: 'critical',
+        title: 'Ambiguous completed-session audit inference detected',
+        description:
+          'The database layer appears to infer AUTO_CHECKOUT or MANUAL from status === completed.',
+        recommendation:
+          'Completed session updates must receive an explicit checkout audit action instead of inferring AUTO_CHECKOUT or MANUAL.',
+        file: dbFile,
+        line: findLineNumber(content, pattern),
+        evidence: pattern
+      });
+    }
+  }
+
+  const directGenericCheckoutPatterns = [
+    'action_type: AUDIT_ACTIONS.AUTO_CHECKOUT',
+    'AUDIT_ACTIONS.AUTO_CHECKOUT,',
+    "'AUTO_CHECKOUT'",
+    '"AUTO_CHECKOUT"'
+  ];
+
+  for (const pattern of directGenericCheckoutPatterns) {
+    if (content.includes(pattern)) {
+      findings.push({
+        id: 'DB-008',
+        domain: 'database',
+        severity: 'high',
+        title: 'Generic AUTO_CHECKOUT detected in database close path',
+        description:
+          'The database layer should not use generic AUTO_CHECKOUT for new completed-session writes.',
+        recommendation:
+          'Use MANUAL_CHECKOUT, AUTO_CHECKOUT_GPS or AUTO_CHECKOUT_FAILSAFE for new checkout close flows. Keep AUTO_CHECKOUT only as read-time legacy mapping outside DB writes.',
+        file: dbFile,
+        line: findLineNumber(content, pattern),
+        evidence: pattern
+      });
+    }
+  }
+
+  const legacyEndTimeSignature = 'updateSessionEndTime = async (id: number, endTime: number)';
+
+  if (content.includes(legacyEndTimeSignature)) {
+    findings.push({
+      id: 'DB-009',
+      domain: 'database',
+      severity: 'critical',
+      title: 'updateSessionEndTime lacks explicit checkout action',
+      description:
+        'updateSessionEndTime still appears to accept only id and endTime.',
+      recommendation:
+        'Require checkoutAction: CheckoutAuditAction when ending a session.',
+      file: dbFile,
+      line: findLineNumber(content, legacyEndTimeSignature),
+      evidence: legacyEndTimeSignature
+    });
+  }
+
+  if (!content.includes('CheckoutAuditAction')) {
+    findings.push({
+      id: 'DB-010',
+      domain: 'database',
+      severity: 'high',
+      title: 'CheckoutAuditAction not detected in database layer',
+      description:
+        'The database layer does not clearly use CheckoutAuditAction.',
+      recommendation:
+        'Type session completion APIs with CheckoutAuditAction to prevent ambiguous action_type writes.',
+      file: dbFile,
+      evidence: 'CheckoutAuditAction'
+    });
+  }
+
+  if (!content.includes('isOfficialCheckoutAuditAction')) {
+    findings.push({
+      id: 'DB-011',
+      domain: 'database',
+      severity: 'medium',
+      title: 'Official checkout action validation not detected',
+      description:
+        'The database layer does not clearly validate checkout actions against official checkout audit actions.',
+      recommendation:
+        'Validate completed-session writes with isOfficialCheckoutAuditAction or an equivalent central helper.',
+      file: dbFile,
+      evidence: 'isOfficialCheckoutAuditAction'
+    });
+  }
+
   return findings;
 }
+

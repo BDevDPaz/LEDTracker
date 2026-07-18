@@ -1,4 +1,3 @@
-// --- src/services/ReportGenerator.ts ---
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as MailComposer from 'expo-mail-composer';
@@ -7,7 +6,12 @@ import * as Notifications from 'expo-notifications';
 import { getSettings, getAllAsync } from '../database/db';
 import escapeHtml from 'escape-html';
 import { WorkSession, AppSettings, AuditLog } from '../types';
-import { log, logStructured } from '../utils/logger';
+import {
+  getCheckoutMethodLabel,
+  isCheckoutAuditAction,
+  log,
+  logStructured
+} from '../utils/logger';
 import dayjs from '../utils/dayjsSetup';
 import { formatDate, formatTime } from '../utils/dateUtils';
 import { calculateSessionDuration, calculatePay } from '../utils/payrollUtils';
@@ -99,7 +103,9 @@ export const generateWeeklyReportOptimized = async (
     );
 
     if (sessions.length > SESSIONS_PER_PAGE * 2) {
-      logStructured('WARN', 'ADVERTENCIA',
+      logStructured(
+        'WARN',
+        'ADVERTENCIA',
         `Large report detected (${sessions.length} sessions). Esto puede tomar más tiempo.`
       );
     }
@@ -119,6 +125,22 @@ export const generateWeeklyReportOptimized = async (
   }
 };
 
+function buildCheckoutActionBySessionId(logs: AuditLog[]): Map<number, string> {
+  const checkoutActionBySessionId = new Map<number, string>();
+
+  for (const auditLog of logs) {
+    if (
+      auditLog.session_id &&
+      isCheckoutAuditAction(auditLog.action_type) &&
+      !checkoutActionBySessionId.has(auditLog.session_id)
+    ) {
+      checkoutActionBySessionId.set(auditLog.session_id, auditLog.action_type);
+    }
+  }
+
+  return checkoutActionBySessionId;
+}
+
 function buildReportHtml(
   sessions: WorkSession[],
   logs: AuditLog[],
@@ -129,11 +151,7 @@ function buildReportHtml(
     let totalOvertime = 0;
     let totalEarnings = 0;
 
-    const autoCheckoutSessionIds = new Set(
-      logs
-        .filter((l: AuditLog) => l.action_type.includes('AUTO_CHECKOUT') && l.session_id)
-        .map((l: AuditLog) => l.session_id)
-    );
+    const checkoutActionBySessionId = buildCheckoutActionBySessionId(logs);
 
     const rows = sessions.map((session: WorkSession) => {
       const startTime = session.actual_start_time || session.start_time;
@@ -158,7 +176,11 @@ function buildReportHtml(
       totalOvertime += overtimeHours;
       totalEarnings += totalPay;
 
-      const fueAutoCheckout = autoCheckoutSessionIds.has(session.id!);
+      const checkoutAction = session.id
+        ? checkoutActionBySessionId.get(session.id) ?? null
+        : null;
+
+      const checkoutLabel = getCheckoutMethodLabel(checkoutAction);
 
       return {
         date: formatDate(startTime),
@@ -172,7 +194,7 @@ function buildReportHtml(
         pay: formatCurrency(totalPay),
         status: session.status,
         isGeofenceIn: Boolean(session.actual_start_time),
-        isGeofenceOut: fueAutoCheckout,
+        checkoutLabel,
         isManual: Boolean(session.is_manual_edit)
       };
     });
@@ -206,7 +228,7 @@ function buildReportHtml(
             .manual-badge { background: #D4AF37; color: #000; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 4px; margin-left: 5px; }
             .notes { font-style: italic; color: #666; font-size: 10px; display: block; margin-top: 4px; }
             .geo-badge-in { color: #2ecc71; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
-            .geo-badge-out { color: #e67e22; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
+            .checkout-badge { color: #e67e22; font-size: 9px; font-weight: bold; display: block; margin-top: 2px; }
             .lunch-badge { color: #e67e22; font-size: 9px; }
             .audit-section { margin-top: 20px; border-top: 3px solid #eee; padding-top: 20px; page-break-inside: avoid; }
             .audit-title { font-size: 12px; font-weight: bold; color: #000; text-transform: uppercase; margin-bottom: 15px; }
@@ -279,7 +301,7 @@ function buildReportHtml(
                   <td>
                     ${row.start} - ${row.end}
                     ${row.isGeofenceIn ? '<span class="geo-badge-in">✓ Auto Check-in (GPS)</span>' : ''}
-                    ${row.isGeofenceOut ? '<span class="geo-badge-out">⚠ Auto Check-out (GPS)</span>' : ''}
+                    ${row.checkoutLabel ? `<span class="checkout-badge">⚠ ${escapeHtml(row.checkoutLabel)}</span>` : ''}
                   </td>
                   <td><strong>${row.total}</strong></td>
                   <td>${row.pay}</td>
@@ -303,7 +325,7 @@ function buildReportHtml(
             <div class="audit-title">Registro de Eventos Críticos (GPS & Sistema)</div>
             ${logs.length === 0 ? '<div style="font-size:10px; color:#999;">Sin eventos registrados en este periodo.</div>' :
                logs.map(auditLog => `
-                <div class="log-item ${auditLog.action_type.includes('AUTO') || auditLog.action_type.includes('EXIT') ? 'log-alert' : ''}">
+                <div class="log-item ${isCheckoutAuditAction(auditLog.action_type) || auditLog.action_type.includes('EXIT') ? 'log-alert' : ''}">
                   <strong>${formatTime(auditLog.timestamp)}</strong> — <span style="font-weight:bold">[${auditLog.action_type}]</span> ${escapeHtml(auditLog.details)}
                 </div>
               `).join('')}
@@ -456,3 +478,4 @@ export const ensureWeeklyReportExists = async () => {
   }
   return false;
 };
+

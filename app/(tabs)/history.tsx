@@ -18,20 +18,46 @@ import {
   deleteWorkSession,
   updateWorkSessionManual,
   checkSessionOverlap,
+  getAllAsync,
 } from '../../src/database/db';
 import { WorkSession } from '../../src/engine/contracts/types';
+import { AuditLog } from '../../src/types';
 import { formatDate, formatTime } from '../../src/utils/dateUtils';
-import { log } from '../../src/utils/logger';
+import {
+  getCheckoutMethodLabel,
+  isCheckoutAuditAction,
+  log
+} from '../../src/utils/logger';
 import { generateWeeklyReport } from '../../src/services/ReportGenerator';
 import { calculateSessionMinutes, calculatePayFromMinutes } from '../../src/utils/payrollUtils';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { historyEditSchema } from '../../src/utils/validation';
 import { z } from 'zod';
 
+type HistorySession = WorkSession & {
+  checkout_action_type?: string | null;
+};
+
+function buildCheckoutActionBySessionId(logs: AuditLog[]): Map<number, string> {
+  const checkoutActionBySessionId = new Map<number, string>();
+
+  for (const auditLog of logs) {
+    if (
+      auditLog.session_id &&
+      isCheckoutAuditAction(auditLog.action_type) &&
+      !checkoutActionBySessionId.has(auditLog.session_id)
+    ) {
+      checkoutActionBySessionId.set(auditLog.session_id, auditLog.action_type);
+    }
+  }
+
+  return checkoutActionBySessionId;
+}
+
 function HistoryScreenComponent() {
   const router = useRouter();
   const { showToast, showDialog } = useLuxuryUI();
-  const [sessions, setSessions] = useState<WorkSession[]>([]);
+  const [sessions, setSessions] = useState<HistorySession[]>([]);
   const [totalHours, setTotalHours] = useState(0);
   const [estEarnings, setEstEarnings] = useState(0);
 
@@ -45,7 +71,22 @@ function HistoryScreenComponent() {
   const loadHistory = async () => {
     try {
       const data = await getHistory();
-      setSessions(data);
+
+      const logs = await getAllAsync<AuditLog>(
+        `SELECT * FROM audit_logs
+         ORDER BY timestamp DESC`
+      );
+
+      const checkoutActionBySessionId = buildCheckoutActionBySessionId(logs);
+
+      const enrichedData: HistorySession[] = data.map((session) => ({
+        ...session,
+        checkout_action_type: session.id
+          ? checkoutActionBySessionId.get(session.id) ?? null
+          : null,
+      }));
+
+      setSessions(enrichedData);
 
       const settings = await getSettings();
       const rate = settings?.hourly_rate || 0;
@@ -54,7 +95,7 @@ function HistoryScreenComponent() {
       let totalEstPay = 0;
       const otMultiplier = settings?.overtime_multiplier || 1.5;
 
-      data.forEach((s: WorkSession) => {
+      enrichedData.forEach((s: WorkSession) => {
         if (s.start_time && s.end_time) {
           const sessionMinutes = calculateSessionMinutes(
             s.start_time,
@@ -212,53 +253,64 @@ function HistoryScreenComponent() {
   };
 
   const renderItem = useCallback(
-    ({ item }: { item: WorkSession }) => (
-      <TouchableOpacity
-        testID={`history-record-${item.id}`}
-        accessibilityRole="button"
-        accessibilityLabel="Editar registro"
-        accessibilityHint="Mantén presionado para eliminar el registro"
-        onPress={() => openEdit(item)}
-        onLongPress={() => handleDelete(item.id!)}
-        activeOpacity={0.7}
-      >
-        <LuxuryCard style={styles.card}>
-          <View style={styles.row}>
-            <Text style={styles.date}>{formatDate(item.start_time)}</Text>
+    ({ item }: { item: HistorySession }) => {
+      const checkoutLabel = getCheckoutMethodLabel(item.checkout_action_type);
 
-            <View style={styles.statusBadge}>
-              {item.is_manual_edit === 1 && (
-                <Ionicons
-                  name="pencil"
-                  size={12}
-                  color={COLORS.gold}
-                  style={{ marginRight: 6 }}
+      return (
+        <TouchableOpacity
+          testID={`history-record-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel="Editar registro"
+          accessibilityHint="Mantén presionado para eliminar el registro"
+          onPress={() => openEdit(item)}
+          onLongPress={() => handleDelete(item.id!)}
+          activeOpacity={0.7}
+        >
+          <LuxuryCard style={styles.card}>
+            <View style={styles.row}>
+              <Text style={styles.date}>{formatDate(item.start_time)}</Text>
+
+              <View style={styles.statusBadge}>
+                {item.is_manual_edit === 1 && (
+                  <Ionicons
+                    name="pencil"
+                    size={12}
+                    color={COLORS.gold}
+                    style={{ marginRight: 6 }}
+                  />
+                )}
+
+                <View
+                  style={[
+                    styles.dot,
+                    { backgroundColor: item.status === 'active' ? COLORS.success : '#666' },
+                  ]}
                 />
-              )}
-
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: item.status === 'active' ? COLORS.success : '#666' },
-                ]}
-              />
+              </View>
             </View>
-          </View>
 
-          <Text style={styles.address} numberOfLines={1} ellipsizeMode="tail">
-            {item.address}
-          </Text>
-
-          <View style={styles.timeContainer}>
-            <Text style={styles.time}>{formatTime(item.start_time)}</Text>
-            <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
-            <Text style={styles.time}>
-              {item.end_time ? formatTime(item.end_time) : '...'}
+            <Text style={styles.address} numberOfLines={1} ellipsizeMode="tail">
+              {item.address}
             </Text>
-          </View>
-        </LuxuryCard>
-      </TouchableOpacity>
-    ),
+
+            <View style={styles.timeContainer}>
+              <Text style={styles.time}>{formatTime(item.start_time)}</Text>
+              <Ionicons name="arrow-forward" size={12} color={COLORS.gold} />
+              <Text style={styles.time}>
+                {item.end_time ? formatTime(item.end_time) : '...'}
+              </Text>
+            </View>
+
+            {checkoutLabel && (
+              <View style={styles.checkoutBadge}>
+                <Ionicons name="exit-outline" size={12} color={COLORS.gold} />
+                <Text style={styles.checkoutText}>{checkoutLabel}</Text>
+              </View>
+            )}
+          </LuxuryCard>
+        </TouchableOpacity>
+      );
+    },
     [openEdit, handleDelete]
   );
 
@@ -501,6 +553,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_400Regular',
     color: '#DDD',
     fontSize: 13,
+  },
+  checkoutBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(212,175,55,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.18)',
+  },
+  checkoutText: {
+    fontFamily: 'Montserrat_700Bold',
+    color: COLORS.gold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   modalHeader: {
     flexDirection: 'row',

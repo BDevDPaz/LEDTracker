@@ -47,7 +47,7 @@ app-example
 .vscode/
 .jules/
 .Jules/
-assets/images/
+#assets/images/
 coverage/
 *.log
 

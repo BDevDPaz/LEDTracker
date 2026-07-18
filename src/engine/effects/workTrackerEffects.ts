@@ -9,7 +9,7 @@ import {
 } from '../../database/db';
 import { LocationService } from '../../services/LocationManager';
 import dayjs from '../../utils/dayjsSetup';
-import { log } from '../../utils/logger';
+import { AUDIT_ACTIONS, log } from '../../utils/logger';
 import { securityAdapter } from '../../runtime/securityAdapter';
 
 export async function workTrackerEffects(
@@ -49,7 +49,7 @@ export async function workTrackerEffects(
       }
 
       case 'START_SESSION_REQUEST': {
-                const sanitizedAddress = securityAdapter.sanitizeInput(event.address);
+        const sanitizedAddress = securityAdapter.sanitizeInput(event.address);
         const sanitizedClient = event.client ? securityAdapter.sanitizeInput(event.client) : undefined;
         const sanitizedNotes = event.notes ? securityAdapter.sanitizeInput(event.notes) : undefined;
 
@@ -99,7 +99,13 @@ export async function workTrackerEffects(
 
       case 'STOP_SESSION_REQUEST':
         if (state.activeSession?.id) {
-          await updateSessionStatus(state.activeSession.id, 'completed', event.lunchMinutes);
+          await updateSessionStatus(
+            state.activeSession.id,
+            'completed',
+            event.lunchMinutes,
+            AUDIT_ACTIONS.MANUAL_CHECKOUT
+          );
+
           // Only stop monitoring if no more active/pending sessions exist for today
           const pendingSessions = await getAllAsync<any>(
             "SELECT id FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
@@ -109,8 +115,8 @@ export async function workTrackerEffects(
           if (pendingSessions.length === 0) {
             await LocationService.stopMonitoring();
           } else {
-             // If there are still pending sessions, just re-sync monitoring to exclude the current one
-             const initSites = pendingSessions.map(s => ({
+            // If there are still pending sessions, just re-sync monitoring to exclude the current one
+            const initSites = pendingSessions.map(s => ({
               id: s.id.toString(),
               latitude: s.latitude,
               longitude: s.longitude,
@@ -143,3 +149,4 @@ export async function workTrackerEffects(
     dispatch({ type: 'ERROR_OCCURRED', error: String(error) });
   }
 }
+

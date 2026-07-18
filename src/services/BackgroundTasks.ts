@@ -4,8 +4,8 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AsyncLock from 'async-lock';
 
-import { log, logStructured } from '../utils/logger';
-import { ensureDbReady, insertAuditLog, updateSessionEndTime } from '../database/db';
+import { AUDIT_ACTIONS, log, logStructured } from '../utils/logger';
+import { ensureDbReady, updateSessionEndTime } from '../database/db';
 import { WorkSession } from '../types';
 import { generateWeeklyReport, checkAndDeliverPendingReports } from './ReportGenerator';
 import { EXIT_TIMESTAMP_KEY } from './LocationManager';
@@ -47,14 +47,10 @@ export const runFailsafeCheck = async () => {
               )} min)`
             );
 
-            await updateSessionEndTime(session.id, exitTime);
-
-            await insertAuditLog(
+            await updateSessionEndTime(
               session.id,
-              'AUTO_CHECKOUT_GPS',
-              `Auto Check-out (GPS) tras ${Math.round(
-                FAILSAFE_THRESHOLD_MS / 60000
-              )} min fuera del área.`
+              exitTime,
+              AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE
             );
 
             await Promise.all([

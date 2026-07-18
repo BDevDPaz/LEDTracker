@@ -37,8 +37,17 @@ const _output = {
 
 export const AUDIT_ACTIONS = {
   AUTO_CHECKIN: 'AUTO_CHECKIN',
+
+  // Legacy / generic actions kept for backwards compatibility.
+  // Do not use AUTO_CHECKOUT or MANUAL for new checkout close flows.
   AUTO_CHECKOUT: 'AUTO_CHECKOUT',
   MANUAL: 'MANUAL',
+
+  // Explicit checkout semantics.
+  MANUAL_CHECKOUT: 'MANUAL_CHECKOUT',
+  AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_GPS',
+  AUTO_CHECKOUT_FAILSAFE: 'AUTO_CHECKOUT_FAILSAFE',
+
   OVERLAP: 'OVERLAP',
   MUTEX: 'MUTEX',
   LOCATION: 'LOCATION',
@@ -46,8 +55,69 @@ export const AUDIT_ACTIONS = {
   PAYROLL: 'PAYROLL',
   GEOFENCE_EXIT: 'GEOFENCE_EXIT',
   AUTO_CHECKIN_GPS: 'AUTO_CHECKIN_GPS',
-  AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_GPS',
 } as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
+
+export const CHECKOUT_AUDIT_ACTIONS = [
+  AUDIT_ACTIONS.MANUAL_CHECKOUT,
+  AUDIT_ACTIONS.AUTO_CHECKOUT_GPS,
+  AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE,
+] as const;
+
+export type CheckoutAuditAction = (typeof CHECKOUT_AUDIT_ACTIONS)[number];
+
+export const LEGACY_CHECKOUT_AUDIT_ACTIONS = [
+  AUDIT_ACTIONS.AUTO_CHECKOUT,
+] as const;
+
+export type LegacyCheckoutAuditAction =
+  (typeof LEGACY_CHECKOUT_AUDIT_ACTIONS)[number];
+
+export const ALL_CHECKOUT_AUDIT_ACTIONS = [
+  ...CHECKOUT_AUDIT_ACTIONS,
+  ...LEGACY_CHECKOUT_AUDIT_ACTIONS,
+] as const;
+
+export type AnyCheckoutAuditAction =
+  | CheckoutAuditAction
+  | LegacyCheckoutAuditAction;
+
+const checkoutAuditActionSet = new Set<string>(ALL_CHECKOUT_AUDIT_ACTIONS);
+const officialCheckoutAuditActionSet = new Set<string>(CHECKOUT_AUDIT_ACTIONS);
+
+export function isCheckoutAuditAction(
+  action: string | null | undefined
+): action is AnyCheckoutAuditAction {
+  return Boolean(action && checkoutAuditActionSet.has(action));
+}
+
+export function isOfficialCheckoutAuditAction(
+  action: string | null | undefined
+): action is CheckoutAuditAction {
+  return Boolean(action && officialCheckoutAuditActionSet.has(action));
+}
+
+export function getCheckoutMethodLabel(
+  action: string | null | undefined
+): string | null {
+  switch (action) {
+    case AUDIT_ACTIONS.MANUAL_CHECKOUT:
+      return 'Salida manual';
+
+    case AUDIT_ACTIONS.AUTO_CHECKOUT_GPS:
+      return 'Salida automática por GPS';
+
+    case AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE:
+      return 'Salida automática por respaldo';
+
+    case AUDIT_ACTIONS.AUTO_CHECKOUT:
+      return 'Salida automática legacy';
+
+    default:
+      return null;
+  }
+}
 
 export interface AuditLogEntry {
   session_id: number | null;

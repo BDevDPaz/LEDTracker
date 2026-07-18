@@ -1,9 +1,14 @@
-// --- src/database/db.ts ---
 import * as SQLite from 'expo-sqlite';
 import dayjs from '../utils/dayjsSetup';
 import { validateSession } from "../utils/payrollUtils";
 import { WorkSession, AppSettings, SessionStatus } from '../types';
-import { log, logAudit, AUDIT_ACTIONS } from '../utils/logger';
+import {
+  log,
+  logAudit,
+  AUDIT_ACTIONS,
+  CheckoutAuditAction,
+  isOfficialCheckoutAuditAction,
+} from '../utils/logger';
 
 const DB_NAME = 'wtracker_v1.db';
 
@@ -12,6 +17,12 @@ let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let dbReady = false;
 
 const nowMs = (): number => dayjs().valueOf();
+
+const DB_OFFICIAL_CHECKOUT_AUDIT_ACTIONS: readonly CheckoutAuditAction[] = [
+  AUDIT_ACTIONS.MANUAL_CHECKOUT,
+  AUDIT_ACTIONS.AUTO_CHECKOUT_GPS,
+  AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE,
+];
 
 async function openDbOnce(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
@@ -54,6 +65,23 @@ async function runInTransaction<T>(
     }
     throw error;
   }
+}
+
+function assertCheckoutAuditAction(
+  action: CheckoutAuditAction | undefined,
+  operation: string
+): CheckoutAuditAction {
+  const isKnownOfficialAction =
+    isOfficialCheckoutAuditAction(action) &&
+    DB_OFFICIAL_CHECKOUT_AUDIT_ACTIONS.includes(action);
+
+  if (!isKnownOfficialAction) {
+    throw new Error(
+      `${operation} requires an explicit official checkout audit action`
+    );
+  }
+
+  return action;
 }
 
 export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
@@ -146,8 +174,15 @@ export async function ensureDbReady(): Promise<SQLite.SQLiteDatabase> {
 }
 
 export const insertWorkSession = async (session: WorkSession) => {
-  const error = validateSession(session.start_time, session.end_time || null, session.lunch_start, session.lunch_end);
+  const error = validateSession(
+    session.start_time,
+    session.end_time || null,
+    session.lunch_start,
+    session.lunch_end
+  );
+
   if (error) throw new Error(error);
+
   await runInTransaction(async (database) => {
     const result = await database.runAsync(
       `INSERT INTO work_sessions (
@@ -184,7 +219,16 @@ export const insertWorkSession = async (session: WorkSession) => {
   });
 };
 
-export const updateSessionEndTime = async (id: number, endTime: number) => {
+export const updateSessionEndTime = async (
+  id: number,
+  endTime: number,
+  checkoutAction: CheckoutAuditAction
+) => {
+  const resolvedCheckoutAction = assertCheckoutAuditAction(
+    checkoutAction,
+    'updateSessionEndTime'
+  );
+
   await runInTransaction(async (database) => {
     await database.runAsync(
       "UPDATE work_sessions SET end_time = ?, status = 'completed' WHERE id = ?",
@@ -193,7 +237,7 @@ export const updateSessionEndTime = async (id: number, endTime: number) => {
 
     await logAudit({
       session_id: id,
-      action_type: AUDIT_ACTIONS.AUTO_CHECKOUT,
+      action_type: resolvedCheckoutAction,
       details: `Session ended at ${endTime}`,
       timestamp: nowMs()
     });
@@ -261,6 +305,7 @@ export const updateWorkSessionManual = async (
 ) => {
   const error = validateSession(startTime, endTime, null, null); // Lunch validation could be added if passed
   if (error) throw new Error(error);
+
   await runInTransaction(async (database) => {
     await database.runAsync(
       `UPDATE work_sessions
@@ -387,7 +432,9 @@ export const getHistory = async (): Promise<WorkSession[]> => {
   );
 };
 
-export const getDailyCompletedSessions = async (dateString: string): Promise<WorkSession[]> => {
+export const getDailyCompletedSessions = async (
+  dateString: string
+): Promise<WorkSession[]> => {
   const database = await ensureDbReady();
   return await database.getAllAsync<WorkSession>(
     `SELECT * FROM work_sessions
@@ -400,11 +447,22 @@ export const getDailyCompletedSessions = async (dateString: string): Promise<Wor
 export const updateSessionStatus = async (
   id: number,
   status: SessionStatus,
-  lunchMinutes: number = 0
+  lunchMinutes: number = 0,
+  checkoutAction?: CheckoutAuditAction
 ) => {
   const endTime = nowMs();
+
   await runInTransaction(async (database) => {
+    let auditAction: string = AUDIT_ACTIONS.MANUAL;
+
     if (status === 'completed') {
+      const resolvedCheckoutAction = assertCheckoutAuditAction(
+        checkoutAction,
+        'updateSessionStatus(completed)'
+      );
+
+      auditAction = resolvedCheckoutAction;
+
       let lunchStart = null;
       let lunchEnd = null;
       let lunchTaken = 0;
@@ -430,10 +488,11 @@ export const updateSessionStatus = async (
       );
     }
 
-    const lunchDetails = lunchMinutes > 0 ?  ` con ${lunchMinutes}m de almuerzo` : "";
+    const lunchDetails = lunchMinutes > 0 ? ` con ${lunchMinutes}m de almuerzo` : "";
+
     await logAudit({
       session_id: id,
-      action_type: status === 'completed' ? AUDIT_ACTIONS.AUTO_CHECKOUT : AUDIT_ACTIONS.MANUAL,
+      action_type: auditAction,
       details: `Estado de la sesión actualizado a ${status}${lunchDetails}`,
       timestamp: nowMs()
     });
@@ -442,3 +501,4 @@ export const updateSessionStatus = async (
 
 export const getActiveSession = getOpenSession;
 export const saveSession = insertWorkSession;
+
