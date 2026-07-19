@@ -284,9 +284,18 @@ export const SETTINGS_SEED_SQL = `INSERT OR IGNORE INTO settings (
   employer_name,
   company_email,
   language
-) VALUES (1, 'BDevDPaz', 'WTracker Testing Library', 'bdpaz_developer@outlook.com, 'es')`;
+) VALUES (?, ?, ?, ?, ?)`;
+
+export const SETTINGS_SEED_PARAMS = [
+  1,
+  'BDevDPaz',
+  'WTracker Testing Library',
+  'bdpaz_developer@outlook.com',
+  'es',
+] as const;
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
 export const LOCATION_EVIDENCE_REQUIRED_COLUMNS =
   LOCATION_EVIDENCE_TABLE.columns.map((entry) => entry.name);
+

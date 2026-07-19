@@ -3,6 +3,7 @@ import {
   ExpectedColumn,
   ExpectedIndex,
   ExpectedTable,
+  SETTINGS_SEED_PARAMS,
   SETTINGS_SEED_SQL,
 } from './schema';
 
@@ -241,9 +242,13 @@ export async function reconcileExpectedSchema(
   }
 
   if (options.seedSettings) {
-    const seedResult = await database.runAsync(SETTINGS_SEED_SQL);
+    const seedResult = await database.runAsync(
+      SETTINGS_SEED_SQL,
+      [...SETTINGS_SEED_PARAMS]
+    );
     result.seededSettings = (seedResult.changes ?? 0) > 0;
   }
 
   return result;
 }
+

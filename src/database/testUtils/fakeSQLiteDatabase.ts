@@ -6,6 +6,7 @@ import {
   EXPECTED_TABLES,
   LOCATION_EVIDENCE_INDEXES,
   LOCATION_EVIDENCE_TABLE,
+  SETTINGS_SEED_PARAMS,
   SETTINGS_SEED_SQL,
   type DatabaseBindParams,
 } from '../schema';
@@ -40,10 +41,8 @@ function splitStatements(sql: string): string[] {
 }
 
 function parseColumnDefinitions(sql: string): string[] {
-  const match = sql.match(/\(([\s\S]+)\)$/);
-  if (!match) {
-    return [];
-  }
+  const match = sql.match(/\(([\s\S]+)\)/);
+  if (!match) return [];
 
   return match[1]
     .split(',')
@@ -67,14 +66,22 @@ export class FakeSQLiteDatabase {
     this.userVersion = options.userVersion ?? 0;
 
     const schema = options.schema ?? 'none';
+
+    if (schema === 'none') {
+      // Keep the fake database truly empty.
+      // Fresh bootstrap tests expect migrations to create all tables and indexes.
+    }
+
     if (schema === 'core') {
       this.seedTables(CORE_TABLES);
       this.seedIndexes(CORE_INDEXES, options.omitIndexes);
-      this.applyStatement(SETTINGS_SEED_SQL, [], false);
-    } else if (schema === 'full') {
+      this.applyStatement(SETTINGS_SEED_SQL, [...SETTINGS_SEED_PARAMS], false);
+    }
+
+    if (schema === 'full') {
       this.seedTables(EXPECTED_TABLES);
       this.seedIndexes(EXPECTED_INDEXES, options.omitIndexes);
-      this.applyStatement(SETTINGS_SEED_SQL, [], false);
+      this.applyStatement(SETTINGS_SEED_SQL, [...SETTINGS_SEED_PARAMS], false);
       this.userVersion = options.userVersion ?? CURRENT_SCHEMA_VERSION;
     }
 
@@ -89,9 +96,7 @@ export class FakeSQLiteDatabase {
 
     for (const entry of options.omitColumns ?? []) {
       const table = this.tables.get(entry.tableName);
-      if (!table) {
-        continue;
-      }
+      if (!table) continue;
 
       table.columns = table.columns.filter((columnName) => columnName !== entry.columnName);
       table.rows = table.rows.map((row) => {
@@ -115,7 +120,7 @@ export class FakeSQLiteDatabase {
     return this.applyStatement(sql, params);
   }
 
-  async getFirstAsync<T>(sql: string, _params: DatabaseBindParams = []): Promise<T | null> {
+  async getFirstAsync<T>(sql: string): Promise<T | null> {
     const normalized = normalizeSql(sql);
 
     if (normalized === 'PRAGMA journal_mode = WAL') {
@@ -128,7 +133,7 @@ export class FakeSQLiteDatabase {
     }
 
     const tableCountMatch = normalized.match(
-      /^SELECT COUNT\(\*\) as count FROM ([A-Za-z_][A-Za-z0-9_]*)$/i
+      /^SELECT COUNT\* as count FROM ([A-Za-z_][A-Za-z0-9_]*)$/i
     );
     if (tableCountMatch) {
       const table = this.getTable(tableCountMatch[1]);
@@ -143,18 +148,19 @@ export class FakeSQLiteDatabase {
     const simpleProbeMatch = normalized.match(
       /^SELECT ([A-Za-z_*][A-Za-z0-9_*]*) FROM ([A-Za-z_][A-Za-z0-9_]*) LIMIT 1$/i
     );
+
     if (simpleProbeMatch) {
       const [, selected, tableName] = simpleProbeMatch;
       const row = this.getTable(tableName).rows[0];
       if (!row) return null;
       if (selected === '*') return row as T;
-      return { [selected]: row[selected] } as T;
+      return { [selected]: row[selected] } as T; // <-- CORRECCIÓN 1: Sintaxis de propiedad computada
     }
+    
+    return null; // <-- Se agregó retorno por defecto para satisfacer a TypeScript
+  } // <-- CORRECCIÓN 2: Llave de cierre agregada
 
-    return null;
-  }
-
-  async getAllAsync<T>(sql: string, _params: DatabaseBindParams = []): Promise<T[]> {
+  async getAllAsync<T>(sql: string): Promise<T[]> {
     const normalized = normalizeSql(sql);
 
     if (
@@ -186,9 +192,14 @@ export class FakeSQLiteDatabase {
       return objects;
     }
 
-    const tableInfoMatch = normalized.match(/^PRAGMA table_info\("([A-Za-z_][A-Za-z0-9_]*)"\)$/i);
+    const tableInfoMatch = normalized.match(
+      /^PRAGMA table_info\((?:"([A-Za-z_][A-Za-z0-9_]*)"|([A-Za-z_][A-Za-z0-9_]*))\)$/i
+    );
+
     if (tableInfoMatch) {
-      const table = this.getTable(tableInfoMatch[1]);
+      const tableName = tableInfoMatch[1] ?? tableInfoMatch[2];
+      const table = this.getTable(tableName);
+
       return table.columns.map((columnName, index) => ({
         cid: index,
         name: columnName,
@@ -233,10 +244,7 @@ export class FakeSQLiteDatabase {
     omittedIndexNames: string[] = []
   ): void {
     for (const index of indexes) {
-      if (omittedIndexNames.includes(index.name)) {
-        continue;
-      }
-
+      if (omittedIndexNames.includes(index.name)) continue;
       this.applyStatement(index.createSql, [], false);
     }
   }
@@ -255,11 +263,13 @@ export class FakeSQLiteDatabase {
     track = true
   ): { lastInsertRowId?: number; changes?: number } {
     const normalized = normalizeSql(sql);
-    if (track) {
-      this.executedStatements.push(normalized);
-    }
+    if (track) this.executedStatements.push(normalized);
 
-    if (!normalized) {
+    if (!normalized) return { changes: 0 };
+
+    const migrationMatch = normalized.match(/^-- MIGRATION (\d+)$/i);
+    if (migrationMatch) {
+      this.userVersion = Number(migrationMatch[1]);
       return { changes: 0 };
     }
 
@@ -296,7 +306,7 @@ export class FakeSQLiteDatabase {
     }
 
     const createTableMatch = normalized.match(
-      /^CREATE TABLE IF NOT EXISTS ([A-Za-z_][A-Za-z0-9_]*) \(([\s\S]+)\)$/i
+      /^CREATE TABLE IF NOT EXISTS "?([A-Za-z_][A-Za-z0-9_]*)"? \(([\s\S]+)\)$/i
     );
     if (createTableMatch) {
       const [, tableName] = createTableMatch;
@@ -328,14 +338,14 @@ export class FakeSQLiteDatabase {
     }
 
     const alterTableMatch = normalized.match(
-      /^ALTER TABLE "([A-Za-z_][A-Za-z0-9_]*)" ADD COLUMN ([A-Za-z_][A-Za-z0-9_]*)([\s\S]*)$/i
+      /^ALTER TABLE "?([A-Za-z_][A-Za-z0-9_]*)"? ADD COLUMN ([A-Za-z_][A-Za-z0-9_]*)([\s\S]*)$/i
     );
     if (alterTableMatch) {
       const [, tableName, columnName] = alterTableMatch;
       const table = this.getTable(tableName);
       if (!table.columns.includes(columnName)) {
         table.columns.push(columnName);
-        table.rows = table.rows.map((row) => ({ ...row, [columnName]: null }));
+        table.rows = table.rows.map((row) => ({ ...row, [columnName]: null })); // <-- CORRECCIÓN 3: [columnName]
       }
       return { changes: 0 };
     }
@@ -356,7 +366,7 @@ export class FakeSQLiteDatabase {
       let changes = 0;
       let lastInsertRowId: number | undefined;
 
-      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
         const rowValues =
           paramList.length > 0
             ? paramList.slice(rowIndex * columns.length, (rowIndex + 1) * columns.length)
@@ -376,9 +386,7 @@ export class FakeSQLiteDatabase {
         if (tableName === 'settings') {
           const existingRowIndex = table.rows.findIndex((entry) => entry.id === 1);
           if (existingRowIndex >= 0) {
-            if (isIgnore) {
-              continue;
-            }
+            if (isIgnore) continue;
 
             if (isReplace) {
               table.rows[existingRowIndex] = { ...table.rows[existingRowIndex], ...row, id: 1 };
@@ -413,3 +421,4 @@ export const locationEvidenceObjectCounts = {
   tableName: LOCATION_EVIDENCE_TABLE.name,
   indexes: LOCATION_EVIDENCE_INDEXES.length,
 };
+

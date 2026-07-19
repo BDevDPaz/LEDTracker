@@ -14,13 +14,9 @@ async function loadModules(fakeDatabase: FakeSQLiteDatabase) {
     openDatabaseAsync,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const dbModule = require('../db') as typeof import('../db');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const migrationsModule = require('../migrations') as typeof import('../migrations');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const healthModule = require('../dbHealth') as typeof import('../dbHealth');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const loggerModule = require('../../utils/logger') as typeof import('../../utils/logger');
 
   return {
@@ -68,11 +64,9 @@ describe('database bootstrap hardening', () => {
 
     expect(fakeDatabase.userVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(fakeDatabase.countStatements(/^CREATE TABLE/i)).toBe(0);
-    expect(
-      fakeDatabase
-        .getRows('system_logs')
-        .some((entry) => entry.mensaje === 'DB_LEGACY_BASELINE_DETECTED')
-    ).toBe(true);
+
+    const systemLogs = fakeDatabase.getRows('system_logs');
+    expect(systemLogs.some((entry) => entry.mensaje === 'DB_LEGACY_BASELINE_DETECTED')).toBe(true);
   });
 
   it('applies pending migrations in order and only once', async () => {
@@ -105,6 +99,7 @@ describe('database bootstrap hardening', () => {
     expect(first).toBe(second);
     expect(openDatabaseAsync).toHaveBeenCalledTimes(1);
     expect(fakeDatabase.userVersion).toBe(CURRENT_SCHEMA_VERSION);
+
     expect(fakeDatabase.countStatements(/^CREATE TABLE/i)).toBe(expectedFullObjectCounts.tables);
     expect(fakeDatabase.countStatements(/^CREATE (UNIQUE )?INDEX/i)).toBe(
       expectedFullObjectCounts.indexes
@@ -180,6 +175,7 @@ describe('database bootstrap hardening', () => {
         }),
       ])
     );
+
     expect(repairResult.skippedColumns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -188,6 +184,7 @@ describe('database bootstrap hardening', () => {
         }),
       ])
     );
+
     expect(fakeDatabase.getColumns('location_evidence')).not.toContain('event_source');
     expect(finalReport.isHealthy).toBe(false);
   });
