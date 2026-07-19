@@ -7,6 +7,7 @@ import {
   LOCATION_EVIDENCE_INDEXES,
   LOCATION_EVIDENCE_TABLE,
   SETTINGS_SEED_SQL,
+  type DatabaseBindParams,
 } from '../schema';
 
 type Row = Record<string, unknown>;
@@ -109,12 +110,12 @@ export class FakeSQLiteDatabase {
 
   async runAsync(
     sql: string,
-    params: unknown[] = []
+    params: DatabaseBindParams = []
   ): Promise<{ lastInsertRowId?: number; changes?: number }> {
     return this.applyStatement(sql, params);
   }
 
-  async getFirstAsync<T>(sql: string, _params: unknown[] = []): Promise<T | null> {
+  async getFirstAsync<T>(sql: string, _params: DatabaseBindParams = []): Promise<T | null> {
     const normalized = normalizeSql(sql);
 
     if (normalized === 'PRAGMA journal_mode = WAL') {
@@ -126,9 +127,11 @@ export class FakeSQLiteDatabase {
       return { user_version: this.userVersion } as T;
     }
 
-    const countMatch = normalized.match(/^SELECT COUNT\(\*\) as count FROM ([A-Za-z_][A-Za-z0-9_]*)$/i);
-    if (countMatch) {
-      const table = this.getTable(countMatch[1]);
+    const tableCountMatch = normalized.match(
+      /^SELECT COUNT\(\*\) as count FROM ([A-Za-z_][A-Za-z0-9_]*)$/i
+    );
+    if (tableCountMatch) {
+      const table = this.getTable(tableCountMatch[1]);
       return { count: table.rows.length } as T;
     }
 
@@ -151,7 +154,7 @@ export class FakeSQLiteDatabase {
     return null;
   }
 
-  async getAllAsync<T>(sql: string, _params: unknown[] = []): Promise<T[]> {
+  async getAllAsync<T>(sql: string, _params: DatabaseBindParams = []): Promise<T[]> {
     const normalized = normalizeSql(sql);
 
     if (
@@ -248,7 +251,7 @@ export class FakeSQLiteDatabase {
 
   private applyStatement(
     sql: string,
-    params: unknown[] = [],
+    params: DatabaseBindParams = [],
     track = true
   ): { lastInsertRowId?: number; changes?: number } {
     const normalized = normalizeSql(sql);
@@ -262,7 +265,11 @@ export class FakeSQLiteDatabase {
 
     const userVersionMatch = normalized.match(/^PRAGMA user_version = (\d+)$/i);
     if (userVersionMatch) {
-      this.userVersion = Number(userVersionMatch[1]);
+      const parsedVersion = Number(userVersionMatch[1]);
+      if (!Number.isSafeInteger(parsedVersion) || parsedVersion < 0) {
+        throw new Error(`Invalid fake SQLite user_version: ${parsedVersion}`);
+      }
+      this.userVersion = parsedVersion;
       return { changes: 0 };
     }
 
@@ -342,16 +349,17 @@ export class FakeSQLiteDatabase {
       const columns = rawColumns.split(',').map((entry) => entry.trim());
       const isIgnore = /^INSERT OR IGNORE/i.test(normalized);
       const isReplace = /^INSERT OR REPLACE/i.test(normalized);
+      const paramList = Array.isArray(params) ? params : [];
       const rowCount =
-        params.length > 0 ? Math.max(1, Math.floor(params.length / columns.length)) : 1;
+        paramList.length > 0 ? Math.max(1, Math.floor(paramList.length / columns.length)) : 1;
 
       let changes = 0;
       let lastInsertRowId: number | undefined;
 
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
         const rowValues =
-          params.length > 0
-            ? params.slice(rowIndex * columns.length, (rowIndex + 1) * columns.length)
+          paramList.length > 0
+            ? paramList.slice(rowIndex * columns.length, (rowIndex + 1) * columns.length)
             : [];
 
         const row: Row = {};

@@ -74,6 +74,20 @@ function quoteIdentifier(identifier: string): string {
   return `"${sanitizeIdentifier(identifier)}"`;
 }
 
+function describeUnsafeColumnAdd(definition: string): string {
+  const normalized = definition.toUpperCase();
+
+  if (normalized.includes('PRIMARY KEY')) {
+    return 'column is part of a primary key definition';
+  }
+
+  if (normalized.includes('NOT NULL') && !normalized.includes('DEFAULT')) {
+    return 'column is NOT NULL without a default value for existing rows';
+  }
+
+  return 'column requires a potentially unsafe backfill or constraint rewrite';
+}
+
 export async function getUserVersion(database: DatabaseAdapter): Promise<number> {
   const row = await database.getFirstAsync<{ user_version?: number }>('PRAGMA user_version');
   return Number(row?.user_version ?? 0);
@@ -83,6 +97,10 @@ export async function setUserVersion(
   database: DatabaseAdapter,
   version: number
 ): Promise<void> {
+  if (!Number.isSafeInteger(version) || version < 0) {
+    throw new Error(`Invalid SQLite user_version: ${version}`);
+  }
+
   await database.execAsync(`PRAGMA user_version = ${version}`);
 }
 
@@ -156,7 +174,7 @@ async function addColumnIfSafe(
     result.skippedColumns.push({
       tableName,
       columnName: column.name,
-      reason: 'column requires a potentially unsafe backfill or constraint rewrite',
+      reason: describeUnsafeColumnAdd(column.definition),
     });
     return false;
   }

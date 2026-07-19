@@ -1,11 +1,18 @@
+export type DatabaseBindValue = string | number | null | boolean | Uint8Array;
+export type DatabaseBindParams =
+  | Record<string, DatabaseBindValue>
+  | DatabaseBindValue[];
+
+export interface DatabaseRunResult {
+  lastInsertRowId?: number;
+  changes?: number;
+}
+
 export interface DatabaseAdapter {
   execAsync(sql: string): Promise<void>;
-  runAsync(
-    sql: string,
-    params?: any
-  ): Promise<{ lastInsertRowId?: number; changes?: number }>;
-  getFirstAsync<T>(sql: string, params?: any): Promise<T | null>;
-  getAllAsync<T>(sql: string, params?: any): Promise<T[]>;
+  runAsync(sql: string, params?: DatabaseBindParams): Promise<DatabaseRunResult>;
+  getFirstAsync<T>(sql: string, params?: DatabaseBindParams): Promise<T | null>;
+  getAllAsync<T>(sql: string, params?: DatabaseBindParams): Promise<T[]>;
 }
 
 export interface ExpectedColumn {
