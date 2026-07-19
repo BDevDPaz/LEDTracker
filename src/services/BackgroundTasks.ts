@@ -11,10 +11,17 @@ import { EXIT_TIMESTAMP_KEY } from './LocationManager';
 import dayjs from '../utils/dayjsSetup';
 import { engine } from '../engine/workTrackerEngine';
 import { runDatabaseWork } from '../database/dbWorkQueue';
+import { RUNTIME_POLICY } from '../runtime/runtimePolicy';
+import {
+  LOCATION_EVIDENCE_DECISIONS,
+  LOCATION_EVIDENCE_SIGNAL_TYPES,
+  recordExitTimestampEvidence,
+  recordFailsafeEligibilityEvidence,
+} from '../runtime/locationEvidence';
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
-export const FAILSAFE_THRESHOLD_MS = 45 * 60 * 1000;
+export const FAILSAFE_THRESHOLD_MS = RUNTIME_POLICY.EXIT_FAILSAFE_THRESHOLD_MS;
 
 export const runFailsafeCheck = async (): Promise<boolean> => {
   logStructured(
@@ -48,13 +55,36 @@ export const runFailsafeCheck = async (): Promise<boolean> => {
     const exitTime = parseInt(lastExitStr, 10);
 
     if (Number.isNaN(exitTime) || exitTime > now) {
+      await recordExitTimestampEvidence({
+        source: 'BackgroundTasks',
+        signalType: LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_INVALID,
+        decision: LOCATION_EVIDENCE_DECISIONS.NO_DECISION,
+        metadata: {
+          exitTimestampRaw: lastExitStr,
+        },
+      });
       await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
       return false;
     }
 
     const timeDiff = now - exitTime;
+    const session = await db.getFirstAsync<WorkSession>(
+      "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY actual_start_time DESC LIMIT 1"
+    );
+    const sessionId = session?.id ?? null;
 
     if (timeDiff <= FAILSAFE_THRESHOLD_MS) {
+      await recordFailsafeEligibilityEvidence({
+        sessionId,
+        source: 'BackgroundTasks',
+        eligible: false,
+        metadata: {
+          exitTimestamp: exitTime,
+          elapsedMs: timeDiff,
+          thresholdMs: FAILSAFE_THRESHOLD_MS,
+        },
+      });
+
       logStructured(
         'DEBUG',
         'BACKGROUND_TASK',
@@ -70,11 +100,18 @@ export const runFailsafeCheck = async (): Promise<boolean> => {
       return false;
     }
 
-    const session = await db.getFirstAsync<WorkSession>(
-      "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY actual_start_time DESC LIMIT 1"
-    );
-
     if (session?.id) {
+      await recordFailsafeEligibilityEvidence({
+        sessionId: session.id,
+        source: 'BackgroundTasks',
+        eligible: true,
+        metadata: {
+          exitTimestamp: exitTime,
+          elapsedMs: timeDiff,
+          thresholdMs: FAILSAFE_THRESHOLD_MS,
+        },
+      });
+
       log(
         'AMARILLO',
         'ADVERTENCIA',
@@ -421,4 +458,3 @@ export const BackgroundTasks = {
     }
   },
 };
-

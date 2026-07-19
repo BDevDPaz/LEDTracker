@@ -1,3 +1,5 @@
+import { RUNTIME_POLICY } from '../runtime/runtimePolicy';
+
 export enum GeofenceState {
   OUTSIDE = 'OUTSIDE',
   ENTERING = 'ENTERING',
@@ -8,7 +10,7 @@ export enum GeofenceState {
 export const GEOFENCE_STATE_KEY = 'GEOFENCE_HYSTERESIS_STATE';
 export const GEOFENCE_SAMPLES_KEY = 'GEOFENCE_HYSTERESIS_SAMPLES';
 
-const REQUIRED_SAMPLES = 3;
+const REQUIRED_SAMPLES = RUNTIME_POLICY.REQUIRED_STABLE_GEOFENCE_SAMPLES;
 
 export interface IStorage {
     getItem(key: string): Promise<string | null>;

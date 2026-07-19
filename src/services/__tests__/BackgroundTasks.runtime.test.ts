@@ -31,6 +31,7 @@ describe('BackgroundTasks runtime failsafe', () => {
 
   let updateSessionEndTime: jest.Mock;
   let runFailsafeCheck: () => Promise<boolean>;
+  let recordFailsafeEligibilityEvidence: jest.Mock;
 
   beforeEach(() => {
     jest.resetModules();
@@ -47,6 +48,7 @@ describe('BackgroundTasks runtime failsafe', () => {
     };
 
     updateSessionEndTime = jest.fn();
+    recordFailsafeEligibilityEvidence = jest.fn();
 
     jest.doMock('@react-native-async-storage/async-storage', () => ({
       __esModule: true,
@@ -101,6 +103,17 @@ describe('BackgroundTasks runtime failsafe', () => {
       updateSessionEndTime,
     }));
 
+    jest.doMock('../../runtime/locationEvidence', () => ({
+      recordFailsafeEligibilityEvidence,
+      recordExitTimestampEvidence: jest.fn(),
+      LOCATION_EVIDENCE_SIGNAL_TYPES: {
+        EXIT_TIMESTAMP_INVALID: 'EXIT_TIMESTAMP_INVALID',
+      },
+      LOCATION_EVIDENCE_DECISIONS: {
+        NO_DECISION: 'NO_DECISION',
+      },
+    }));
+
     jest.doMock('../../utils/logger', () => ({
       AUDIT_ACTIONS: MOCK_AUDIT_ACTIONS,
       log: jest.fn(),
@@ -145,8 +158,14 @@ describe('BackgroundTasks runtime failsafe', () => {
       exitTimestamp,
       MOCK_AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE
     );
+    expect(recordFailsafeEligibilityEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 10,
+        source: 'BackgroundTasks',
+        eligible: true,
+      })
+    );
 
     expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith(EXIT_TIMESTAMP_KEY);
   });
 });
-
