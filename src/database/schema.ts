@@ -284,7 +284,7 @@ export const SETTINGS_SEED_SQL = `INSERT OR IGNORE INTO settings (
   employer_name,
   company_email,
   language
-) VALUES (1, 'Alex León', 'WTracker Corp', 'nomina@wtracker.app', 'es')`;
+) VALUES (1, 'BDevDPaz', 'WTracker Testing Library', 'bdpaz_developer@outlook.com, 'es')`;
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
