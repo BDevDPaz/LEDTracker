@@ -11,11 +11,20 @@ import { LocationFSM } from './LocationFSM';
 import { locationAdapter } from '../runtime/locationAdapter';
 import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
 import { notifyGeofenceExitDetected } from './Notifications';
+import {
+  LOCATION_EVIDENCE_DECISIONS,
+  LOCATION_EVIDENCE_SIGNAL_TYPES,
+  recordExitTimestampEvidence,
+  recordGeofenceEventEvidence,
+  recordGpsSampleAccepted,
+  recordGpsSampleRejected,
+  recordLocationEvidence,
+} from '../runtime/locationEvidence';
+import { RUNTIME_POLICY } from '../runtime/runtimePolicy';
 
 export const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
 export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
-
-export const MIN_ACCURACY_METERS = 50;
+export const MIN_ACCURACY_METERS = RUNTIME_POLICY.GPS_ACCEPTED_ACCURACY_M;
 
 const fsm = new LocationFSM(AsyncStorage);
 
@@ -74,6 +83,19 @@ export async function registerAutoCheckinGps(
 
   const db = await ensureDbReady();
   const now = dayjs().valueOf();
+
+  await recordGpsSampleAccepted({
+    sessionId: session.id,
+    source: context.source,
+    latitude: context.latitude,
+    longitude: context.longitude,
+    accuracy: context.accuracy,
+    distanceToTarget: context.distanceToTarget,
+    metadata: {
+      statusBefore: session.status,
+      action: AUDIT_ACTIONS.AUTO_CHECKIN_GPS,
+    },
+  });
 
   await Promise.all([
     db.runAsync(
@@ -146,7 +168,29 @@ TaskManager.defineTask(
         return;
       }
 
+      await recordLocationEvidence({
+        sessionId: parseInt(siteId, 10),
+        eventSource: GEOFENCE_TASK,
+        signalType: LOCATION_EVIDENCE_SIGNAL_TYPES.GPS_SAMPLE_RECEIVED,
+        decision: LOCATION_EVIDENCE_DECISIONS.NO_DECISION,
+        latitude: currentPos.latitude,
+        longitude: currentPos.longitude,
+        accuracy: currentPos.accuracy,
+      });
+
       if (currentPos.accuracy && currentPos.accuracy > MIN_ACCURACY_METERS) {
+        await recordGpsSampleRejected({
+          sessionId: parseInt(siteId, 10),
+          source: GEOFENCE_TASK,
+          latitude: currentPos.latitude,
+          longitude: currentPos.longitude,
+          accuracy: currentPos.accuracy,
+          reason: 'WEAK_ACCURACY',
+          metadata: {
+            acceptedAccuracyThresholdM: MIN_ACCURACY_METERS,
+          },
+        });
+
         logStructured(
           'WARN',
           'GPS_DEBIL',
@@ -190,6 +234,20 @@ TaskManager.defineTask(
           eventType === Location.GeofencingEventType.Enter &&
           distanceM > region.radius + 100
         ) {
+          await recordGpsSampleRejected({
+            sessionId: session.id ?? null,
+            source: GEOFENCE_TASK,
+            latitude: currentPos.latitude,
+            longitude: currentPos.longitude,
+            accuracy: currentPos.accuracy,
+            distanceToTarget: distanceM,
+            reason: 'OUTSIDE_RADIUS',
+            metadata: {
+              radiusMeters: region.radius,
+              toleranceBufferM: 100,
+            },
+          });
+
           logStructured(
             'WARN',
             'EVENTO_GEOCERCA',
@@ -210,6 +268,12 @@ TaskManager.defineTask(
       const { transition } = await fsm.update(eventName, siteId);
 
       if (transition === 'ENTERED') {
+        await recordGeofenceEventEvidence(session.id ?? null, GEOFENCE_TASK, 'ENTER', {
+          latitude: currentPos.latitude,
+          longitude: currentPos.longitude,
+          accuracy: currentPos.accuracy,
+        });
+
         log(
           'NARANJA',
           'EVENTO_GEOCERCA',
@@ -226,6 +290,12 @@ TaskManager.defineTask(
           });
         }
       } else if (transition === 'EXITED') {
+        await recordGeofenceEventEvidence(session.id ?? null, GEOFENCE_TASK, 'EXIT', {
+          latitude: currentPos.latitude,
+          longitude: currentPos.longitude,
+          accuracy: currentPos.accuracy,
+        });
+
         log(
           'NARANJA',
           'EVENTO_GEOCERCA',
@@ -235,6 +305,16 @@ TaskManager.defineTask(
 
         if (session.status === 'active' && session.id) {
           const existingExitTimestamp = await AsyncStorage.getItem(EXIT_TIMESTAMP_KEY);
+
+          await recordExitTimestampEvidence({
+            sessionId: session.id,
+            source: GEOFENCE_TASK,
+            signalType: LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_DETECTED,
+            decision: LOCATION_EVIDENCE_DECISIONS.NO_DECISION,
+            metadata: {
+              hasExistingExitTimestamp: Boolean(existingExitTimestamp),
+            },
+          });
 
           if (existingExitTimestamp) {
             logStructured(
@@ -254,6 +334,16 @@ TaskManager.defineTask(
           const exitTimestamp = dayjs().valueOf();
 
           await AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, exitTimestamp.toString());
+
+          await recordExitTimestampEvidence({
+            sessionId: session.id,
+            source: GEOFENCE_TASK,
+            signalType: LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_DETECTED,
+            decision: LOCATION_EVIDENCE_DECISIONS.EXIT_TIMESTAMP_STORED,
+            metadata: {
+              exitTimestamp,
+            },
+          });
 
           logStructured(
             'DEBUG',
@@ -380,4 +470,3 @@ export const LocationService = {
     return await locationAdapter.geocodeAddress(address);
   },
 };
-

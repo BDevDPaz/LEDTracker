@@ -4,7 +4,6 @@ import { locationAdapter } from './locationAdapter';
 import { sessionStoreAdapter } from './sessionStoreAdapter';
 import {
   registerAutoCheckinGps,
-  MIN_ACCURACY_METERS,
   EXIT_TIMESTAMP_KEY,
   LocationService,
   GEOFENCE_TASK,
@@ -13,6 +12,16 @@ import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
 import { AUDIT_ACTIONS, logStructured } from '../utils/logger';
 import dayjs from '../utils/dayjsSetup';
 import { WorkSession } from '../types';
+import { RUNTIME_POLICY } from './runtimePolicy';
+import {
+  LOCATION_EVIDENCE_DECISIONS,
+  LOCATION_EVIDENCE_SIGNAL_TYPES,
+  recordExitTimestampEvidence,
+  recordFailsafeEligibilityEvidence,
+  recordGpsSampleAccepted,
+  recordGpsSampleRejected,
+  recordLocationEvidence,
+} from './locationEvidence';
 
 export type RuntimeReconcileSource =
   | 'APP_INIT'
@@ -20,9 +29,10 @@ export type RuntimeReconcileSource =
   | 'DASHBOARD_REFRESH'
   | 'BACKGROUND_TASK';
 
-const DEFAULT_RECONCILE_RADIUS_METERS = 200;
-const FAILSAFE_THRESHOLD_MS = 45 * 60 * 1000;
-const STALE_EXIT_TIMESTAMP_MS = 12 * 60 * 60 * 1000;
+const DEFAULT_RECONCILE_RADIUS_METERS = RUNTIME_POLICY.DEFAULT_RECONCILE_RADIUS_M;
+const FAILSAFE_THRESHOLD_MS = RUNTIME_POLICY.EXIT_FAILSAFE_THRESHOLD_MS;
+const STALE_EXIT_TIMESTAMP_MS = RUNTIME_POLICY.STALE_EXIT_TIMESTAMP_MS;
+const MIN_ACCURACY_METERS = RUNTIME_POLICY.GPS_ACCEPTED_ACCURACY_M;
 
 let isReconciling = false;
 
@@ -214,6 +224,18 @@ export async function reconcilePendingArrivalState(
     currentLocation.accuracy !== null &&
     currentLocation.accuracy > MIN_ACCURACY_METERS
   ) {
+    await recordGpsSampleRejected({
+      source,
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      accuracy: currentLocation.accuracy,
+      reason: 'WEAK_ACCURACY',
+      metadata: {
+        pendingCount: snapshot.pendingSessions.length,
+        acceptedAccuracyThresholdM: MIN_ACCURACY_METERS,
+      },
+    });
+
     logStructured(
       'DEBUG',
       'ESTADO_SISTEMA',
@@ -234,6 +256,17 @@ export async function reconcilePendingArrivalState(
       },
     };
   }
+
+  await recordGpsSampleAccepted({
+    source,
+    latitude: currentLocation.latitude,
+    longitude: currentLocation.longitude,
+    accuracy: currentLocation.accuracy,
+    metadata: {
+      pendingCount: snapshot.pendingSessions.length,
+      radiusMeters: snapshot.radiusMeters,
+    },
+  });
 
   logStructured(
     'DEBUG',
@@ -268,6 +301,19 @@ export async function reconcilePendingArrivalState(
     );
 
     if (distanceToTarget > snapshot.radiusMeters) {
+      await recordGpsSampleRejected({
+        sessionId: session.id,
+        source,
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        accuracy: currentLocation.accuracy,
+        distanceToTarget,
+        reason: 'OUTSIDE_RADIUS',
+        metadata: {
+          radiusMeters: snapshot.radiusMeters,
+        },
+      });
+
       continue;
     }
 
@@ -358,6 +404,17 @@ export async function reconcileActiveSessionState(
       const exitTimestamp = snapshot.exitTimestamp as number;
       const elapsedMs = snapshot.now - exitTimestamp;
       const failsafeEligible = elapsedMs > FAILSAFE_THRESHOLD_MS;
+
+      await recordFailsafeEligibilityEvidence({
+        sessionId: activeSession.id,
+        source,
+        eligible: failsafeEligible,
+        metadata: {
+          exitTimestamp,
+          elapsedMs,
+          thresholdMs: FAILSAFE_THRESHOLD_MS,
+        },
+      });
 
       logStructured(
         'DEBUG',
@@ -529,6 +586,17 @@ export async function reconcileExitTimestampState(
   if (
     isInvalidExitTimestamp(snapshot.exitTimestamp, snapshot.now)
   ) {
+    await recordExitTimestampEvidence({
+      source,
+      signalType: LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_INVALID,
+      decision: LOCATION_EVIDENCE_DECISIONS.NO_DECISION,
+      metadata: {
+        exitTimestampRaw: snapshot.exitTimestampRaw,
+        hasActiveSession,
+        hasCompletedSession,
+      },
+    });
+
     logStructured(
       'WARN',
       'ESTADO_SISTEMA',
@@ -558,6 +626,20 @@ export async function reconcileExitTimestampState(
   const exitTimestamp = snapshot.exitTimestamp as number;
   const elapsedMs = snapshot.now - exitTimestamp;
   const isStale = elapsedMs > STALE_EXIT_TIMESTAMP_MS;
+
+  await recordLocationEvidence({
+    sessionId: snapshot.activeSession?.id ?? snapshot.completedSessionToday?.id ?? null,
+    eventSource: source,
+    signalType: LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_DETECTED,
+    decision: LOCATION_EVIDENCE_DECISIONS.NO_DECISION,
+    metadata: {
+      exitTimestamp,
+      elapsedMs,
+      stale: isStale,
+      hasActiveSession,
+      hasCompletedSession,
+    },
+  });
 
   if (isStale) {
     logStructured(

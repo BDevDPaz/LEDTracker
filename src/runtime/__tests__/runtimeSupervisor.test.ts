@@ -6,12 +6,32 @@ import { sessionStoreAdapter } from '../sessionStoreAdapter';
 import { AUDIT_ACTIONS, logStructured } from '../../utils/logger';
 import dayjs from '../../utils/dayjsSetup';
 import { registerAutoCheckinGps, LocationService } from '../../services/LocationManager';
+import {
+  recordFailsafeEligibilityEvidence,
+  recordGpsSampleAccepted,
+  recordGpsSampleRejected,
+} from '../locationEvidence';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
     getItem: jest.fn(),
     removeItem: jest.fn(),
+  },
+}));
+
+jest.mock('../locationEvidence', () => ({
+  recordGpsSampleAccepted: jest.fn(),
+  recordGpsSampleRejected: jest.fn(),
+  recordFailsafeEligibilityEvidence: jest.fn(),
+  recordExitTimestampEvidence: jest.fn(),
+  recordLocationEvidence: jest.fn(),
+  LOCATION_EVIDENCE_SIGNAL_TYPES: {
+    EXIT_TIMESTAMP_INVALID: 'EXIT_TIMESTAMP_INVALID',
+    EXIT_TIMESTAMP_DETECTED: 'EXIT_TIMESTAMP_DETECTED',
+  },
+  LOCATION_EVIDENCE_DECISIONS: {
+    NO_DECISION: 'NO_DECISION',
   },
 }));
 
@@ -31,7 +51,6 @@ jest.mock('../sessionStoreAdapter', () => ({
 }));
 
 jest.mock('../../services/LocationManager', () => ({
-  MIN_ACCURACY_METERS: 50,
   EXIT_TIMESTAMP_KEY: 'LAST_GEOFENCE_EXIT_TIMESTAMP',
   GEOFENCE_TASK: 'GEOFENCE_TRACKING_TASK',
   registerAutoCheckinGps: jest.fn(),
@@ -141,6 +160,11 @@ describe('runtimeSupervisor runtime reconciliation', () => {
         longitude: -118.5193,
       })
     );
+    expect(recordGpsSampleAccepted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'APP_INIT',
+      })
+    );
     expect(result.status).toBe('completed');
   });
 
@@ -158,6 +182,13 @@ describe('runtimeSupervisor runtime reconciliation', () => {
     await reconcileRuntimeState('APP_INIT');
 
     expect(registerAutoCheckinGps).not.toHaveBeenCalled();
+    expect(recordGpsSampleRejected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'APP_INIT',
+        accuracy: 100,
+        reason: 'WEAK_ACCURACY',
+      })
+    );
     expect(logStructured).toHaveBeenCalledWith(
       'DEBUG',
       'ESTADO_SISTEMA',
@@ -177,6 +208,13 @@ describe('runtimeSupervisor runtime reconciliation', () => {
 
     await reconcileRuntimeState('FOREGROUND');
 
+    expect(recordFailsafeEligibilityEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: activeSession.id,
+        source: 'FOREGROUND',
+        eligible: true,
+      })
+    );
     expect(logStructured).toHaveBeenCalledWith(
       expect.any(String),
       'ESTADO_SISTEMA',

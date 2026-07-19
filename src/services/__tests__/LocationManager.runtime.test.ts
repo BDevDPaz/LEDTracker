@@ -26,6 +26,7 @@ describe('LocationManager runtime geofence exit', () => {
   let insertAuditLog: jest.Mock;
   let notifyGeofenceExitDetected: jest.Mock;
   let logStructured: jest.Mock;
+  let recordExitTimestampEvidence: jest.Mock;
 
   beforeEach(() => {
     jest.resetModules();
@@ -49,6 +50,7 @@ describe('LocationManager runtime geofence exit', () => {
     insertAuditLog = jest.fn();
     notifyGeofenceExitDetected = jest.fn();
     logStructured = jest.fn();
+    recordExitTimestampEvidence = jest.fn();
 
     jest.doMock('@react-native-async-storage/async-storage', () => ({
       __esModule: true,
@@ -107,6 +109,22 @@ describe('LocationManager runtime geofence exit', () => {
       notifyGeofenceExitDetected,
     }));
 
+    jest.doMock('../../runtime/locationEvidence', () => ({
+      recordLocationEvidence: jest.fn(),
+      recordGpsSampleAccepted: jest.fn(),
+      recordGpsSampleRejected: jest.fn(),
+      recordGeofenceEventEvidence: jest.fn(),
+      recordExitTimestampEvidence,
+      LOCATION_EVIDENCE_DECISIONS: {
+        NO_DECISION: 'NO_DECISION',
+        EXIT_TIMESTAMP_STORED: 'EXIT_TIMESTAMP_STORED',
+      },
+      LOCATION_EVIDENCE_SIGNAL_TYPES: {
+        GPS_SAMPLE_RECEIVED: 'GPS_SAMPLE_RECEIVED',
+        EXIT_TIMESTAMP_DETECTED: 'EXIT_TIMESTAMP_DETECTED',
+      },
+    }));
+
     jest.doMock('../../utils/logger', () => ({
       AUDIT_ACTIONS: MOCK_AUDIT_ACTIONS,
       log: jest.fn(),
@@ -163,6 +181,13 @@ describe('LocationManager runtime geofence exit', () => {
       EXIT_TIMESTAMP_KEY,
       expect.any(String)
     );
+    expect(recordExitTimestampEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 2,
+        source: 'GEOFENCE_TRACKING_TASK',
+        decision: 'EXIT_TIMESTAMP_STORED',
+      })
+    );
 
     expect(logStructured).toHaveBeenCalledWith(
       'DEBUG',
@@ -183,4 +208,3 @@ describe('LocationManager runtime geofence exit', () => {
     expect(notifyGeofenceExitDetected).toHaveBeenCalledWith('Test Client');
   });
 });
-
