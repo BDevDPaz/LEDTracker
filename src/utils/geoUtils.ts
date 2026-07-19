@@ -10,7 +10,15 @@ export const getDistanceFromLatLonInMeters = (
   lat2: number, 
   lon2: number
 ): number => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+
+  if (
+    !Number.isFinite(lat1) ||
+    !Number.isFinite(lon1) ||
+    !Number.isFinite(lat2) ||
+    !Number.isFinite(lon2)
+  ) {
+    return 0;
+  }
   
   const R = 6371e3; // Radio de la tierra en metros
   const dLat = deg2rad(lat2 - lat1);

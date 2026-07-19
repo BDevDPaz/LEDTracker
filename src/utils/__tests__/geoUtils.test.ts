@@ -32,9 +32,25 @@ describe('geoUtils - Cálculo de Distancia', () => {
     expect(dist).toBeLessThan(4000000);
   });
 
-  it('debería devolver 0 si alguna coordenada es falsy (cobertura de rama)', () => {
-    // Esto fuerza la ejecución de la línea 13: if (!lat1 || !lon1 || !lat2 || !lon2)
-    const dist = getDistanceFromLatLonInMeters(0, -118.2437, 34.0522, -118.2437);
+  it('debería aceptar coordenadas 0 como valores válidos', () => {
+    const dist = getDistanceFromLatLonInMeters(
+      0,
+      -118.2437,
+      34.0522,
+      -118.2437
+    );
+  
+    expect(dist).toBeGreaterThan(0);
+  });
+  
+  it('debería devolver 0 si alguna coordenada no es finita', () => {
+    const dist = getDistanceFromLatLonInMeters(
+      Number.NaN,
+      -118.2437,
+      34.0522,
+      -118.2437
+    );
+
     expect(dist).toBe(0);
   });
 });
