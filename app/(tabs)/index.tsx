@@ -21,7 +21,10 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { engine } from '../../src/engine/workTrackerEngine';
-import { selectActiveSession, selectIsLoading } from '../../src/engine/selectors/workTrackerSelectors';
+import {
+  selectActiveSession,
+  selectIsLoading,
+} from '../../src/engine/selectors/workTrackerSelectors';
 import { useLanguage } from '../../src/context/LanguageContext';
 import { useLuxuryUI } from '../../src/context/LuxuryUIContext';
 import { COLORS } from '../../src/constants/theme';
@@ -37,6 +40,7 @@ import { log } from '../../src/utils/logger';
 import { getDailyCompletedSessions, getSettings } from '../../src/database/db';
 import { calculateSessionMinutes } from '../../src/utils/payrollUtils';
 import dayjs from '../../src/utils/dayjsSetup';
+import { reconcileRuntimeState } from '../../src/runtime/runtimeSupervisor';
 
 function HomeScreenComponent() {
   const { t } = useLanguage();
@@ -47,8 +51,15 @@ function HomeScreenComponent() {
   // Engine state
   const [engineState, setEngineState] = useState(engine.getState());
 
-  const activeSession = useMemo(() => selectActiveSession(engineState), [engineState]);
-  const isProcessing = useMemo(() => selectIsLoading(engineState), [engineState]);
+  const activeSession = useMemo(
+    () => selectActiveSession(engineState),
+    [engineState]
+  );
+
+  const isProcessing = useMemo(
+    () => selectIsLoading(engineState),
+    [engineState]
+  );
 
   const [stats, setStats] = useState({ hours: 0, earnings: 0 });
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -67,7 +78,22 @@ function HomeScreenComponent() {
   }, []);
 
   useEffect(() => {
-    engine.dispatch({ type: 'APP_INIT' });
+    const initializeApp = async () => {
+      try {
+        await engine.dispatch({ type: 'APP_INIT' });
+        await reconcileRuntimeState('APP_INIT');
+      } catch (_e) {
+        log(
+          'ROJO',
+          'ERROR_CRITICO',
+          'ERROR',
+          'Error inicializando runtime desde Home',
+          _e
+        );
+      }
+    };
+
+    void initializeApp();
   }, []);
 
   const loadStats = useCallback(async () => {
@@ -78,7 +104,7 @@ function HomeScreenComponent() {
       // This prevents loading all history records into memory just to filter them
       const [dailySessions, settings] = await Promise.all([
         getDailyCompletedSessions(today),
-        getSettings()
+        getSettings(),
       ]);
 
       const rate = settings?.hourly_rate || 0;
@@ -113,16 +139,30 @@ function HomeScreenComponent() {
       setSetupMode('start');
       setShowSetupModal(true);
     }
+
     if (params.showCheckoutPrompt === 'true') {
-       setShowLunchModal(true);
+      setShowLunchModal(true);
     }
   }, [params]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await engine.dispatch({ type: 'APP_INIT' });
-    await loadStats();
-    setRefreshing(false);
+
+    try {
+      await engine.dispatch({ type: 'APP_INIT' });
+      await reconcileRuntimeState('DASHBOARD_REFRESH');
+      await loadStats();
+    } catch (_e) {
+      log(
+        'ROJO',
+        'ERROR_CRITICO',
+        'ERROR',
+        'Error refrescando dashboard runtime',
+        _e
+      );
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadStats]);
 
   const handleSetupSubmit = (addr: string, client: string, notes: string) => {
@@ -170,7 +210,8 @@ function HomeScreenComponent() {
     return COLORS.success;
   };
 
-  const displayAddress = activeSession?.address || t.no_activity || 'No hay actividad registrada.';
+  const displayAddress =
+    activeSession?.address || t.no_activity || 'No hay actividad registrada.';
 
   return (
     <SafeAreaView testID='home-screen' style={styles.container} edges={['top']}>
@@ -195,9 +236,9 @@ function HomeScreenComponent() {
                 testID='home-easter-egg-trigger'
                 onPress={handleEasterEggTap}
                 activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Easter Egg"
-                accessibilityHint="Muestra información del desarrollador"
+                accessibilityRole='button'
+                accessibilityLabel='Easter Egg'
+                accessibilityHint='Muestra información del desarrollador'
               >
                 <Animated.View style={animatedIconStyle}>
                   <Ionicons name='flash' size={18} color={COLORS.gold} />
@@ -232,9 +273,16 @@ function HomeScreenComponent() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(100)} testID='home-card-wrapper'>
-          <LuxuryCard active={!!activeSession} style={{ minHeight: 220, justifyContent: 'center' }}>
+          <LuxuryCard
+            active={!!activeSession}
+            style={{ minHeight: 220, justifyContent: 'center' }}
+          >
             {isProcessing ? (
-              <ActivityIndicator testID='home-loading-indicator' size='large' color={COLORS.gold} />
+              <ActivityIndicator
+                testID='home-loading-indicator'
+                size='large'
+                color={COLORS.gold}
+              />
             ) : (
               <View testID='home-session-state' style={{ alignItems: 'center' }}>
                 <View
@@ -318,7 +366,11 @@ function HomeScreenComponent() {
           />
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(300)} testID='home-stats-container' style={styles.statsContainer}>
+        <Animated.View
+          entering={FadeInDown.delay(300)}
+          testID='home-stats-container'
+          style={styles.statsContainer}
+        >
           <LuxuryCard style={styles.statBox}>
             <Text style={styles.statLabel}>{t.stats_hours}</Text>
             <Text testID='home-hours-value' style={styles.statValue}>
@@ -367,9 +419,9 @@ function HomeScreenComponent() {
             <Text style={styles.eggAuthor}>by BDevDPaz</Text>
             <View style={styles.eggDivider} />
             <Text style={styles.eggText}>
-              Para uso restringido de{"\n"}
+              Para uso restringido de{'\n'}
               <Text style={{ color: '#FFF' }}>Alex León</Text>
-              {"\n"}
+              {'\n'}
               CEO de WTracker Corp
             </Text>
             <LuxuryButton
@@ -503,3 +555,4 @@ const styles = StyleSheet.create({
 });
 
 export default memo(HomeScreenComponent);
+
