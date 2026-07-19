@@ -2,9 +2,13 @@ import * as SQLite from 'expo-sqlite';
 import dayjs from '../utils/dayjsSetup';
 import { validateSession } from "../utils/payrollUtils";
 import { WorkSession, AppSettings, SessionStatus } from '../types';
+import { repairDatabaseHealth, verifyDatabaseHealth } from './dbHealth';
+import { runDatabaseMigrations } from './migrations';
 import {
   log,
   logAudit,
+  logStructured,
+  setLoggerDB,
   AUDIT_ACTIONS,
   CheckoutAuditAction,
   isOfficialCheckoutAuditAction,
@@ -88,102 +92,61 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (dbReady && db) return db;
   if (initPromise) return initPromise;
 
-  initPromise = (async () => {
+  const pendingInit = (async () => {
     const database = await openDbOnce();
 
-    await configureDatabase(database);
+    logStructured('INFO', 'ESTADO_SISTEMA', 'DB_INIT_STARTED', {
+      database: DB_NAME,
+    });
 
-    await database.execAsync(`
-      CREATE TABLE IF NOT EXISTS work_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        start_time INTEGER NOT NULL,
-        actual_start_time INTEGER,
-        end_time INTEGER,
-        status TEXT NOT NULL,
-        latitude REAL,
-        longitude REAL,
-        target_latitude REAL,
-        target_longitude REAL,
-        setup_latitude REAL,
-        setup_longitude REAL,
-        address TEXT,
-        client_name TEXT,
-        location_confirmed INTEGER DEFAULT 0,
-        is_manual_edit INTEGER DEFAULT 0,
-        manual_note TEXT,
-        lunch_taken INTEGER DEFAULT 0,
-        lunch_start INTEGER,
-        lunch_end INTEGER,
-        date_string TEXT
-      );
+    try {
+      await configureDatabase(database);
 
-      CREATE TABLE IF NOT EXISTS settings (
-        id INTEGER PRIMARY KEY NOT NULL,
-        employee_name TEXT,
-        employer_name TEXT,
-        company_email TEXT,
-        tolerance_radius INTEGER DEFAULT 200,
-        hourly_rate REAL DEFAULT 0,
-        language TEXT DEFAULT 'es',
-        start_time TEXT DEFAULT '08:00',
-        overtime_multiplier REAL DEFAULT 1.5
-      );
+      const migrationResult = await runDatabaseMigrations(database);
 
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER,
-        action_type TEXT NOT NULL,
-        details TEXT,
-        timestamp INTEGER NOT NULL
-      );
+      setLoggerDB(database);
 
-      CREATE TABLE IF NOT EXISTS system_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        timestamp_str TEXT NOT NULL,
-        color TEXT,
-        categoria TEXT,
-        severidad TEXT,
-        mensaje TEXT,
-        metadata TEXT
-      );
+      let healthReport = await verifyDatabaseHealth(database);
 
-      CREATE TABLE IF NOT EXISTS location_evidence (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER,
-        timestamp INTEGER NOT NULL,
-        latitude REAL,
-        longitude REAL,
-        accuracy REAL,
-        distance_to_target REAL,
-        event_source TEXT NOT NULL,
-        signal_type TEXT NOT NULL,
-        decision TEXT NOT NULL,
-        metadata TEXT,
-        created_at INTEGER NOT NULL
-      );
+      if (!healthReport.isHealthy) {
+        await repairDatabaseHealth(database);
+        healthReport = await verifyDatabaseHealth(database);
+      }
 
-      -- Performance indexes
-      CREATE INDEX IF NOT EXISTS idx_sessions_by_date ON work_sessions(date_string, status);
-      CREATE INDEX IF NOT EXISTS idx_sessions_active ON work_sessions(status) WHERE status IN ("active", "pending_arrival");
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_by_session ON audit_logs(session_id, timestamp);
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_by_timestamp ON audit_logs(timestamp DESC);
-      CREATE INDEX IF NOT EXISTS idx_system_logs_by_time ON system_logs(timestamp DESC);
-      CREATE INDEX IF NOT EXISTS idx_location_evidence_session_time ON location_evidence(session_id, timestamp DESC);
-      CREATE INDEX IF NOT EXISTS idx_location_evidence_signal_time ON location_evidence(signal_type, timestamp DESC);
-      CREATE INDEX IF NOT EXISTS idx_location_evidence_created_at ON location_evidence(created_at DESC);
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_active_session ON work_sessions(date_string, status) WHERE status IN ("pending_arrival", "active");
+      if (!healthReport.isHealthy) {
+        throw new Error(
+          `Database health verification failed: ${healthReport.findings
+            .map((finding) => finding.message)
+            .join('; ')}`
+        );
+      }
 
-      INSERT OR IGNORE INTO settings (id, employee_name, employer_name, company_email, language)
-      VALUES (1, 'Alex León', 'WTracker Corp', 'nomina@wtracker.app', 'es');
-    `);
+      db = database;
+      dbReady = true;
 
-    db = database;
-    dbReady = true;
-    return database;
+      logStructured('INFO', 'ESTADO_SISTEMA', 'DB_INIT_COMPLETED', {
+        database: DB_NAME,
+        initialVersion: migrationResult.initialVersion,
+        finalVersion: migrationResult.finalVersion,
+        appliedMigrations: migrationResult.appliedVersions,
+        legacyBaselineDetected: migrationResult.legacyBaselineDetected,
+      });
+
+      return database;
+    } catch (error) {
+      dbReady = false;
+      logStructured('ERROR', 'ESTADO_SISTEMA', 'DB_INIT_FAILED', {
+        database: DB_NAME,
+        error,
+      });
+      throw error;
+    } finally {
+      initPromise = null;
+    }
   })();
 
-  return initPromise;
+  initPromise = pendingInit;
+  return pendingInit;
 }
 
 export async function ensureDbReady(): Promise<SQLite.SQLiteDatabase> {
