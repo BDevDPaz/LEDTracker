@@ -387,6 +387,16 @@ export const getHistory = async (): Promise<WorkSession[]> => {
   );
 };
 
+export const getDailyCompletedSessions = async (dateString: string): Promise<WorkSession[]> => {
+  const database = await ensureDbReady();
+  return await database.getAllAsync<WorkSession>(
+    `SELECT * FROM work_sessions
+     WHERE date_string = ? AND status = 'completed'
+     ORDER BY start_time DESC`,
+    [dateString]
+  );
+};
+
 export const updateSessionStatus = async (
   id: number,
   status: SessionStatus,
