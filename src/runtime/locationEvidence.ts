@@ -23,6 +23,14 @@ export const LOCATION_EVIDENCE_DECISIONS = {
   FAILSAFE_NOT_ELIGIBLE: 'FAILSAFE_NOT_ELIGIBLE',
 } as const;
 
+type ExitTimestampSignalType =
+  | typeof LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_DETECTED
+  | typeof LOCATION_EVIDENCE_SIGNAL_TYPES.EXIT_TIMESTAMP_INVALID;
+
+type ExitTimestampDecisionType =
+  | typeof LOCATION_EVIDENCE_DECISIONS.NO_DECISION
+  | typeof LOCATION_EVIDENCE_DECISIONS.EXIT_TIMESTAMP_STORED;
+
 export interface LocationEvidenceEntry {
   id?: number;
   session_id: number | null;
@@ -247,8 +255,8 @@ export async function recordGeofenceEventEvidence(
 export async function recordExitTimestampEvidence(context: {
   sessionId?: number | null;
   source: string;
-  signalType: (typeof LOCATION_EVIDENCE_SIGNAL_TYPES)['EXIT_TIMESTAMP_DETECTED' | 'EXIT_TIMESTAMP_INVALID'];
-  decision: (typeof LOCATION_EVIDENCE_DECISIONS)['NO_DECISION' | 'EXIT_TIMESTAMP_STORED'];
+  signalType: ExitTimestampSignalType;
+  decision: ExitTimestampDecisionType;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   await recordLocationEvidence({
