@@ -1,6 +1,8 @@
 describe('BackgroundTasks runtime failsafe', () => {
   const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 
+  const FIXED_EXIT_TIMESTAMP_MS = 1_700_000_000_000;
+
   const MOCK_AUDIT_ACTIONS = {
     AUTO_CHECKOUT_FAILSAFE: 'AUTO_CHECKOUT_FAILSAFE',
     BACKGROUND_FAILSAFE_CHECK_STARTED: 'BACKGROUND_FAILSAFE_CHECK_STARTED',
@@ -29,7 +31,6 @@ describe('BackgroundTasks runtime failsafe', () => {
 
   let updateSessionEndTime: jest.Mock;
   let runFailsafeCheck: () => Promise<boolean>;
-  let FAILSAFE_THRESHOLD_MS: number;
 
   beforeEach(() => {
     jest.resetModules();
@@ -126,11 +127,10 @@ describe('BackgroundTasks runtime failsafe', () => {
     const backgroundTasksModule = require('../BackgroundTasks') as typeof import('../BackgroundTasks');
 
     runFailsafeCheck = backgroundTasksModule.runFailsafeCheck;
-    FAILSAFE_THRESHOLD_MS = backgroundTasksModule.FAILSAFE_THRESHOLD_MS;
   });
 
   it('active + EXIT_TIMESTAMP_KEY + threshold cumplido cierra con AUTO_CHECKOUT_FAILSAFE usando timestamp real', async () => {
-    const exitTimestamp = Date.now() - FAILSAFE_THRESHOLD_MS - 60_000;
+    const exitTimestamp = FIXED_EXIT_TIMESTAMP_MS;
 
     mockAsyncStorage.getItem.mockResolvedValue(exitTimestamp.toString());
 
