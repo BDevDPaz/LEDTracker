@@ -1,5 +1,5 @@
 describe('LocationFSM policy centralization', () => {
-  it('usa REQUIRED_STABLE_GEOFENCE_SAMPLES desde runtimePolicy', async () => {
+  it('uses REQUIRED_STABLE_GEOFENCE_SAMPLES from runtimePolicy', async () => {
     jest.resetModules();
 
     jest.doMock('../../runtime/runtimePolicy', () => ({

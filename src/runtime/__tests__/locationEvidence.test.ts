@@ -31,7 +31,7 @@ describe('locationEvidence', () => {
     mockGetFirstAsync.mockResolvedValue({ count: 0 });
   });
 
-  it('recordLocationEvidence guarda fila en location_evidence', async () => {
+  it('recordLocationEvidence saves a row in location_evidence', async () => {
     await recordLocationEvidence({
       sessionId: 10,
       eventSource: 'TEST',
@@ -48,7 +48,7 @@ describe('locationEvidence', () => {
     );
   });
 
-  it('recordGpsSampleRejected registra rechazo por weak accuracy con semántica estable', async () => {
+  it('recordGpsSampleRejected logs weak-accuracy rejection with stable semantics', async () => {
     await recordGpsSampleRejected({
       sessionId: 7,
       source: 'APP_INIT',
@@ -69,7 +69,7 @@ describe('locationEvidence', () => {
     );
   });
 
-  it('cleanupOldLocationEvidence aplica retención por antigüedad y límite global', async () => {
+  it('cleanupOldLocationEvidence applies age retention and global max-row limit', async () => {
     mockRunAsync
       .mockResolvedValueOnce({ changes: 3 })
       .mockResolvedValueOnce({ changes: 2 });
@@ -98,7 +98,7 @@ describe('locationEvidence', () => {
     );
   });
 
-  it('getLocationEvidenceForSession consulta solo location_evidence (sin usar audit_logs)', async () => {
+  it('getLocationEvidenceForSession queries only location_evidence and not audit_logs', async () => {
     (getAllAsync as jest.Mock).mockResolvedValue([]);
 
     await getLocationEvidenceForSession(22);
