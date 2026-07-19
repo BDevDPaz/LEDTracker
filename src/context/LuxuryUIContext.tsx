@@ -145,14 +145,14 @@ export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => 
           <View style={styles.dialogBox}>
             <Text style={styles.dialogTitle}>{dialog?.title}</Text>
             <Text style={styles.dialogMessage}>{dialog?.message}</Text>
-            <div style={styles.dialogButtons}>
+            <View style={styles.dialogButtons}>
               <TouchableOpacity onPress={handleDialogCancel} style={[styles.btn, styles.btnCancel]}>
                 <Text style={styles.btnTextCancel}>{dialog?.cancelText || 'Cancelar'}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleDialogConfirm} style={[styles.btn, styles.btnConfirm, dialog?.isDestructive && styles.btnDestructive]}>
                 <Text style={styles.btnTextConfirm}>{dialog?.confirmText || 'Confirmar'}</Text>
               </TouchableOpacity>
-            </div>
+            </View>
           </View>
         </View>
       </Modal>
