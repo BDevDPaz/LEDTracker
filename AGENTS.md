@@ -498,7 +498,7 @@ npm run gm
 
 ---
 
-# 8. Reconciliar salida de geocerca para sesión `active`
+# 8. Reconciliar salida de geocerca para sesión `active` ✅️ TAREA FINALIZADA Y APROBADA ✅️
 
 Este es el segundo hallazgo de campo real:
 

@@ -17,63 +17,110 @@ const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 export const FAILSAFE_THRESHOLD_MS = 45 * 60 * 1000;
 
 export const runFailsafeCheck = async () => {
+  logStructured(
+    'DEBUG',
+    'BACKGROUND_TASK',
+    AUDIT_ACTIONS.BACKGROUND_FAILSAFE_CHECK_STARTED,
+    {
+      source: 'BackgroundTasks',
+    }
+  );
+
   const db = await ensureDbReady();
   const now = dayjs().valueOf();
 
   try {
     const lastExitStr = await AsyncStorage.getItem(EXIT_TIMESTAMP_KEY);
 
-    if (lastExitStr) {
-      const exitTime = parseInt(lastExitStr, 10);
-
-      if (Number.isNaN(exitTime) || exitTime > now) {
-        await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
-      } else {
-        const timeDiff = now - exitTime;
-
-        if (timeDiff > FAILSAFE_THRESHOLD_MS) {
-          const session = await db.getFirstAsync<WorkSession>(
-            "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY actual_start_time DESC LIMIT 1"
-          );
-
-          if (session?.id) {
-            log(
-              'AMARILLO',
-              'ADVERTENCIA',
-              'WARN',
-              `Failsafe: Auto Check-out retroactivo para sesión #${session.id} (Salida detectada hace ${Math.round(
-                timeDiff / 60000
-              )} min)`
-            );
-
-            await updateSessionEndTime(
-              session.id,
-              exitTime,
-              AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE
-            );
-
-            await Promise.all([
-              AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
-              Notifications.scheduleNotificationAsync({
-                content: {
-                  title: 'Jornada Finalizada 🏁',
-                  body: `Tu sesión en ${
-                    session.client_name || 'el sitio'
-                  } se cerró automáticamente por inactividad.`,
-                  sound: true,
-                },
-                trigger: null,
-              }),
-            ]);
-
-            engine.dispatch({ type: 'BACKGROUND_SESSION_TIMEOUT' });
-            return true;
-          }
-
-          await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
+    if (!lastExitStr) {
+      logStructured(
+        'DEBUG',
+        'BACKGROUND_TASK',
+        AUDIT_ACTIONS.BACKGROUND_FAILSAFE_SKIPPED_NO_EXIT_TIMESTAMP,
+        {
+          source: 'BackgroundTasks',
         }
-      }
+      );
+
+      return false;
     }
+
+    const exitTime = parseInt(lastExitStr, 10);
+
+    if (Number.isNaN(exitTime) || exitTime > now) {
+      await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
+      return false;
+    }
+
+    const timeDiff = now - exitTime;
+
+    if (timeDiff <= FAILSAFE_THRESHOLD_MS) {
+      logStructured(
+        'DEBUG',
+        'BACKGROUND_TASK',
+        AUDIT_ACTIONS.BACKGROUND_FAILSAFE_SKIPPED_THRESHOLD_NOT_MET,
+        {
+          source: 'BackgroundTasks',
+          exitTimestamp: exitTime,
+          elapsedMinutes: Math.round(timeDiff / 60000),
+          thresholdMinutes: Math.round(FAILSAFE_THRESHOLD_MS / 60000),
+        }
+      );
+
+      return false;
+    }
+
+    const session = await db.getFirstAsync<WorkSession>(
+      "SELECT * FROM work_sessions WHERE status = 'active' ORDER BY actual_start_time DESC LIMIT 1"
+    );
+
+    if (session?.id) {
+      log(
+        'AMARILLO',
+        'ADVERTENCIA',
+        'WARN',
+        `Failsafe: Auto Check-out retroactivo para sesión #${session.id} (Salida detectada hace ${Math.round(
+          timeDiff / 60000
+        )} min)`
+      );
+
+      await updateSessionEndTime(
+        session.id,
+        exitTime,
+        AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE
+      );
+
+      await Promise.all([
+        AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY),
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Jornada Finalizada 🏁',
+            body: `Tu sesión en ${
+              session.client_name || 'el sitio'
+            } se cerró automáticamente por inactividad.`,
+            sound: true,
+          },
+          trigger: null,
+        }),
+      ]);
+
+      logStructured(
+        'INFO',
+        'BACKGROUND_TASK',
+        AUDIT_ACTIONS.BACKGROUND_FAILSAFE_COMPLETED,
+        {
+          source: 'BackgroundTasks',
+          sessionId: session.id,
+          exitTimestamp: exitTime,
+          checkoutAction: AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE,
+        }
+      );
+
+      engine.dispatch({ type: 'BACKGROUND_SESSION_TIMEOUT' });
+      return true;
+    }
+
+    await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
   } catch (failsafeError) {
     log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error en Failsafe', failsafeError);
   }
@@ -94,6 +141,15 @@ TaskManager.defineTask(TASK_NAME, async () => {
     );
 
     try {
+      logStructured(
+        'DEBUG',
+        'BACKGROUND_TASK',
+        AUDIT_ACTIONS.BACKGROUND_RUN_STARTED,
+        {
+          source: 'BackgroundTasks',
+        }
+      );
+
       log(
         'BLANCO',
         'BACKGROUND_TASK',
