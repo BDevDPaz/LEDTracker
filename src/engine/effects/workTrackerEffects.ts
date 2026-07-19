@@ -1,3 +1,4 @@
+import { reconcileRuntimeState } from '../../runtime/runtimeSupervisor';
 import { EngineEvent, EngineState } from '../contracts/types';
 import {
   getActiveSession,
@@ -20,25 +21,40 @@ export async function workTrackerEffects(
   try {
     switch (event.type) {
       case 'APP_INIT': {
-        const [session, settings] = await Promise.all([getActiveSession(), getSettings()]);
+        const [session, settings] = await Promise.all([
+          getActiveSession(),
+          getSettings(),
+        ]);
 
-        // Ensure monitoring is active for all pending sessions
+        // Ensure monitoring is active for all pending sessions.
         const pendingForInit = await getAllAsync<any>(
           "SELECT id, latitude, longitude FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
           [dayjs().format('YYYY-MM-DD')]
         );
 
         if (pendingForInit.length > 0) {
-          const initSites = pendingForInit.map(s => ({
+          const initSites = pendingForInit.map((s) => ({
             id: s.id.toString(),
             latitude: s.latitude,
             longitude: s.longitude,
           }));
+
           const initRadius = settings?.tolerance_radius || 200;
           await LocationService.startMonitoringArrival(initSites, initRadius);
         }
 
-        dispatch({ type: 'DATA_LOADED', state: { activeSession: session, settings } });
+        await reconcileRuntimeState('APP_INIT');
+
+        const reconciledSession = await getActiveSession();
+
+        dispatch({
+          type: 'DATA_LOADED',
+          state: {
+            activeSession: reconciledSession,
+            settings,
+          },
+        });
+
         break;
       }
 

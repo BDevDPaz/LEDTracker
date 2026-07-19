@@ -40,7 +40,6 @@ import { log } from '../../src/utils/logger';
 import { getDailyCompletedSessions, getSettings } from '../../src/database/db';
 import { calculateSessionMinutes } from '../../src/utils/payrollUtils';
 import dayjs from '../../src/utils/dayjsSetup';
-import { reconcileRuntimeState } from '../../src/runtime/runtimeSupervisor';
 
 function HomeScreenComponent() {
   const { t } = useLanguage();
@@ -81,7 +80,6 @@ function HomeScreenComponent() {
     const initializeApp = async () => {
       try {
         await engine.dispatch({ type: 'APP_INIT' });
-        await reconcileRuntimeState('APP_INIT');
       } catch (_e) {
         log(
           'ROJO',
@@ -150,7 +148,6 @@ function HomeScreenComponent() {
 
     try {
       await engine.dispatch({ type: 'APP_INIT' });
-      await reconcileRuntimeState('DASHBOARD_REFRESH');
       await loadStats();
     } catch (_e) {
       log(

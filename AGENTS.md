@@ -1,116 +1,91 @@
-**Providing task instructions**  
-Voy a ofrecer una serie de instrucciones sobre cómo proceder con la escritura de texto, asegurándome de que sean concisas pero completas. Aquí están los pasos a seguir:  
+La idea central de Fase D es esta:
 
-1. **Definir el objetivo**: Clarifica el propósito del texto que se va a escribir.  
-2. **Identificar la audiencia**: Considera quién leerá el texto y adapta el tono y el estilo en consecuencia.  
-3. **Recopilar información**: Reúne datos relevantes y recursos que apoyen el contenido.  
-4. **Estructurar el texto**: Organiza las ideas en una estructura lógica, como introducción, desarrollo y conclusión.  
-5. **Redactar el borrador**: Escribe un primer borrador sin preocuparte demasiado por la perfección.  
-6. **Revisar y editar**: Revisa el texto para corregir errores y mejorar la claridad y coherencia.  
-7. **Obtener retroalimentación**: Si es posible, comparte el texto con otros para recibir comentarios.  
-8. **Finalizar el texto**: Realiza los ajustes finales y asegúrate de que esté listo para su presentación o publicación.  
-
-Estos pasos deberían guiar el proceso de escritura de manera efectiva.
-Perfecto. Aquí tienes una versión más accionable, dividida en **Tareas** y **Pasos Lógicos**, pensada para dársela directamente a un agente de programación autónomo con autorización completa sobre el proyecto.
-
-```md
-# Instrucciones para Agente de Programación: Fase D - Runtime Resilience
-
-Actúa como un agente de programación senior con autorización total para modificar, validar, auditar y cerrar esta fase del proyecto. Tu objetivo es implementar **Fase D: Runtime Resilience** sin romper la estabilidad alcanzada en fases anteriores.
-
-La fase debe aplicarse con criterio de producción: cambios pequeños, validación frecuente, tests claros, auditoría estructurada y preservación total de la semántica ya existente de check-in/check-out.
-
-No incluyas funciones fuera de alcance. No hagas refactors grandes si no son necesarios para completar esta fase.
-
----
-
-# Objetivo General de Fase D
-
-Implementar una capa runtime que permita a la app **recuperar y corregir su estado operacional** cuando:
-
-- la app inicia,
+```text
+La app debe recuperar y corregir su estado operacional cada vez que:
+- inicia,
 - vuelve a foreground,
-- el dashboard se refresca,
-- corre una tarea background,
-- se detecta entrada o salida tardía de geocerca.
+- se refresca el dashboard,
+- corre background task,
+- detecta salida o entrada tardía de geocerca.
+```
 
-La app debe reconciliar sesiones `pending_arrival` y `active` contra:
-
-- ubicación actual,
-- estado de monitoreo,
-- storage,
-- timestamps de salida,
-- estado de app,
-- geocercas,
-- background tasks.
+Expo BackgroundTask debe tratarse como trabajo diferible, porque la documentación indica que el sistema decide cuándo ejecutarlo y que no corre necesariamente de inmediato; en Android usa WorkManager y en iOS BGTaskScheduler. [1](https://docs.expo.dev/versions/latest/sdk/background-task/)  
+Expo Location permite leer ubicación actual, hacer polling o suscribirse a eventos de ubicación, y también tiene configuración de background location y foreground service en Android mediante config plugin. [2](https://docs.expo.dev/versions/latest/sdk/location/)  
+React Native AppState permite detectar si la app está en foreground o background y escuchar cambios de estado, lo cual encaja con la reconciliación al volver a foreground. [3](https://reactnative.dev/docs/appstate)
 
 ---
 
-# Principios Técnicos Obligatorios
+# Fase D: Runtime Resilience
 
-1. **Background task es best effort**
-   - No trates las tareas background como reloj exacto.
-   - El sistema operativo decide cuándo ejecutarlas.
-   - El failsafe debe usar timestamps reales guardados previamente, no la hora tardía de ejecución de background.
+## Objetivo oficial
 
-2. **Foreground reconciliation es obligatoria**
-   - Al volver de `background` o `inactive` a `active`, la app debe reconciliar estado.
+```text
+Implementar una capa runtime que reconcilie sesiones pending_arrival y active
+contra ubicación actual, monitoreo, storage, timestamps de salida y estado de app,
+para que Auto Check-in y Auto Check-out sean más predecibles en campo real.
+```
 
-3. **Dashboard refresh debe reconciliar**
-   - El pull-to-refresh debe poder corregir una sesión `pending_arrival` que ya debería estar `active`.
+## Alcance incluido
 
-4. **APP_INIT debe reconciliar**
-   - El inicio de app debe cargar datos, asegurar monitoreo y reconciliar estado.
+```text
+✅ runtimeSupervisor
+✅ reconcileRuntimeState
+✅ foreground reconciliation
+✅ APP_INIT reconciliation
+✅ dashboard refresh reconciliation
+✅ pending_arrival → AUTO_CHECKIN_GPS si ya está dentro del perímetro
+✅ active → detectar salida, guardar EXIT_TIMESTAMP_KEY y notificar
+✅ background failsafe usando timestamp real de salida
+✅ auditoría runtime estructurada
+✅ tests de flujos críticos
+✅ npm run gm verde
+```
 
-5. **No mover `TaskManager.defineTask`**
-   - No coloques `TaskManager.defineTask` dentro del supervisor runtime ni dentro de lifecycle methods de React.
-   - Debe permanecer en scope global del bundle.
+## Fuera de alcance para Fase D
 
-6. **Preservar semánticas existentes**
-   - `AUTO_CHECKIN_GPS` debe seguir existiendo.
-   - `MANUAL_CHECKOUT` debe conservarse para checkout manual.
-   - `AUTO_CHECKOUT_FAILSAFE` debe seguir separado de `AUTO_CHECKOUT_GPS`.
-   - No convertir checkout manual en failsafe.
+No meter todavía:
+
+```text
+❌ lunch reminder completo
+❌ overtime flow completo
+❌ Sentry/PostHog
+❌ migraciones grandes de DB
+❌ location evidence persistente completo
+❌ rediseño grande de notificaciones laborales
+```
+
+Eso queda mejor para fases posteriores.
 
 ---
 
-# Fuera de Alcance
+# 0. Preparación Git
 
-No implementes todavía:
+Desde `main` limpio:
 
-- lunch reminder completo,
-- overtime flow completo,
-- Sentry/PostHog,
-- migraciones grandes de DB,
-- location evidence persistente completo,
-- rediseño grande de notificaciones laborales.
+```bash
+git checkout main
+git pull origin main
+git status
+npm run gm
+```
 
-Si encuentras código relacionado, no lo amplíes salvo que sea estrictamente necesario para completar Runtime Resilience.
+Crear rama:
+
+```bash
+git checkout -b feature/runtime-resilience-phase-d
+```
 
 ---
 
-# Tarea 1: Preparar la Fase D
+# 1. Crear contrato de Fase D ✅️ TAREA FINALIZADA Y APROBADA ✅️
 
-## Objetivo
-
-Crear una base clara y documentada para la fase antes de modificar lógica runtime.
-
-## Pasos Lógicos
-
-1. Verifica que el proyecto esté en un estado limpio y validado.
-2. Confirma que la validación general del proyecto pasa antes de iniciar.
-3. Crea una rama de trabajo dedicada para Fase D usando la estrategia normal del repositorio.
-4. No mezcles esta fase con cambios no relacionados.
-
-## Entregable
-
-Crear un documento interno:
+Antes de tocar lógica, crea una nota interna o checklist, por ejemplo:
 
 ```text
 docs/phase-d-runtime-resilience.md
 ```
 
-## Contenido mínimo sugerido
+Contenido sugerido:
 
 ```md
 # Phase D: Runtime Resilience
@@ -132,43 +107,26 @@ docs/phase-d-runtime-resilience.md
 - Large DB migrations.
 ```
 
-## Criterios de aceptación
+Commit opcional:
 
-- Existe documentación de alcance.
-- Los objetivos y no objetivos están claros.
-- No se ha tocado lógica funcional todavía.
-- La base sigue validando correctamente.
+```bash
+git add docs/phase-d-runtime-resilience.md
+git commit -m "Document Phase D runtime resilience scope"
+```
 
 ---
 
-# Tarea 2: Crear Runtime Supervisor
+# 2. Crear `runtimeSupervisor` ✅️ TAREA FINALIZADA Y APROBADA ✅️
 
-## Objetivo
-
-Crear una capa central de coordinación runtime que pueda reconciliar el estado de la app desde distintos puntos de entrada.
-
-## Archivo sugerido
+Archivo sugerido:
 
 ```text
 src/runtime/runtimeSupervisor.ts
 ```
 
-## Responsabilidad del módulo
+Responsabilidad: coordinar, no meter toda la lógica ahí.
 
-El supervisor debe coordinar, no contener toda la lógica pesada.
-
-Debe orquestar:
-
-- lectura de sesión actual,
-- reconciliación de `pending_arrival`,
-- reconciliación de sesión `active`,
-- verificación de monitoreo,
-- logs estructurados,
-- manejo seguro de errores.
-
-## API esperada
-
-El módulo debe exponer una API equivalente a:
+Debe exponer funciones como:
 
 ```ts
 export type RuntimeReconcileSource =
@@ -178,7 +136,11 @@ export type RuntimeReconcileSource =
   | 'BACKGROUND_TASK';
 
 export async function reconcileRuntimeState(source: RuntimeReconcileSource) {
-  // Orquestar reconciliación runtime
+  // load current session
+  // check pending_arrival
+  // check active session
+  // verify monitoring
+  // log result
 }
 
 export async function onAppStart() {
@@ -198,48 +160,17 @@ export async function onBackgroundMaintenance() {
 }
 ```
 
-## Pasos Lógicos
+## Regla importante
 
-1. Crear el archivo `runtimeSupervisor`.
-2. Definir el tipo `RuntimeReconcileSource`.
-3. Crear la función principal `reconcileRuntimeState`.
-4. Crear wrappers semánticos:
-   - `onAppStart`,
-   - `onAppForeground`,
-   - `onDashboardRefresh`,
-   - `onBackgroundMaintenance`.
-5. Conectar el supervisor con adapters o servicios existentes.
-6. Evitar dependencias circulares.
-7. Agregar protección básica contra fallos para que una reconciliación fallida no rompa la app.
-8. Considerar protección contra reentrancia si existe riesgo de reconciliaciones simultáneas.
-
-## Criterios de aceptación
-
-- Existe `runtimeSupervisor.ts`.
-- Existe `reconcileRuntimeState`.
-- El supervisor tiene entradas claras para app init, foreground, dashboard refresh y background.
-- No se movió `TaskManager.defineTask`.
-- El módulo coordina, pero no concentra toda la lógica de DB, location, background y notificaciones.
+No mover `TaskManager.defineTask` dentro del supervisor. Expo TaskManager documenta que `defineTask` debe llamarse en el scope global del bundle, no dentro de lifecycle methods de React. [4](https://docs.expo.dev/versions/latest/sdk/task-manager/)
 
 ---
 
-# Tarea 3: Agregar Auditoría Runtime Estructurada
+# 3. Agregar eventos de logger para Runtime Resilience ✅️ TAREA FINALIZADA Y APROBADA ✅️
 
-## Objetivo
+En `src/utils/logger.ts`, agrega eventos o categorías claras.
 
-Agregar eventos de logging/auditoría para diagnosticar reconciliaciones runtime en campo real.
-
-## Archivo probable
-
-```text
-src/utils/logger.ts
-```
-
-o el módulo equivalente de auditoría/logs existente.
-
-## Eventos Mínimos
-
-Agregar soporte para:
+Eventos mínimos:
 
 ```text
 RUNTIME_RECONCILE_STARTED
@@ -256,7 +187,7 @@ GPS_SAMPLE_ACCEPTED_FOR_RECONCILIATION
 GPS_SAMPLE_REJECTED_WEAK_ACCURACY
 ```
 
-## Metadata mínima cuando aplique
+Metadata mínima:
 
 ```ts
 {
@@ -270,38 +201,28 @@ GPS_SAMPLE_REJECTED_WEAK_ACCURACY
 }
 ```
 
-## Pasos Lógicos
+Primer commit funcional sugerido:
 
-1. Revisar cómo está estructurado actualmente el logger.
-2. Agregar eventos nuevos siguiendo la convención existente.
-3. Crear helpers si el proyecto ya usa funciones dedicadas para logs.
-4. Asegurar que cada reconciliación tenga:
-   - log de inicio,
-   - log de completado,
-   - log de skip con razón,
-   - log de fallo con contexto.
-5. Asegurar que GPS débil y GPS aceptado tengan eventos separados.
-6. Asegurar que guardar timestamp y encontrar timestamp ya existente tengan eventos separados.
-
-## Criterios de aceptación
-
-- Todos los eventos mínimos existen.
-- Los eventos tienen metadata útil.
-- Los skips incluyen razón.
-- Los errores quedan registrados sin romper el flujo principal.
-- La taxonomía de logs se mantiene consistente con el proyecto.
+```bash
+git add src/runtime/runtimeSupervisor.ts src/utils/logger.ts
+git commit -m "Add runtime supervisor and reconciliation audit events"
+npm run gm
+```
 
 ---
 
-# Tarea 4: Reconciliar Sesiones `pending_arrival`
+# 4. Reconciliar `pending_arrival` ✅️ TAREA FINALIZADA Y APROBADA ✅️
 
-## Objetivo
+Este es el punto más importante de Fase D, porque ataca el problema real que viste:
 
-Resolver el caso en que el usuario ya llegó al destino, pero la app no registró Auto Check-in hasta reload, foreground o refresh manual.
+```text
+Llegaste al destino, pero la app tardó en confirmar Auto Check-in
+hasta reload/refresh.
+```
 
-## Regla Principal
+## Regla nueva
 
-Cuando se ejecute reconciliación desde:
+Cuando ocurra:
 
 ```text
 APP_INIT
@@ -310,40 +231,29 @@ DASHBOARD_REFRESH
 BACKGROUND_TASK
 ```
 
-y exista una sesión:
+Si hay sesión:
 
 ```text
 status = pending_arrival
 ```
 
-la app debe intentar reconciliarla contra ubicación actual.
+Entonces:
 
-## Pasos Lógicos
+```text
+1. Obtener ubicación actual.
+2. Validar accuracy <= 50m.
+3. Calcular distancia al destino.
+4. Validar radio + hysteresis.
+5. Si cumple:
+   - registrar AUTO_CHECKIN_GPS
+   - cambiar sesión a active
+   - sincronizar active session
+   - registrar evento PENDING_ARRIVAL_RECONCILED_TO_ACTIVE
+6. Si no cumple:
+   - registrar por qué no hizo check-in
+```
 
-1. Buscar sesión actual `pending_arrival`.
-2. Si no existe:
-   - registrar skip con razón `NO_PENDING_ARRIVAL`.
-3. Obtener ubicación actual para reconciliación.
-4. Si no hay ubicación:
-   - registrar skip con razón `NO_LOCATION_AVAILABLE`.
-5. Validar precisión GPS.
-6. Si `accuracy > 50m` o supera la constante equivalente existente:
-   - no hacer check-in,
-   - registrar `GPS_SAMPLE_REJECTED_WEAK_ACCURACY`.
-7. Calcular distancia desde la ubicación actual al destino de la sesión.
-8. Validar si está dentro del radio de llegada, incluyendo hysteresis si el proyecto ya la usa.
-9. Si está fuera del radio:
-   - no hacer check-in,
-   - registrar skip con razón `OUTSIDE_TARGET_RADIUS`.
-10. Si está dentro del radio:
-   - registrar `AUTO_CHECKIN_GPS`,
-   - cambiar sesión a `active`,
-   - sincronizar estado de active session,
-   - registrar `PENDING_ARRIVAL_RECONCILED_TO_ACTIVE`.
-11. Asegurar que la transición sea idempotente.
-12. Asegurar que no se registre check-in duplicado.
-
-## Pseudoflujo
+Pseudoflujo:
 
 ```ts
 async function reconcilePendingArrival(source: RuntimeReconcileSource) {
@@ -357,10 +267,7 @@ async function reconcilePendingArrival(source: RuntimeReconcileSource) {
   const location = await getCurrentLocationForReconciliation();
 
   if (!location) {
-    logRuntimeSkipped('NO_LOCATION_AVAILABLE', {
-      source,
-      sessionId: session.id,
-    });
+    logRuntimeSkipped('NO_LOCATION_AVAILABLE', { source, sessionId: session.id });
     return;
   }
 
@@ -400,7 +307,7 @@ async function reconcilePendingArrival(source: RuntimeReconcileSource) {
 }
 ```
 
-## Archivos probables
+## Archivos probables a tocar
 
 ```text
 src/runtime/runtimeSupervisor.ts
@@ -413,96 +320,91 @@ src/utils/geoUtils.ts
 src/utils/logger.ts
 ```
 
-## Criterios de aceptación
+Commit sugerido:
 
-- `pending_arrival` puede pasar a `active` por APP_INIT.
-- `pending_arrival` puede pasar a `active` por FOREGROUND.
-- `pending_arrival` puede pasar a `active` por DASHBOARD_REFRESH.
-- `pending_arrival` puede pasar a `active` por BACKGROUND_TASK si las condiciones son válidas.
-- No se hace check-in con GPS débil.
-- No se hace check-in fuera del radio.
-- Se preserva `AUTO_CHECKIN_GPS`.
+```bash
+git add .
+git commit -m "Reconcile pending arrival sessions from foreground location"
+npm run gm
+```
 
 ---
 
-# Tarea 5: Conectar Runtime Reconciliation con APP_INIT
+# 5. Conectar `APP_INIT` con `runtimeSupervisor`
 
-## Objetivo
+Actualmente tus logs muestran:
 
-Asegurar que la app reconcilie estado al iniciar.
+```text
+Engine Dispatch: APP_INIT
+GPS Warm-up completed
+Monitoreando 1 sitios...
+DATA_LOADED
+```
 
-## Flujo Esperado
+Ahora `APP_INIT` debe hacer algo más formal:
 
 ```text
 APP_INIT
--> cargar datos
--> asegurar monitoreo
--> reconcileRuntimeState('APP_INIT')
--> DATA_LOADED
+→ cargar datos
+→ asegurar monitoreo
+→ reconcileRuntimeState('APP_INIT')
+→ DATA_LOADED
 ```
 
-## Archivo probable
+## Dónde conectarlo
+
+Probablemente en:
 
 ```text
 src/engine/effects/workTrackerEffects.ts
 ```
 
-o donde se maneje actualmente `APP_INIT`.
+o donde actualmente se maneja:
 
-## Pasos Lógicos
+```text
+APP_INIT
+```
 
-1. Localizar el flujo actual de `APP_INIT`.
-2. Identificar dónde se cargan datos y se asegura monitoreo.
-3. Insertar llamada única a `reconcileRuntimeState('APP_INIT')`.
-4. Asegurar que errores de reconciliación no bloqueen el inicio de la app.
-5. Registrar logs de inicio, final, skip o fallo.
-6. Evitar duplicar lógica que ya exista en servicios.
+La meta no es duplicar lógica, sino que APP_INIT llame una sola función:
 
-## Criterios de aceptación
+```ts
+await reconcileRuntimeState('APP_INIT');
+```
 
-- `APP_INIT` ejecuta reconciliación runtime.
-- Si hay `pending_arrival` y ubicación válida dentro del radio, pasa a `active`.
-- Si no puede reconciliar, la app sigue cargando.
-- `DATA_LOADED` sigue ocurriendo correctamente.
-- No se rompe el flujo de inicialización existente.
+Commit:
+
+```bash
+git add .
+git commit -m "Run runtime reconciliation during app init"
+npm run gm
+```
 
 ---
 
-# Tarea 6: Conectar Runtime Reconciliation con Foreground
+# 6. Conectar foreground con `AppState`
 
-## Objetivo
-
-Ejecutar reconciliación cada vez que la app vuelve a foreground.
-
-## Archivo sugerido
+Crear o ajustar un hook:
 
 ```text
 src/runtime/useRuntimeSupervisor.ts
 ```
 
-o integración en:
+o integrarlo donde ya tienes inicialización de app, posiblemente:
 
 ```text
 app/_layout.tsx
 ```
 
-si ese es el punto global adecuado.
+Regla:
 
-## Pasos Lógicos
+```text
+Cuando AppState cambia de background/inactive a active:
+  reconcileRuntimeState('FOREGROUND')
+```
 
-1. Crear o ubicar un hook global de runtime.
-2. Usar `AppState` para observar cambios de estado.
-3. Guardar el estado anterior.
-4. Detectar transición desde:
-   - `inactive` a `active`,
-   - `background` a `active`.
-5. Al detectar retorno a foreground, ejecutar:
-   - `reconcileRuntimeState('FOREGROUND')`.
-6. Limpiar el listener correctamente.
-7. Asegurar que no se disparen reconciliaciones duplicadas innecesarias.
-8. Manejar errores sin afectar la UI.
+React Native AppState documenta el estado `active` para foreground, `background` para segundo plano y el evento `change` para escuchar cambios de estado. [3](https://reactnative.dev/docs/appstate)
 
-## Pseudoflujo
+Pseudoflujo:
 
 ```ts
 useEffect(() => {
@@ -523,29 +425,31 @@ useEffect(() => {
 }, []);
 ```
 
-## Criterios de aceptación
+Commit:
 
-- Al volver a foreground se ejecuta reconciliación.
-- Si el usuario ya llegó al destino, puede registrarse `AUTO_CHECKIN_GPS`.
-- No se generan loops.
-- El listener se limpia correctamente.
-- La UI no queda bloqueada.
+```bash
+git add .
+git commit -m "Reconcile runtime state when app returns to foreground"
+npm run gm
+```
 
 ---
 
-# Tarea 7: Conectar Runtime Reconciliation con Dashboard Refresh
+# 7. Conectar pull-to-refresh del Dashboard
 
-## Objetivo
-
-Permitir que el pull-to-refresh del dashboard corrija estado runtime.
-
-## Flujo Esperado
+Cuando el usuario haga refresh manual, debe pasar esto:
 
 ```text
 pull-to-refresh
--> reload dashboard data
--> reconcileRuntimeState('DASHBOARD_REFRESH')
--> reload dashboard data otra vez si hubo cambios
+→ reload dashboard data
+→ reconcileRuntimeState('DASHBOARD_REFRESH')
+→ reload dashboard data otra vez si hubo cambios
+```
+
+Esto ataca exactamente el hallazgo de campo:
+
+```text
+jalé hacia abajo la pantalla del dashboard para que se refrescara
 ```
 
 ## Archivo probable
@@ -554,19 +458,9 @@ pull-to-refresh
 app/(tabs)/index.tsx
 ```
 
-o el componente real del Dashboard.
+o donde esté tu Dashboard.
 
-## Pasos Lógicos
-
-1. Localizar el handler actual de refresh.
-2. Asegurar que active el estado visual de refreshing.
-3. Ejecutar reconciliación con source `DASHBOARD_REFRESH`.
-4. Recargar datos del dashboard después de reconciliar.
-5. Si la reconciliación cambió el estado de sesión, reflejarlo en UI.
-6. Manejar errores sin dejar el spinner activo.
-7. Registrar logs runtime correspondientes.
-
-## Pseudoflujo
+Pseudoflujo:
 
 ```ts
 const onRefresh = async () => {
@@ -581,31 +475,33 @@ const onRefresh = async () => {
 };
 ```
 
-## Criterios de aceptación
+Commit:
 
-- Pull-to-refresh ejecuta runtime reconciliation.
-- Si hay `pending_arrival` válido, pasa a `active`.
-- El dashboard muestra el estado actualizado.
-- El refresh termina incluso si ocurre error.
-- No se duplica lógica de sesión en el componente UI.
+```bash
+git add .
+git commit -m "Run runtime reconciliation from dashboard refresh"
+npm run gm
+```
 
 ---
 
-# Tarea 8: Reconciliar Salida de Geocerca para Sesión `active`
+# 8. Reconciliar salida de geocerca para sesión `active`
 
-## Objetivo
+Este es el segundo hallazgo de campo real:
 
-Resolver el caso en que el usuario sale del perímetro, pero la app no reacciona oportunamente.
+```text
+Me retiré del sitio y pasó mucho tiempo, pero la app no notificó ni reaccionó.
+```
 
-## Regla Principal
+## Regla nueva
 
-Cuando exista una sesión:
+Cuando sesión está:
 
 ```text
 status = active
 ```
 
-y se detecte:
+y se detecta salida:
 
 ```text
 GEOFENCE_EXIT_DETECTED
@@ -613,34 +509,21 @@ GEOFENCE_EXIT_DETECTED
 
 la app debe:
 
-1. Guardar `EXIT_TIMESTAMP_KEY` con timestamp real de salida.
-2. Registrar `EXIT_TIMESTAMP_STORED`.
+```text
+1. Guardar EXIT_TIMESTAMP_KEY con timestamp real de salida.
+2. Registrar evento EXIT_TIMESTAMP_STORED.
 3. Notificar al usuario.
-4. Mantener la sesión `active` mientras espera decisión.
-5. Permitir checkout manual posterior como `MANUAL_CHECKOUT`.
-6. Permitir failsafe posterior como `AUTO_CHECKOUT_FAILSAFE` si el usuario no responde.
+4. Mantener sesión active mientras espera decisión.
+5. Si el usuario hace checkout manual, usar MANUAL_CHECKOUT.
+6. Si no responde y el failsafe aplica, cerrar con AUTO_CHECKOUT_FAILSAFE usando exit timestamp real.
+```
 
-## Pasos Lógicos
-
-1. Localizar el flujo actual de salida de geocerca.
-2. Confirmar cómo se detecta y valida una salida.
-3. Al validar salida de sesión active, obtener timestamp real del evento.
-4. Guardar `EXIT_TIMESTAMP_KEY` si no existe.
-5. Si ya existe:
-   - no sobrescribirlo,
-   - registrar `EXIT_TIMESTAMP_ALREADY_PRESENT`.
-6. Enviar o programar notificación de salida.
-7. Registrar evento `ACTIVE_SESSION_EXIT_RECONCILED`.
-8. Mantener la sesión en estado `active`.
-9. Asegurar que el monitoreo siga en estado coherente.
-10. Asegurar idempotencia para eventos repetidos.
-
-## Logs esperados
+## Evento esperado en logs
 
 ```text
-Geocerca: SALIDA validada para sesión
-EXIT_TIMESTAMP_STORED
-Notificación de salida programada/enviada
+LOG [..] 🟠 [EVENTO_GEOCERCA] Geocerca: SALIDA validada para sesión #2
+LOG [..] ⚪️ [ESTADO_SISTEMA] EXIT_TIMESTAMP_STORED
+LOG [..] 🟢 [OPERACION_EXITOSA] Notificación de salida programada/enviada
 ```
 
 ## Archivos probables
@@ -654,57 +537,35 @@ src/engine/effects/workTrackerEffects.ts
 src/utils/logger.ts
 ```
 
-## Criterios de aceptación
+Commit:
 
-- Salida de geocerca guarda `EXIT_TIMESTAMP_KEY`.
-- La notificación se envía o programa.
-- La sesión permanece `active`.
-- No se cierra automáticamente solo por salir.
-- No se sobrescribe timestamp existente.
-- Checkout manual posterior sigue siendo `MANUAL_CHECKOUT`.
+```bash
+git add .
+git commit -m "Store exit timestamp and notify on active session geofence exit"
+npm run gm
+```
 
 ---
 
-# Tarea 9: Ajustar Failsafe para Usar Timestamp Real de Salida
+# 9. Ajustar failsafe para usar timestamp real de salida
 
-## Objetivo
-
-Asegurar que el failsafe cierre usando la hora real de salida, no la hora tardía en que corrió background.
-
-## Regla Principal
-
-Si existe:
+El failsafe no debe cerrar con la hora tardía de ejecución del background task. Debe cerrar con:
 
 ```text
-active session
 EXIT_TIMESTAMP_KEY
-threshold cumplido
 ```
 
-entonces cerrar con:
+Regla:
 
 ```text
-AUTO_CHECKOUT_FAILSAFE
-end_time = exitTimestamp
+si active session
+y existe EXIT_TIMESTAMP_KEY
+y threshold ya se cumplió:
+  cerrar sesión con AUTO_CHECKOUT_FAILSAFE
+  end_time = exitTimestamp
 ```
 
-## Pasos Lógicos
-
-1. Localizar la lógica actual de failsafe.
-2. Separar claramente la hora de ejecución del background task del timestamp real de salida.
-3. Leer `EXIT_TIMESTAMP_KEY`.
-4. Si no existe:
-   - no cerrar sesión,
-   - registrar `BACKGROUND_FAILSAFE_SKIPPED_NO_EXIT_TIMESTAMP`.
-5. Si existe pero el threshold no se cumplió:
-   - no cerrar sesión,
-   - registrar `BACKGROUND_FAILSAFE_SKIPPED_THRESHOLD_NOT_MET`.
-6. Si el threshold se cumplió:
-   - cerrar la sesión con `AUTO_CHECKOUT_FAILSAFE`,
-   - usar `exitTimestamp` como `end_time`.
-7. Si la sesión ya fue cerrada manualmente:
-   - no ejecutar failsafe.
-8. Verificar que el reporte conserve la semántica correcta.
+El punto importante es que BackgroundTask no es reloj exacto, porque la documentación dice que la tarea puede ejecutarse después del intervalo mínimo si el sistema lo decide y si se cumplen condiciones. [1](https://docs.expo.dev/versions/latest/sdk/background-task/)
 
 ## Logs esperados
 
@@ -716,39 +577,35 @@ BACKGROUND_FAILSAFE_SKIPPED_THRESHOLD_NOT_MET
 BACKGROUND_FAILSAFE_COMPLETED
 ```
 
-## Criterios de aceptación
+Commit:
 
-- Failsafe usa `EXIT_TIMESTAMP_KEY`.
-- Failsafe no usa la hora tardía de background como `end_time`.
-- Failsafe no pisa checkout manual.
-- `AUTO_CHECKOUT_FAILSAFE` sigue separado de `AUTO_CHECKOUT_GPS`.
-- Si no hay timestamp real de salida, no se cierra sesión por failsafe.
+```bash
+git add .
+git commit -m "Use stored exit timestamp for background failsafe checkout"
+npm run gm
+```
 
 ---
 
-# Tarea 10: Estructurar Background Maintenance
+# 10. Separar internamente la background task
 
-## Objetivo
-
-Separar internamente las responsabilidades de background sin crear necesariamente nuevas tareas nativas.
-
-## Archivo probable
-
-```text
-src/services/BackgroundTasks.ts
-```
-
-## Estructura sugerida
+No necesariamente crear nuevas tareas nativas. Solo separar funciones internas:
 
 ```ts
 export async function runBackgroundMaintenance() {
   await runFailsafeCheck();
   await runPendingReportDeliveryCheck();
-  await runWeeklyReportWindowCheck();
+  await runWeeklyReportCheck();
 }
 ```
 
-## Subrutinas esperadas
+Estructura sugerida:
+
+```text
+src/services/BackgroundTasks.ts
+```
+
+Funciones:
 
 ```ts
 async function runFailsafeCheck() {}
@@ -757,19 +614,7 @@ async function runWeeklyReportWindowCheck() {}
 async function runBackgroundMaintenance() {}
 ```
 
-## Pasos Lógicos
-
-1. Revisar la tarea background actual.
-2. Mantener `TaskManager.defineTask` donde ya corresponde.
-3. Crear o ajustar `runBackgroundMaintenance`.
-4. Extraer failsafe a `runFailsafeCheck`.
-5. Extraer retry de reportes pendientes a función dedicada.
-6. Extraer revisión semanal a función dedicada.
-7. Agregar logs por subrutina.
-8. Asegurar que errores de una subrutina no oculten diagnósticos útiles.
-9. Decidir si un fallo debe frenar toda la maintenance o solo registrarse, según patrón actual del proyecto.
-
-## Logs esperados
+Logs:
 
 ```text
 BACKGROUND_RUN_STARTED
@@ -780,90 +625,47 @@ BACKGROUND_REPORT_CHECK_COMPLETED
 BACKGROUND_PENDING_REPORT_RETRY_COMPLETED
 ```
 
-## Criterios de aceptación
+Commit:
 
-- Background maintenance queda organizada.
-- Failsafe está separado.
-- Report checks están separados.
-- Logs son claros.
-- No se crean nuevas tareas nativas innecesarias.
-- No se mueve `TaskManager.defineTask` fuera de su lugar correcto.
+```bash
+git add .
+git commit -m "Structure background maintenance with dedicated audit logs"
+npm run gm
+```
 
 ---
 
-# Tarea 11: Agregar Tests de Runtime Resilience
+# 11. Tests obligatorios para Fase D
 
-## Objetivo
+Agregar tests antes de cerrar.
 
-Cubrir los flujos críticos de Fase D con tests deterministas.
-
-## Tests mínimos obligatorios
-
-### Test 1: Pending arrival en APP_INIT dentro del radio
+## Tests mínimos
 
 ```text
-Given sesión pending_arrival
-And source APP_INIT
-And ubicación con accuracy válida dentro del radio
-Then registra AUTO_CHECKIN_GPS
-And cambia sesión a active
-And loguea PENDING_ARRIVAL_RECONCILED_TO_ACTIVE
+1. pending_arrival + APP_INIT + ubicación dentro del radio
+   → registra AUTO_CHECKIN_GPS
+
+2. pending_arrival + FOREGROUND + GPS weak
+   → no registra check-in
+   → log GPS_SAMPLE_REJECTED_WEAK_ACCURACY
+
+3. pending_arrival + DASHBOARD_REFRESH + fuera del radio
+   → no registra check-in
+
+4. active + geofence exit
+   → guarda EXIT_TIMESTAMP_KEY
+   → notifica salida
+
+5. active + EXIT_TIMESTAMP_KEY + threshold cumplido
+   → cierra con AUTO_CHECKOUT_FAILSAFE
+   → usa timestamp real de salida
+
+6. active + checkout manual después de exit timestamp
+   → cierra con MANUAL_CHECKOUT
+   → no lo convierte en AUTO_CHECKOUT_FAILSAFE
 ```
 
-### Test 2: Pending arrival en FOREGROUND con GPS débil
-
-```text
-Given sesión pending_arrival
-And source FOREGROUND
-And ubicación con accuracy débil
-Then no registra check-in
-And no cambia sesión a active
-And loguea GPS_SAMPLE_REJECTED_WEAK_ACCURACY
-```
-
-### Test 3: Pending arrival en DASHBOARD_REFRESH fuera del radio
-
-```text
-Given sesión pending_arrival
-And source DASHBOARD_REFRESH
-And ubicación válida pero fuera del radio
-Then no registra check-in
-And no cambia sesión a active
-And loguea skip OUTSIDE_TARGET_RADIUS
-```
-
-### Test 4: Active session con geofence exit
-
-```text
-Given sesión active
-When se detecta salida de geocerca
-Then guarda EXIT_TIMESTAMP_KEY
-And notifica salida
-And mantiene sesión active
-```
-
-### Test 5: Active session con EXIT_TIMESTAMP_KEY y threshold cumplido
-
-```text
-Given sesión active
-And EXIT_TIMESTAMP_KEY existe
-And threshold está cumplido
-When corre failsafe
-Then cierra con AUTO_CHECKOUT_FAILSAFE
-And usa exitTimestamp como end_time
-```
-
-### Test 6: Checkout manual después de exit timestamp
-
-```text
-Given sesión active
-And EXIT_TIMESTAMP_KEY existe
-When el usuario hace checkout manual
-Then cierra con MANUAL_CHECKOUT
-And no lo convierte en AUTO_CHECKOUT_FAILSAFE
-```
-
-## Archivos sugeridos
+## Archivos de tests sugeridos
 
 ```text
 src/runtime/__tests__/runtimeSupervisor.test.ts
@@ -871,52 +673,32 @@ src/services/__tests__/BackgroundTasks.runtime.test.ts
 src/engine/__tests__/workTrackerEffects.runtime.test.ts
 ```
 
-## Pasos Lógicos
+Commit:
 
-1. Revisar estructura actual de tests.
-2. Crear tests en los módulos más apropiados.
-3. Mockear ubicación actual.
-4. Mockear accuracy fuerte y débil.
-5. Mockear distancia dentro y fuera del radio.
-6. Mockear sesión `pending_arrival`.
-7. Mockear sesión `active`.
-8. Mockear storage de `EXIT_TIMESTAMP_KEY`.
-9. Mockear notificaciones.
-10. Verificar logs relevantes.
-11. Verificar que no haya transiciones duplicadas.
-12. Ejecutar toda la suite y corregir regresiones.
-
-## Criterios de aceptación
-
-- Los seis tests mínimos existen.
-- Los tests son deterministas.
-- No dependen de ubicación real.
-- No dependen del reloj real sin control.
-- Verifican semánticas críticas.
-- Tests existentes siguen pasando.
+```bash
+git add .
+git commit -m "Add runtime resilience tests for arrival and exit reconciliation"
+npm run gm
+```
 
 ---
 
-# Tarea 12: Actualizar Auditoría Gold Master
+# 12. Actualizar Gold Master audit si aplica
 
-## Objetivo
+Como en Fase C ya tienes auditorías para DB/logger, Fase D debería auditar que no se pierdan piezas críticas.
 
-Proteger invariantes críticas de Fase D dentro del sistema de auditoría existente.
-
-## Checks sugeridos
-
-Agregar si el framework lo permite:
+Agregar checks si tu audit framework lo permite:
 
 ```text
-runtimeSupervisor.ts existe
-reconcileRuntimeState existe
-eventos RUNTIME_* existen en logger
-EXIT_TIMESTAMP_KEY sigue protegido
-AUTO_CHECKOUT_FAILSAFE sigue separado de AUTO_CHECKOUT_GPS
-AUTO_CHECKIN_GPS sigue existiendo
+- runtimeSupervisor.ts existe
+- reconcileRuntimeState existe
+- eventos RUNTIME_* existen en logger
+- EXIT_TIMESTAMP_KEY sigue protegido
+- AUTO_CHECKOUT_FAILSAFE sigue separado de AUTO_CHECKOUT_GPS
+- AUTO_CHECKIN_GPS sigue existiendo
 ```
 
-## Archivos probables
+Archivos probables:
 
 ```text
 scripts/audit/audits/logger.audit.ts
@@ -924,79 +706,57 @@ scripts/audit/audits/database.audit.ts
 scripts/audit/gold-master.ts
 ```
 
-## Pasos Lógicos
+Commit:
 
-1. Revisar cómo funcionan las auditorías actuales.
-2. Agregar checks estructurales de Fase D.
-3. Evitar checks frágiles basados en formato cosmético.
-4. Verificar que los checks protejan contratos reales.
-5. Ejecutar auditoría completa.
-6. Corregir cualquier falso positivo.
-
-## Criterios de aceptación
-
-- Gold Master valida invariantes runtime.
-- Los checks no son frágiles.
-- La auditoría protege semánticas críticas.
-- La auditoría completa pasa.
+```bash
+git add .
+git commit -m "Audit runtime resilience invariants in Gold Master"
+npm run gm
+```
 
 ---
 
-# Tarea 13: Validar Manualmente Flujos de Campo
+# 13. Prueba manual de campo
 
-## Objetivo
+Esta prueba debe ser más precisa que la anterior.
 
-Documentar y ejecutar pruebas manuales representativas de campo real.
-
----
-
-## Caso A: Llegada sin reload
-
-### Pasos
+## Caso A: llegada sin reload
 
 ```text
 1. Abrir app limpia.
-2. Iniciar Start Shift o flujo equivalente.
-3. Activar geocerca a destino real.
-4. Llegar físicamente al sitio.
-5. No hacer reload manual.
-6. Abrir app o volverla a foreground si estaba en background.
+2. Start Shift o flujo equivalente.
+3. Activate Geofence a destino real.
+4. Conducir al sitio.
+5. No hacer reload.
+6. Abrir app o hacer foreground si estaba background.
 7. Esperar reconciliación.
 ```
 
-### Esperado
+Esperado:
 
 ```text
 RUNTIME_RECONCILE_STARTED source=FOREGROUND
 GPS_SAMPLE_ACCEPTED_FOR_RECONCILIATION
 PENDING_ARRIVAL_RECONCILED_TO_ACTIVE
-Auto Check-in GPS registrado
+Auto Check-in (GPS) registrado
 ```
 
----
-
-## Caso B: Llegada con pull-to-refresh
-
-### Pasos
+## Caso B: llegada con pull-to-refresh
 
 ```text
-1. Crear sesión pending_arrival.
+1. Crear pending_arrival.
 2. Llegar al destino.
-3. Si no confirma sola, hacer pull-to-refresh.
+3. Si no confirma solo, hacer pull-to-refresh.
 ```
 
-### Esperado
+Esperado:
 
 ```text
 RUNTIME_RECONCILE_STARTED source=DASHBOARD_REFRESH
 PENDING_ARRIVAL_RECONCILED_TO_ACTIVE
 ```
 
----
-
-## Caso C: Salida del perímetro
-
-### Pasos
+## Caso C: salida del perímetro
 
 ```text
 1. Tener sesión active.
@@ -1004,7 +764,7 @@ PENDING_ARRIVAL_RECONCILED_TO_ACTIVE
 3. Esperar evento de salida o reconciliación.
 ```
 
-### Esperado
+Esperado:
 
 ```text
 Geocerca: SALIDA validada
@@ -1012,11 +772,7 @@ EXIT_TIMESTAMP_STORED
 Notificación enviada/programada
 ```
 
----
-
-## Caso D: Checkout manual después de salida
-
-### Pasos
+## Caso D: checkout manual después de salida
 
 ```text
 1. Salir del perímetro.
@@ -1024,7 +780,7 @@ Notificación enviada/programada
 3. Hacer Clock Out manual.
 ```
 
-### Esperado
+Esperado:
 
 ```text
 STOP_SESSION_REQUEST
@@ -1033,11 +789,7 @@ Monitoreo detenido
 PDF muestra Check-out manual
 ```
 
----
-
-## Caso E: Failsafe
-
-### Pasos
+## Caso E: failsafe
 
 ```text
 1. Salir del perímetro.
@@ -1045,155 +797,149 @@ PDF muestra Check-out manual
 3. Dejar que background/failsafe corra cuando el sistema lo permita.
 ```
 
-### Esperado
+Esperado:
 
 ```text
 AUTO_CHECKOUT_FAILSAFE
 end_time = timestamp real de salida
-end_time no debe ser la hora tardía del background task
+no end_time = hora tardía del background task
 ```
-
-## Criterios de aceptación
-
-- Todos los casos manuales tienen resultado esperado.
-- Los logs permiten verificar cada transición.
-- El reporte conserva la semántica de checkout.
-- El comportamiento en campo coincide con el contrato de Fase D.
 
 ---
 
-# Tarea 14: Validación Final de Cierre
+# 14. Checklist de cierre de Fase D
 
-## Objetivo
+Antes de mergear:
 
-Confirmar que Fase D está lista para integración.
+```bash
+git status
+npm run gm
+```
 
-## Checklist Final
-
-Antes de integrar, verificar:
+Debe estar:
 
 ```text
-typecheck pasa
-lint pasa
-tests existentes pasan
-tests nuevos pasan
-audit Gold Master pasa
-report PDF sigue funcionando
-manual checkout sigue mostrando MANUAL_CHECKOUT
-AUTO_CHECKIN_GPS sigue funcionando
-salida guarda EXIT_TIMESTAMP_KEY
-failsafe usa timestamp real de salida
-foreground reconciliation funciona
-dashboard refresh reconciliation funciona
-APP_INIT reconciliation funciona
-background task queda como best effort
-no se introdujeron migraciones grandes
-no se mezclaron lunch reminder u overtime flows completos
+✅ typecheck pass
+✅ lint pass
+✅ 44+ tests pass
+✅ audit:gm pass
+✅ report PDF sigue funcionando
+✅ manual checkout sigue mostrando MANUAL_CHECKOUT
+✅ AUTO_CHECKIN_GPS sigue funcionando
+✅ salida guarda EXIT_TIMESTAMP_KEY
+✅ failsafe usa timestamp real de salida
+✅ foreground reconciliation funciona
+✅ dashboard refresh reconciliation funciona
 ```
-
-## Pasos Lógicos
-
-1. Revisar cambios pendientes.
-2. Revisar que no haya archivos temporales.
-3. Ejecutar validación completa del proyecto.
-4. Revisar manualmente los cambios críticos.
-5. Confirmar que los tests cubren los flujos mínimos.
-6. Confirmar que los logs son útiles.
-7. Confirmar que los reportes no rompieron semántica.
-8. Integrar a la rama principal usando el flujo estándar del repositorio.
-9. Validar nuevamente después de integrar.
-10. Crear marca/tag de cierre según convención del proyecto.
-
-## Criterios de aceptación
-
-- Validación completa pasa antes de integrar.
-- Validación completa pasa después de integrar.
-- No hay regresiones conocidas.
-- Fase D queda documentada.
-- La rama principal queda estable.
 
 ---
 
-# Orden Lógico Recomendado de Trabajo
+# 15. Merge y tag de cierre
 
-Ejecuta la fase en este orden:
+Cuando todo esté verde:
+
+```bash
+git checkout main
+git pull origin main
+git merge feature/runtime-resilience-phase-d
+npm run gm
+git push origin main
+```
+
+Crear tag:
+
+```bash
+git tag phase-d-runtime-resilience-complete
+git push origin phase-d-runtime-resilience-complete
+```
+
+---
+
+# Orden recomendado de commits
+
+Puedes seguir esta secuencia exacta:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/runtime-resilience-phase-d
+
+# 1
+git add docs/phase-d-runtime-resilience.md
+git commit -m "Document Phase D runtime resilience scope"
+npm run gm
+
+# 2
+git add src/runtime/runtimeSupervisor.ts src/utils/logger.ts
+git commit -m "Add runtime supervisor and reconciliation audit events"
+npm run gm
+
+# 3
+git add .
+git commit -m "Reconcile pending arrival sessions from foreground location"
+npm run gm
+
+# 4
+git add .
+git commit -m "Run runtime reconciliation during app init"
+npm run gm
+
+# 5
+git add .
+git commit -m "Reconcile runtime state when app returns to foreground"
+npm run gm
+
+# 6
+git add .
+git commit -m "Run runtime reconciliation from dashboard refresh"
+npm run gm
+
+# 7
+git add .
+git commit -m "Store exit timestamp and notify on active session geofence exit"
+npm run gm
+
+# 8
+git add .
+git commit -m "Use stored exit timestamp for background failsafe checkout"
+npm run gm
+
+# 9
+git add .
+git commit -m "Structure background maintenance with dedicated audit logs"
+npm run gm
+
+# 10
+git add .
+git commit -m "Add runtime resilience tests for arrival and exit reconciliation"
+npm run gm
+
+# 11
+git add .
+git commit -m "Audit runtime resilience invariants in Gold Master"
+npm run gm
+```
+
+---
+
+# Definición final de “Fase D completada”
+
+Yo consideraría Fase D cerrada solo cuando puedas decir:
 
 ```text
-1. Documentar contrato de Fase D.
-2. Crear runtimeSupervisor.
-3. Agregar eventos de auditoría runtime.
-4. Implementar reconciliación de pending_arrival.
-5. Conectar APP_INIT.
-6. Conectar foreground con AppState.
-7. Conectar dashboard refresh.
-8. Guardar EXIT_TIMESTAMP_KEY en salida de geocerca.
-9. Ajustar failsafe para usar timestamp real.
-10. Separar background maintenance.
-11. Agregar tests obligatorios.
-12. Agregar auditorías Gold Master.
-13. Ejecutar pruebas manuales de campo.
-14. Validar cierre e integrar.
-```
+✅ Si la sesión está pending_arrival y el usuario ya está en destino,
+   APP_INIT, foreground o dashboard refresh pueden convertirla en active.
 
----
+✅ Si la sesión está active y el usuario sale del perímetro,
+   la app guarda EXIT_TIMESTAMP_KEY y notifica.
 
-# Estrategia de Commits
+✅ Si el usuario hace checkout manual,
+   el reporte conserva MANUAL_CHECKOUT.
 
-Divide los cambios en commits pequeños y verificables. Usa esta secuencia lógica:
+✅ Si el usuario no responde,
+   failsafe cierra con AUTO_CHECKOUT_FAILSAFE usando timestamp real de salida.
 
-```text
-1. Document Phase D runtime resilience scope
-2. Add runtime supervisor and reconciliation audit events
-3. Reconcile pending arrival sessions from foreground location
-4. Run runtime reconciliation during app init
-5. Reconcile runtime state when app returns to foreground
-6. Run runtime reconciliation from dashboard refresh
-7. Store exit timestamp and notify on active session geofence exit
-8. Use stored exit timestamp for background failsafe checkout
-9. Structure background maintenance with dedicated audit logs
-10. Add runtime resilience tests for arrival and exit reconciliation
-11. Audit runtime resilience invariants in Gold Master
-```
+✅ Background task queda tratado como best effort, no como reloj exacto.
 
-Después de cada bloque lógico, ejecuta las validaciones equivalentes del proyecto y corrige cualquier regresión antes de continuar.
-
----
-
-# Definición Final de Fase D Completada
-
-Considera Fase D cerrada solo cuando puedas afirmar:
-
-```text
-Si la sesión está pending_arrival y el usuario ya está en destino,
-APP_INIT, foreground o dashboard refresh pueden convertirla en active.
-
-Si la sesión está active y el usuario sale del perímetro,
-la app guarda EXIT_TIMESTAMP_KEY y notifica.
-
-Si el usuario hace checkout manual,
-el reporte conserva MANUAL_CHECKOUT.
-
-Si el usuario no responde,
-failsafe cierra con AUTO_CHECKOUT_FAILSAFE usando timestamp real de salida.
-
-Background task queda tratado como best effort, no como reloj exacto.
-
-La validación Gold Master pasa completa en la rama de trabajo y después de integrar a main.
-```
-
----
-
-# Reglas Finales de Calidad
-
-- No romper Fase C.
-- No romper checkout manual.
-- No mezclar `AUTO_CHECKOUT_FAILSAFE` con `AUTO_CHECKOUT_GPS`.
-- No registrar auto check-in con GPS débil.
-- No cerrar sesión automáticamente solo por salir de geocerca.
-- No usar la hora del background task como hora real de salida.
-- No introducir dependencias externas innecesarias.
-- No hacer refactors grandes fuera del alcance.
-- Mantener tests claros y deterministas.
-- Mantener logs estructurados y útiles para diagnóstico en campo.
-- Mantener Gold Master verde.
+✅ npm run gm pasa completo en rama y en main.
 ```
