@@ -184,7 +184,7 @@ describe('LocationManager runtime geofence exit', () => {
     expect(recordExitTimestampEvidence).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 2,
-        source: 'GEOFENCE_TASK',
+        source: 'GEOFENCE_TRACKING_TASK',
         decision: 'EXIT_TIMESTAMP_STORED',
       })
     );

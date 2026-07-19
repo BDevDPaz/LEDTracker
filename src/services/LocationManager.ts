@@ -20,10 +20,10 @@ import {
   recordGpsSampleRejected,
   recordLocationEvidence,
 } from '../runtime/locationEvidence';
-import { EXIT_TIMESTAMP_KEY, RUNTIME_POLICY } from '../runtime/runtimePolicy';
+import { RUNTIME_POLICY } from '../runtime/runtimePolicy';
 
 export const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
-export { EXIT_TIMESTAMP_KEY };
+export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 export const MIN_ACCURACY_METERS = RUNTIME_POLICY.GPS_ACCEPTED_ACCURACY_M;
 
 const fsm = new LocationFSM(AsyncStorage);

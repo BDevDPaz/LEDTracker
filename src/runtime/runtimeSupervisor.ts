@@ -4,6 +4,7 @@ import { locationAdapter } from './locationAdapter';
 import { sessionStoreAdapter } from './sessionStoreAdapter';
 import {
   registerAutoCheckinGps,
+  EXIT_TIMESTAMP_KEY,
   LocationService,
   GEOFENCE_TASK,
 } from '../services/LocationManager';
@@ -11,7 +12,7 @@ import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
 import { AUDIT_ACTIONS, logStructured } from '../utils/logger';
 import dayjs from '../utils/dayjsSetup';
 import { WorkSession } from '../types';
-import { EXIT_TIMESTAMP_KEY, RUNTIME_POLICY } from './runtimePolicy';
+import { RUNTIME_POLICY } from './runtimePolicy';
 import {
   LOCATION_EVIDENCE_DECISIONS,
   LOCATION_EVIDENCE_SIGNAL_TYPES,
