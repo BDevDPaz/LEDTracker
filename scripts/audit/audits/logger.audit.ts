@@ -1,6 +1,6 @@
 import type { AuditFinding } from '../core/finding';
 import { auditConfig } from '../core/config';
-import { fileExists, readTextFile } from '../core/fileScanner';
+import { fileExists, readTextFile, findLineNumber } from '../core/fileScanner';
 
 export async function runLoggerAudit(): Promise<AuditFinding[]> {
   const findings: AuditFinding[] = [];
@@ -130,6 +130,126 @@ export async function runLoggerAudit(): Promise<AuditFinding[]> {
           'Centralize checkout detection and labeling helpers in logger.ts or update this audit if the helpers moved.',
         file: loggerFile,
         evidence: helperName
+      });
+    }
+  }
+
+  const expectedRuntimeResilienceEvents = [
+    'RUNTIME_RECONCILE_STARTED',
+    'RUNTIME_RECONCILE_COMPLETED',
+    'RUNTIME_RECONCILE_SKIPPED',
+    'RUNTIME_RECONCILE_FAILED',
+    'PENDING_ARRIVAL_RECONCILED_TO_ACTIVE',
+    'ACTIVE_SESSION_EXIT_RECONCILED',
+    'MONITORING_RESTARTED',
+    'MONITORING_ALREADY_ACTIVE',
+    'EXIT_TIMESTAMP_STORED',
+    'EXIT_TIMESTAMP_ALREADY_PRESENT',
+    'GPS_SAMPLE_ACCEPTED_FOR_RECONCILIATION',
+    'GPS_SAMPLE_REJECTED_WEAK_ACCURACY'
+  ];
+
+  for (const event of expectedRuntimeResilienceEvents) {
+    if (!content.includes(event)) {
+      findings.push({
+        id: 'LOG-008',
+        domain: 'logger',
+        severity: 'high',
+        title: `Runtime resilience event missing: ${event}`,
+        description:
+          `The logger does not clearly define the runtime resilience event "${event}".`,
+        recommendation:
+          'Keep Fase D runtime reconciliation events centralized in AUDIT_ACTIONS so runtime behavior remains auditable.',
+        file: loggerFile,
+        line: findLineNumber(content, 'Runtime Resilience Phase D actions'),
+        evidence: event
+      });
+    }
+  }
+
+  const expectedBackgroundMaintenanceEvents = [
+    'BACKGROUND_RUN_STARTED',
+    'BACKGROUND_RUN_COMPLETED',
+    'BACKGROUND_RUN_FAILED',
+    'BACKGROUND_FAILSAFE_CHECK_STARTED',
+    'BACKGROUND_FAILSAFE_SKIPPED_NO_EXIT_TIMESTAMP',
+    'BACKGROUND_FAILSAFE_SKIPPED_THRESHOLD_NOT_MET',
+    'BACKGROUND_FAILSAFE_COMPLETED',
+    'BACKGROUND_REPORT_CHECK_COMPLETED',
+    'BACKGROUND_PENDING_REPORT_RETRY_COMPLETED'
+  ];
+
+  for (const event of expectedBackgroundMaintenanceEvents) {
+    if (!content.includes(event)) {
+      findings.push({
+        id: 'LOG-009',
+        domain: 'logger',
+        severity: 'medium',
+        title: `Background maintenance event missing: ${event}`,
+        description:
+          `The logger does not clearly define the background maintenance event "${event}".`,
+        recommendation:
+          'Keep background maintenance and failsafe observability events centralized in AUDIT_ACTIONS.',
+        file: loggerFile,
+        line: findLineNumber(content, 'Background'),
+        evidence: event
+      });
+    }
+  }
+
+  const explicitCheckoutActionDeclarations = [
+    {
+      action: 'MANUAL_CHECKOUT',
+      expectedDeclaration: "MANUAL_CHECKOUT: 'MANUAL_CHECKOUT'"
+    },
+    {
+      action: 'AUTO_CHECKOUT_GPS',
+      expectedDeclaration: "AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_GPS'"
+    },
+    {
+      action: 'AUTO_CHECKOUT_FAILSAFE',
+      expectedDeclaration: "AUTO_CHECKOUT_FAILSAFE: 'AUTO_CHECKOUT_FAILSAFE'"
+    }
+  ];
+
+  for (const { action, expectedDeclaration } of explicitCheckoutActionDeclarations) {
+    if (!content.includes(expectedDeclaration)) {
+      findings.push({
+        id: 'LOG-010',
+        domain: 'logger',
+        severity: 'high',
+        title: `Checkout action is not explicitly self-mapped: ${action}`,
+        description:
+          `The logger should define "${action}" as a distinct first-class AUDIT_ACTIONS entry.`,
+        recommendation:
+          `Add or restore the explicit AUDIT_ACTIONS declaration: ${expectedDeclaration}.`,
+        file: loggerFile,
+        evidence: expectedDeclaration
+      });
+    }
+  }
+
+  const riskyCheckoutAliasPatterns = [
+    'AUTO_CHECKOUT_FAILSAFE: AUDIT_ACTIONS.AUTO_CHECKOUT_GPS',
+    'AUTO_CHECKOUT_GPS: AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE',
+    "AUTO_CHECKOUT_FAILSAFE: 'AUTO_CHECKOUT_GPS'",
+    "AUTO_CHECKOUT_GPS: 'AUTO_CHECKOUT_FAILSAFE'"
+  ];
+
+  for (const pattern of riskyCheckoutAliasPatterns) {
+    if (content.includes(pattern)) {
+      findings.push({
+        id: 'LOG-011',
+        domain: 'logger',
+        severity: 'critical',
+        title: 'Checkout semantic aliasing detected',
+        description:
+          'AUTO_CHECKOUT_FAILSAFE and AUTO_CHECKOUT_GPS must remain separate audit semantics.',
+        recommendation:
+          'Keep AUTO_CHECKOUT_FAILSAFE and AUTO_CHECKOUT_GPS as distinct AUDIT_ACTIONS entries and checkout labels.',
+        file: loggerFile,
+        line: findLineNumber(content, pattern),
+        evidence: pattern
       });
     }
   }

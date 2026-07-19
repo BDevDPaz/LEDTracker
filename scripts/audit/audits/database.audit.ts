@@ -37,26 +37,56 @@ export async function runDatabaseAudit(): Promise<AuditFinding[]> {
     });
   }
 
-  const criticalDbFunctions = [
-    'checkSessionOverlap',
-    'createSession',
-    'updateSession',
-    'deleteSession',
-    'closeSession',
-    'getOpenSession'
+  const criticalDbFunctionGroups = [
+    {
+      label: 'checkSessionOverlap',
+      alternatives: ['checkSessionOverlap'],
+      severity: 'critical' as const
+    },
+    {
+      label: 'createSession',
+      alternatives: ['createSession', 'insertWorkSession'],
+      severity: 'medium' as const
+    },
+    {
+      label: 'updateSession',
+      alternatives: ['updateSessionStatus', 'updateWorkSessionManual', 'updateSession'],
+      severity: 'medium' as const
+    },
+    {
+      label: 'deleteSession',
+      alternatives: ['deleteSession', 'deleteWorkSession'],
+      severity: 'medium' as const
+    },
+    {
+      label: 'closeSession',
+      alternatives: ['closeSession', 'updateSessionEndTime'],
+      severity: 'medium' as const
+    },
+    {
+      label: 'getOpenSession',
+      alternatives: ['getOpenSession', 'getActiveSession'],
+      severity: 'medium' as const
+    }
   ];
 
-  for (const functionName of criticalDbFunctions) {
-    if (!content.includes(functionName)) {
+  for (const functionGroup of criticalDbFunctionGroups) {
+    const detected = functionGroup.alternatives.some((functionName) =>
+      content.includes(functionName)
+    );
+
+    if (!detected) {
       findings.push({
         id: 'DB-003',
         domain: 'database',
-        severity: functionName === 'checkSessionOverlap' ? 'critical' : 'medium',
-        title: `Expected database function not detected: ${functionName}`,
-        description: `The audit could not find "${functionName}" in ${dbFile}.`,
+        severity: functionGroup.severity,
+        title: `Expected database function family not detected: ${functionGroup.label}`,
+        description:
+          `The audit could not find any accepted implementation name for "${functionGroup.label}" in ${dbFile}.`,
         recommendation:
-          'If the function exists under another name, update the audit rules. Otherwise, implement it to protect session integrity.',
-        file: dbFile
+          `Implement or restore one of: ${functionGroup.alternatives.join(', ')}.`,
+        file: dbFile,
+        evidence: functionGroup.alternatives.join(', ')
       });
     }
   }
@@ -218,6 +248,78 @@ export async function runDatabaseAudit(): Promise<AuditFinding[]> {
       file: dbFile,
       evidence: 'isOfficialCheckoutAuditAction'
     });
+  }
+
+  const requiredEndTimeSignatureParts = [
+    'updateSessionEndTime',
+    'endTime: number',
+    'checkoutAction: CheckoutAuditAction'
+  ];
+
+  for (const signaturePart of requiredEndTimeSignatureParts) {
+    if (!content.includes(signaturePart)) {
+      findings.push({
+        id: 'DB-012',
+        domain: 'database',
+        severity: 'high',
+        title: `updateSessionEndTime signature invariant missing: ${signaturePart}`,
+        description:
+          'The failsafe checkout path depends on updateSessionEndTime accepting a real endTime and explicit checkoutAction.',
+        recommendation:
+          'Keep updateSessionEndTime typed as updateSessionEndTime(id, endTime, checkoutAction: CheckoutAuditAction).',
+        file: dbFile,
+        line: findLineNumber(content, 'updateSessionEndTime'),
+        evidence: signaturePart
+      });
+    }
+  }
+
+  const requiredOfficialCheckoutReferences = [
+    'AUDIT_ACTIONS.MANUAL_CHECKOUT',
+    'AUDIT_ACTIONS.AUTO_CHECKOUT_GPS',
+    'AUDIT_ACTIONS.AUTO_CHECKOUT_FAILSAFE'
+  ];
+
+  for (const reference of requiredOfficialCheckoutReferences) {
+    if (!content.includes(reference)) {
+      findings.push({
+        id: 'DB-013',
+        domain: 'database',
+        severity: 'high',
+        title: `Official checkout reference missing in database layer: ${reference}`,
+        description:
+          'The database layer should keep official checkout actions explicit and separated.',
+        recommendation:
+          'Keep MANUAL_CHECKOUT, AUTO_CHECKOUT_GPS and AUTO_CHECKOUT_FAILSAFE referenced as separate official checkout actions.',
+        file: dbFile,
+        evidence: reference
+      });
+    }
+  }
+
+  const riskyCheckoutConflationPatterns = [
+    'AUTO_CHECKOUT_FAILSAFE = AUTO_CHECKOUT_GPS',
+    'AUTO_CHECKOUT_GPS = AUTO_CHECKOUT_FAILSAFE',
+    'AUTO_CHECKOUT_FAILSAFE: AUTO_CHECKOUT_GPS',
+    'AUTO_CHECKOUT_GPS: AUTO_CHECKOUT_FAILSAFE'
+  ];
+
+  for (const pattern of riskyCheckoutConflationPatterns) {
+    if (content.includes(pattern)) {
+      findings.push({
+        id: 'DB-014',
+        domain: 'database',
+        severity: 'critical',
+        title: 'Checkout action conflation detected in database layer',
+        description:
+          'AUTO_CHECKOUT_FAILSAFE and AUTO_CHECKOUT_GPS must remain distinct completed-session semantics.',
+        recommendation:
+          'Keep failsafe checkout and GPS checkout as separate actions throughout database writes and audit logs.',
+        file: dbFile,
+        line: findLineNumber(content, pattern),
+        evidence: pattern
+      });
+    }
   }
 
   return findings;
