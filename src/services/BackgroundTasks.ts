@@ -2,7 +2,6 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundTask from 'expo-background-task';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import AsyncLock from 'async-lock';
 
 import { AUDIT_ACTIONS, log, logStructured } from '../utils/logger';
 import { ensureDbReady, updateSessionEndTime } from '../database/db';
@@ -11,11 +10,11 @@ import { generateWeeklyReport, checkAndDeliverPendingReports } from './ReportGen
 import { EXIT_TIMESTAMP_KEY } from './LocationManager';
 import dayjs from '../utils/dayjsSetup';
 import { engine } from '../engine/workTrackerEngine';
+import { runDatabaseWork } from '../database/dbWorkQueue';
 
 const TASK_NAME = 'APP_BACKGROUND_SERVICES';
 const REPORT_STORAGE_KEY = 'LAST_REPORT_WEEK_ID';
 export const FAILSAFE_THRESHOLD_MS = 45 * 60 * 1000;
-const bgLock = new AsyncLock();
 
 export const runFailsafeCheck = async () => {
   const db = await ensureDbReady();
@@ -83,11 +82,24 @@ export const runFailsafeCheck = async () => {
 };
 
 TaskManager.defineTask(TASK_NAME, async () => {
-  return await bgLock.acquire('bg-database-work', async () => {
-    logStructured('DEBUG', 'ESTADO_SISTEMA', 'MUTEX_LOCK: bg-database-work');
+  return await runDatabaseWork('bg-database-work', async () => {
+    logStructured(
+      'DEBUG',
+      'ESTADO_SISTEMA',
+      'MUTEX_LOCK: bg-database-work',
+      {
+        source: 'bg-database-work',
+        owner: 'BackgroundTasks',
+      }
+    );
 
     try {
-      log('BLANCO', 'BACKGROUND_TASK', 'DEBUG', 'Tarea iniciada por el sistema...');
+      log(
+        'BLANCO',
+        'BACKGROUND_TASK',
+        'INFO',
+        'Tarea iniciada por el sistema...'
+      );
 
       let newDataProcessed = false;
 
@@ -155,7 +167,15 @@ TaskManager.defineTask(TASK_NAME, async () => {
         return BackgroundTask.BackgroundTaskResult.Failed;
       }
     } finally {
-      logStructured('DEBUG', 'ESTADO_SISTEMA', 'MUTEX_UNLOCK: bg-database-work');
+      logStructured(
+        'DEBUG',
+        'ESTADO_SISTEMA',
+        'MUTEX_UNLOCK: bg-database-work',
+        {
+          source: 'bg-database-work',
+          owner: 'BackgroundTasks',
+        }
+      );
     }
   });
 });

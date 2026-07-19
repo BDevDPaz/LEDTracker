@@ -16,6 +16,7 @@ import { LuxuryUIProvider } from '../src/context/LuxuryUIContext';
 import { useLogFeedback } from '../src/feedback/useLogFeedback';
 import { initDatabase } from '../src/database/db';
 import dayjs from '../src/utils/dayjsSetup';
+import { useRuntimeSupervisor } from '../src/runtime/useRuntimeSupervisor';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -33,6 +34,8 @@ function handleNotificationAction(router: ReturnType<typeof useRouter>, data: Re
 function FeedbackBridge() { useLogFeedback(); return null; }
 
 export default function RootLayout() {
+  useRuntimeSupervisor();
+
   const router = useRouter();
   const [appIsReady, setAppIsReady] = useState(false);
 
@@ -102,3 +105,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+

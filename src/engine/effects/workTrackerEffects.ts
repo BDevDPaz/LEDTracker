@@ -12,6 +12,7 @@ import { LocationService } from '../../services/LocationManager';
 import dayjs from '../../utils/dayjsSetup';
 import { AUDIT_ACTIONS, log } from '../../utils/logger';
 import { securityAdapter } from '../../runtime/securityAdapter';
+import { runDatabaseWork } from '../../database/dbWorkQueue';
 
 export async function workTrackerEffects(
   event: EngineEvent,
@@ -21,38 +22,37 @@ export async function workTrackerEffects(
   try {
     switch (event.type) {
       case 'APP_INIT': {
-        const [session, settings] = await Promise.all([
-          getActiveSession(),
-          getSettings(),
-        ]);
+        await runDatabaseWork('app-init', async () => {
+          const settings = await getSettings();
 
-        // Ensure monitoring is active for all pending sessions.
-        const pendingForInit = await getAllAsync<any>(
-          "SELECT id, latitude, longitude FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
-          [dayjs().format('YYYY-MM-DD')]
-        );
+          // Ensure monitoring is active for all pending sessions.
+          const pendingForInit = await getAllAsync<any>(
+            "SELECT id, latitude, longitude FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
+            [dayjs().format('YYYY-MM-DD')]
+          );
 
-        if (pendingForInit.length > 0) {
-          const initSites = pendingForInit.map((s) => ({
-            id: s.id.toString(),
-            latitude: s.latitude,
-            longitude: s.longitude,
-          }));
+          if (pendingForInit.length > 0) {
+            const initSites = pendingForInit.map((s) => ({
+              id: s.id.toString(),
+              latitude: s.latitude,
+              longitude: s.longitude,
+            }));
 
-          const initRadius = settings?.tolerance_radius || 200;
-          await LocationService.startMonitoringArrival(initSites, initRadius);
-        }
+            const initRadius = settings?.tolerance_radius || 200;
+            await LocationService.startMonitoringArrival(initSites, initRadius);
+          }
 
-        await reconcileRuntimeState('APP_INIT');
+          await reconcileRuntimeState('APP_INIT');
 
-        const reconciledSession = await getActiveSession();
+          const reconciledSession = await getActiveSession();
 
-        dispatch({
-          type: 'DATA_LOADED',
-          state: {
-            activeSession: reconciledSession,
-            settings,
-          },
+          dispatch({
+            type: 'DATA_LOADED',
+            state: {
+              activeSession: reconciledSession,
+              settings,
+            },
+          });
         });
 
         break;
@@ -155,7 +155,9 @@ export async function workTrackerEffects(
       }
 
       case 'BACKGROUND_SESSION_TIMEOUT': {
-        const [reSession, reSettings] = await Promise.all([getActiveSession(), getSettings()]);
+        // Ejecución secuencial para seguridad con SQLite
+        const reSession = await getActiveSession();
+        const reSettings = await getSettings();
         dispatch({ type: 'DATA_LOADED', state: { activeSession: reSession, settings: reSettings } });
         break;
       }

@@ -38,6 +38,7 @@ import { DailySetupModal } from '../../src/components/modals/DailySetupModal';
 import { LunchModal } from '../../src/components/modals/LunchModal';
 import { log } from '../../src/utils/logger';
 import { getDailyCompletedSessions, getSettings } from '../../src/database/db';
+import { runDatabaseWork } from '../../src/database/dbWorkQueue';
 import { calculateSessionMinutes } from '../../src/utils/payrollUtils';
 import dayjs from '../../src/utils/dayjsSetup';
 
@@ -73,7 +74,7 @@ function HomeScreenComponent() {
 
   useEffect(() => {
     const unsubscribe = engine.subscribe(setEngineState);
-    return () => unsubscribe();
+     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -96,33 +97,31 @@ function HomeScreenComponent() {
 
   const loadStats = useCallback(async () => {
     try {
-      const today = dayjs().format('YYYY-MM-DD');
+      await runDatabaseWork('ui-load-stats', async () => {
+        const today = dayjs().format('YYYY-MM-DD');
 
-      // ⚡ Bolt Optimization: Fetch only completed sessions for today instead of full history
-      // This prevents loading all history records into memory just to filter them
-      const [dailySessions, settings] = await Promise.all([
-        getDailyCompletedSessions(today),
-        getSettings(),
-      ]);
+        const settings = await getSettings();
+        const dailySessions = await getDailyCompletedSessions(today);
 
-      const rate = settings?.hourly_rate || 0;
+        const rate = settings?.hourly_rate || 0;
 
-      let totalMinutes = 0;
+        let totalMinutes = 0;
 
-      dailySessions.forEach((s) => {
-        if (s.start_time && s.end_time) {
-          totalMinutes += calculateSessionMinutes(
-            s.start_time,
-            s.end_time,
-            s.lunch_taken || 0,
-            s.lunch_start,
-            s.lunch_end
-          );
-        }
+        dailySessions.forEach((s) => {
+          if (s.start_time && s.end_time) {
+            totalMinutes += calculateSessionMinutes(
+              s.start_time,
+              s.end_time,
+              s.lunch_taken || 0,
+              s.lunch_start,
+              s.lunch_end
+            );
+          }
+        });
+
+        const hours = totalMinutes / 60;
+        setStats({ hours, earnings: hours * rate });
       });
-
-      const hours = totalMinutes / 60;
-      setStats({ hours, earnings: hours * rate });
     } catch (_e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando estadísticas', _e);
     }
