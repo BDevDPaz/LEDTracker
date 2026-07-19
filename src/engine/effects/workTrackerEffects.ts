@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { reconcileRuntimeState } from '../../runtime/runtimeSupervisor';
 import { EngineEvent, EngineState } from '../contracts/types';
 import {
@@ -8,7 +10,7 @@ import {
   getAllAsync,
   saveSettings
 } from '../../database/db';
-import { LocationService } from '../../services/LocationManager';
+import { EXIT_TIMESTAMP_KEY, LocationService } from '../../services/LocationManager';
 import dayjs from '../../utils/dayjsSetup';
 import { AUDIT_ACTIONS, log } from '../../utils/logger';
 import { securityAdapter } from '../../runtime/securityAdapter';
@@ -66,8 +68,12 @@ export async function workTrackerEffects(
 
       case 'START_SESSION_REQUEST': {
         const sanitizedAddress = securityAdapter.sanitizeInput(event.address);
-        const sanitizedClient = event.client ? securityAdapter.sanitizeInput(event.client) : undefined;
-        const sanitizedNotes = event.notes ? securityAdapter.sanitizeInput(event.notes) : undefined;
+        const sanitizedClient = event.client
+          ? securityAdapter.sanitizeInput(event.client)
+          : undefined;
+        const sanitizedNotes = event.notes
+          ? securityAdapter.sanitizeInput(event.notes)
+          : undefined;
 
         const coords = await LocationService.getCoordsFromAddress(sanitizedAddress);
         if (!coords) {
@@ -122,6 +128,8 @@ export async function workTrackerEffects(
             AUDIT_ACTIONS.MANUAL_CHECKOUT
           );
 
+          await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
+
           // Only stop monitoring if no more active/pending sessions exist for today
           const pendingSessions = await getAllAsync<any>(
             "SELECT id FROM work_sessions WHERE status = 'pending_arrival' AND date_string = ?",
@@ -158,7 +166,13 @@ export async function workTrackerEffects(
         // Ejecución secuencial para seguridad con SQLite
         const reSession = await getActiveSession();
         const reSettings = await getSettings();
-        dispatch({ type: 'DATA_LOADED', state: { activeSession: reSession, settings: reSettings } });
+        dispatch({
+          type: 'DATA_LOADED',
+          state: {
+            activeSession: reSession,
+            settings: reSettings,
+          },
+        });
         break;
       }
     }

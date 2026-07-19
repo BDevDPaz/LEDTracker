@@ -448,7 +448,7 @@ Estado: VALIDADA EN RUNTIME
 
 ---
 
-# 7. Conectar pull-to-refresh del Dashboard
+# 7. Conectar pull-to-refresh del Dashboard TAREA FINALIZADA Y APROBADA ✅️
 
 Cuando el usuario haga refresh manual, debe pasar esto:
 

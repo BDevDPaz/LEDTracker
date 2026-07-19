@@ -1,4 +1,3 @@
-// --- src/services/Notifications.ts ---
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { log } from '../utils/logger';
@@ -211,9 +210,11 @@ export async function requestAndConfigureNotifications(): Promise<PermissionChec
 // Legacy support (refactored to use new logic)
 export async function setupNotifications() {
   const result = await requestAndConfigureNotifications();
+
   if (!result.isGranted) {
     log('AMARILLO', 'PERMISOS_DENEGADOS', 'WARN', result.message);
   }
+
   return result.isGranted;
 }
 
@@ -236,6 +237,28 @@ export async function scheduleNotificationWithChannel(
       channelId: CHANNELS[channelKey].id
     })
   });
+}
+
+export async function notifyGeofenceExitDetected(siteLabel?: string) {
+  const spec = NOTIFICATION_SPECS.AUTO_CHECKOUT_ALERT;
+
+  await scheduleNotificationWithChannel('FAILSAFE_ALERTS', {
+    title: spec.title,
+    body: siteLabel
+      ? `Se detectó tu salida de ${siteLabel}. ¿Deseas terminar tu jornada?`
+      : 'Se detectó tu salida. ¿Deseas terminar tu jornada?',
+    sound: spec.sound,
+    data: { action: spec.action },
+    color: spec.color,
+    priority: Notifications.AndroidNotificationPriority.MAX,
+  });
+
+  log(
+    'VERDE',
+    'OPERACION_EXITOSA',
+    'INFO',
+    'Notificación de salida programada/enviada'
+  );
 }
 
 export async function scheduleDailyMorningNotification() {
@@ -288,3 +311,4 @@ export async function cancelNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
   await Notifications.dismissAllNotificationsAsync();
 }
+

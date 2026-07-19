@@ -10,6 +10,7 @@ import dayjs from '../utils/dayjsSetup';
 import { LocationFSM } from './LocationFSM';
 import { locationAdapter } from '../runtime/locationAdapter';
 import { getDistanceFromLatLonInMeters } from '../utils/geoUtils';
+import { notifyGeofenceExitDetected } from './Notifications';
 
 export const GEOFENCE_TASK = 'GEOFENCE_TRACKING_TASK';
 export const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
@@ -229,32 +230,52 @@ TaskManager.defineTask(
           'NARANJA',
           'EVENTO_GEOCERCA',
           'EVENT',
-          `Geocerca: SALIDA validada para sitio ${siteId} (Hysteresis). Iniciando temporizador.`
+          `Geocerca: SALIDA validada para sesión #${session.id ?? siteId}`
         );
 
-        if (session.status === 'active') {
-          const now = dayjs().valueOf();
+        if (session.status === 'active' && session.id) {
+          const existingExitTimestamp = await AsyncStorage.getItem(EXIT_TIMESTAMP_KEY);
 
-          await Promise.all([
-            AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, now.toString()),
-            insertAuditLog(
-              session.id!,
-              AUDIT_ACTIONS.GEOFENCE_EXIT,
-              'Salida persistente del área de trabajo validada.'
-            ),
-            Notifications.scheduleNotificationAsync({
-              content: {
-                title: '⚠️ Saliste del área de trabajo',
-                body: `Se detectó tu salida de ${
-                  session.client_name || session.address
-                }.`,
-                data: { action: 'CHECKOUT_DECISION' },
-                sound: true,
-                priority: Notifications.AndroidNotificationPriority.MAX,
-              },
-              trigger: null,
-            }),
-          ]);
+          if (existingExitTimestamp) {
+            logStructured(
+              'DEBUG',
+              'ESTADO_SISTEMA',
+              AUDIT_ACTIONS.EXIT_TIMESTAMP_ALREADY_PRESENT,
+              {
+                source: 'GEOFENCE_TASK',
+                sessionId: session.id,
+                existingExitTimestamp,
+              }
+            );
+
+            return;
+          }
+
+          const exitTimestamp = dayjs().valueOf();
+
+          await AsyncStorage.setItem(EXIT_TIMESTAMP_KEY, exitTimestamp.toString());
+
+          logStructured(
+            'DEBUG',
+            'ESTADO_SISTEMA',
+            AUDIT_ACTIONS.EXIT_TIMESTAMP_STORED,
+            {
+              source: 'GEOFENCE_TASK',
+              sessionId: session.id,
+              exitTimestamp,
+              latitude: currentPos.latitude,
+              longitude: currentPos.longitude,
+              geoAccuracy: currentPos.accuracy ?? undefined,
+            }
+          );
+
+          await insertAuditLog(
+            session.id,
+            AUDIT_ACTIONS.GEOFENCE_EXIT,
+            'Salida persistente del área de trabajo validada.'
+          );
+
+          await notifyGeofenceExitDetected(session.client_name || session.address);
         }
       }
     } catch (err) {
