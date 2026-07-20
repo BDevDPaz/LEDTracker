@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,26 +16,31 @@ function ReportScreenComponent() {
   const { t } = useLanguage();
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     setIsProcessing(true);
-    const path = await generateWeeklyReport(true);
-    setIsProcessing(false);
-    if (path) showToast(t.toast_geofence_active || 'Reporte generado', 'success');
-  };
+    try {
+      const path = await generateWeeklyReport(true);
+      if (path) showToast(t.toast_geofence_active || 'Reporte generado', 'success');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [showToast, t.toast_geofence_active]);
 
-  const handleEmail = async () => {
+  const handleEmail = useCallback(async () => {
     setIsProcessing(true);
-    const settings = await getSettings();
-    const pdfUri = await generateWeeklyReport(false);
-
-    if (pdfUri && settings) {
+    try {
+      const settings = await getSettings();
+      const pdfUri = await generateWeeklyReport(false);
+      if (pdfUri && settings) {
         await sendReportByEmail(pdfUri, settings);
         showToast('Abriendo aplicación de correo...', 'success');
-    } else {
+      } else {
         showToast('No se pudo preparar el correo electrónico', 'error');
+      }
+    } finally {
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
-  };
+  }, [showToast]);
 
   return (
     <SafeAreaView testID='report-screen' style={styles.container} edges={['top']}>
@@ -49,7 +54,7 @@ function ReportScreenComponent() {
           <Ionicons name="chevron-back" size={24} color={COLORS.gold} />
           <Text style={styles.backText}>INICIO</Text>
         </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <View style={styles.headerRight}>
           <View style={styles.iconBadge}>
             <Ionicons name='document-text' size={24} color={COLORS.gold} />
           </View>
@@ -59,7 +64,7 @@ function ReportScreenComponent() {
       <ScrollView testID='report-scroll-view' contentContainerStyle={styles.scroll}>
 
         {/* HEADER TITLE */}
-        <View style={{ marginBottom: 40 }}>
+        <View style={styles.titleBlock}>
           <Text testID='report-title' style={styles.appTitle}>{t.report_title || 'REPORTE SEMANAL'}</Text>
           <Text testID='report-subtitle' style={styles.subTitle}>{t.report_subtitle || 'NÓMINA Y AUDITORÍA'}</Text>
         </View>
@@ -89,7 +94,7 @@ function ReportScreenComponent() {
                 onPress={handleDownload}
                 disabled={isProcessing}
                 icon={<Ionicons name='download-outline' size={20} color='#000' />}
-                style={{ marginBottom: 16 }}
+                style={styles.actionButton}
             />
 
             <LuxuryButton
@@ -99,12 +104,12 @@ function ReportScreenComponent() {
                 onPress={handleEmail}
                 disabled={isProcessing}
                 icon={<Ionicons name='mail-outline' size={20} color='#FFF' />}
-                style={{ marginBottom: 16 }}
+                style={styles.actionButton}
             />
         </View>
 
         {isProcessing && (
-            <ActivityIndicator testID='report-loading' size='large' color={COLORS.gold} style={{marginTop: 30}} />
+            <ActivityIndicator testID='report-loading' size='large' color={COLORS.gold} style={styles.loader} />
         )}
 
         <Text testID='report-footer-note' style={styles.footerNote}>
@@ -125,6 +130,10 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 16
   },
+  headerRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -141,6 +150,9 @@ const styles = StyleSheet.create({
   },
   appTitle: { fontFamily: 'Montserrat_700Bold', fontSize: 28, color: '#FFF', letterSpacing: 1 },
   subTitle: { fontFamily: 'Montserrat_400Regular', fontSize: 10, color: COLORS.gold, letterSpacing: 2, marginTop: 4, textTransform: 'uppercase' },
+  titleBlock: {
+    marginBottom: 40,
+  },
   iconBadge: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(212,175,55,0.1)', alignItems: 'center', justifyContent: 'center' },
   previewCard: { alignItems: 'center', paddingVertical: 40, marginBottom: 40 },
   docContainer: { flexDirection: 'row', marginBottom: 25, opacity: 0.9, alignItems: 'center' },
@@ -149,6 +161,12 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: 'Montserrat_700Bold', color: '#FFF', fontSize: 18, marginBottom: 12 },
   cardDesc: { fontFamily: 'Montserrat_400Regular', color: '#AAA', textAlign: 'center', fontSize: 13, paddingHorizontal: 10, lineHeight: 22 },
   actions: { width: '100%' },
+  actionButton: {
+    marginBottom: 16,
+  },
+  loader: {
+    marginTop: 30,
+  },
   footerNote: { fontFamily: 'Montserrat_400Regular', color: '#555', textAlign: 'center', fontSize: 11, marginTop: 40, fontStyle: 'italic', paddingHorizontal: 20 }
 });
 
