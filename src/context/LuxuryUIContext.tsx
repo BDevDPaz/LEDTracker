@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode, memo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo, ReactNode, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,8 +47,18 @@ export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => 
   const toastQueueRef = useRef<ToastItem[]>([]);
   const dialogQueueRef = useRef<DialogOptions[]>([]);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastRef = useRef<ToastItem | null>(null);
+  const dialogRef = useRef<DialogOptions | null>(null);
   const lastToastRef = useRef<{ key: string; timestamp: number } | null>(null);
   const lastDialogRef = useRef<{ key: string; timestamp: number } | null>(null);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+
+  useEffect(() => {
+    dialogRef.current = dialog;
+  }, [dialog]);
 
   const flushNextToast = useCallback(() => {
     if (toastQueueRef.current.length === 0) {
@@ -65,13 +75,15 @@ export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => 
     const key = createToastKey(normalizedMsg, type);
     const now = dayjs().valueOf();
     if (lastToastRef.current && lastToastRef.current.key === key && now - lastToastRef.current.timestamp < TOAST_DUPLICATE_WINDOW_MS) return;
-    if (toast && createToastKey(toast.msg, toast.type) === key) return;
+
+    const currentToast = toastRef.current;
+    if (currentToast && createToastKey(currentToast.msg, currentToast.type) === key) return;
     if (toastQueueRef.current.some((item) => createToastKey(item.msg, item.type) === key)) return;
 
     const item: ToastItem = { id: `${now}-${Math.random().toString(36).slice(2, 8)}`, msg: normalizedMsg, type, durationMs: DEFAULT_TOAST_DURATION_MS, priority };
     lastToastRef.current = { key, timestamp: now };
 
-    if (!toast) {
+    if (!currentToast) {
       setToast(item);
       return;
     }
@@ -85,7 +97,7 @@ export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => 
       if (queue.length >= MAX_TOAST_QUEUE_SIZE) queue.shift();
       queue.push(item);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     if (toastTimerRef.current) { clearTimeout(toastTimerRef.current); toastTimerRef.current = null; }
@@ -106,12 +118,13 @@ export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => 
     const key = createDialogKey(options);
     const now = dayjs().valueOf();
     if (lastDialogRef.current && lastDialogRef.current.key === key && now - lastDialogRef.current.timestamp < DIALOG_DUPLICATE_WINDOW_MS) return;
-    if (dialog && createDialogKey(dialog) === key) return;
+    const currentDialog = dialogRef.current;
+    if (currentDialog && createDialogKey(currentDialog) === key) return;
     if (dialogQueueRef.current.some((item) => createDialogKey(item) === key)) return;
     lastDialogRef.current = { key, timestamp: now };
-    if (!dialog) { setDialog(options); return; }
+    if (!currentDialog) { setDialog(options); return; }
     dialogQueueRef.current.push(options);
-  }, [dialog]);
+  }, []);
 
   const handleDialogConfirm = () => {
     const current = dialog;
@@ -127,9 +140,13 @@ export const LuxuryUIProvider = memo(({ children }: { children: ReactNode }) => 
 
   const openWeeklyReport = useCallback(() => setIsWeeklyReportVisible(true), []);
   const closeWeeklyReport = useCallback(() => setIsWeeklyReportVisible(false), []);
+  const providerValue = useMemo(
+    () => ({ showToast, showDialog, isWeeklyReportVisible, openWeeklyReport, closeWeeklyReport }),
+    [showToast, showDialog, isWeeklyReportVisible, openWeeklyReport, closeWeeklyReport]
+  );
 
   return (
-    <LuxuryUIContext.Provider value={{ showToast, showDialog, isWeeklyReportVisible, openWeeklyReport, closeWeeklyReport }}>
+    <LuxuryUIContext.Provider value={providerValue}>
       {children}
       {toast && (
         <Animated.View entering={FadeInUp} exiting={FadeOutUp} style={styles.toastContainer} pointerEvents="none">

@@ -47,8 +47,7 @@ app-example
 .vscode/
 .jules/
 .Jules/
-.docs/
-#assets/images/
+###assets/images/###
 coverage/
 *.log
 
@@ -58,3 +57,5 @@ scripts/audit/reports/
 *.db-journal
 *.db-shm
 *.db-wal
+
+#Update: 07.20_06-28
