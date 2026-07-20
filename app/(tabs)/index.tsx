@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { memo, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -69,13 +69,13 @@ function HomeScreenComponent() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Easter Egg
-  const [tapCount, setTapCount] = useState(0);
+  const tapCountRef = useRef(0);
   const [showSpecialCard, setShowSpecialCard] = useState(false);
   const iconScale = useSharedValue(1);
 
   useEffect(() => {
     const unsubscribe = engine.subscribe(setEngineState);
-     return () => unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -122,7 +122,12 @@ function HomeScreenComponent() {
         });
 
         const hours = totalMinutes / 60;
-        setStats({ hours, earnings: hours * rate });
+        const earnings = hours * rate;
+        setStats((prev) =>
+          prev.hours === hours && prev.earnings === earnings
+            ? prev
+            : { hours, earnings }
+        );
       });
     } catch (_e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando estadísticas', _e);
@@ -142,7 +147,7 @@ function HomeScreenComponent() {
     if (params.showCheckoutPrompt === 'true') {
       setShowLunchModal(true);
     }
-  }, [params]);
+  }, [params.showSetup, params.showCheckoutPrompt]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -167,53 +172,75 @@ function HomeScreenComponent() {
     }
   }, [loadStats]);
 
-  const handleSetupSubmit = (addr: string, client: string, notes: string) => {
+  const handleSetupSubmit = useCallback((addr: string, client: string, notes: string) => {
     setShowSetupModal(false);
     router.setParams({ showSetup: undefined });
     engine.dispatch({ type: 'START_SESSION_REQUEST', address: addr, client, notes });
-  };
+  }, [router]);
 
-  const handleClockOut = () => {
+  const handleClockOut = useCallback(() => {
     setShowLunchModal(true);
-  };
+  }, []);
 
-  const completeSession = (lunchMin: number) => {
+  const completeSession = useCallback((lunchMin: number) => {
     setShowLunchModal(false);
     router.setParams({ showCheckoutPrompt: undefined });
     engine.dispatch({ type: 'STOP_SESSION_REQUEST', lunchMinutes: lunchMin });
     showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
-  };
+  }, [router, showToast, t.toast_shift_ended]);
 
-  const handleEasterEggTap = () => {
-    const nextTap = tapCount + 1;
-    setTapCount(nextTap);
-
+  const handleEasterEggTap = useCallback(() => {
     iconScale.value = withSequence(withSpring(1.5), withSpring(1));
+    tapCountRef.current += 1;
 
-    if (nextTap >= 7) {
+    if (tapCountRef.current >= 7) {
       setShowSpecialCard(true);
-      setTapCount(0);
+      tapCountRef.current = 0;
     }
-  };
+  }, [iconScale]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: iconScale.value }],
   }));
 
-  const getStatusIcon = () => {
-    if (!activeSession) return 'power-outline';
-    if (activeSession.status === 'pending_arrival') return 'location-outline';
-    return 'briefcase-outline';
-  };
-
-  const getStatusColor = () => {
-    if (!activeSession) return COLORS.textSecondary;
-    if (activeSession.status === 'pending_arrival') return '#f59e0b';
-    return COLORS.success;
-  };
-
   const displayAddress =
     activeSession?.address || t.no_activity || 'No hay actividad registrada.';
+
+  const statusMeta = useMemo(() => {
+    if (!activeSession) {
+      return {
+        icon: 'power-outline' as const,
+        iconColor: COLORS.textSecondary,
+        dotColor: '#666',
+        label: t.status_inactive,
+      };
+    }
+
+    if (activeSession.status === 'pending_arrival') {
+      return {
+        icon: 'location-outline' as const,
+        iconColor: '#f59e0b',
+        dotColor: '#f59e0b',
+        label: t.status_pending,
+      };
+    }
+
+    if (activeSession.status === 'travel') {
+      return {
+        icon: 'briefcase-outline' as const,
+        iconColor: COLORS.success,
+        dotColor: COLORS.success,
+        label: t.status_transit,
+      };
+    }
+
+    return {
+      icon: 'briefcase-outline' as const,
+      iconColor: COLORS.success,
+      dotColor: COLORS.success,
+      label: t.status_active,
+    };
+  }, [activeSession, t.status_active, t.status_inactive, t.status_pending, t.status_transit]);
 
   return (
     <SafeAreaView testID='home-screen' style={styles.container} edges={['top']}>
@@ -230,7 +257,7 @@ function HomeScreenComponent() {
       >
         <Animated.View entering={FadeIn} testID='home-header' style={styles.header}>
           <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={styles.titleRow}>
               <Text testID='home-title' style={styles.appTitle}>
                 {t.header_title || 'WTracker'}
               </Text>
@@ -252,23 +279,11 @@ function HomeScreenComponent() {
               <View
                 style={[
                   styles.statusDot,
-                  {
-                    backgroundColor: activeSession
-                      ? activeSession.status === 'active'
-                        ? COLORS.success
-                        : '#f59e0b'
-                      : '#666',
-                  },
+                  { backgroundColor: statusMeta.dotColor },
                 ]}
               />
               <Text testID='home-status-text' style={styles.statusText}>
-                {!activeSession
-                  ? t.status_inactive
-                  : activeSession.status === 'pending_arrival'
-                    ? t.status_pending
-                    : activeSession.status === 'travel'
-                      ? t.status_transit
-                      : t.status_active}
+                {statusMeta.label}
               </Text>
             </View>
           </View>
@@ -277,7 +292,7 @@ function HomeScreenComponent() {
         <Animated.View entering={FadeInDown.delay(100)} testID='home-card-wrapper'>
           <LuxuryCard
             active={!!activeSession}
-            style={{ minHeight: 220, justifyContent: 'center' }}
+            style={styles.sessionCard}
           >
             {isProcessing ? (
               <ActivityIndicator
@@ -286,7 +301,7 @@ function HomeScreenComponent() {
                 color={COLORS.gold}
               />
             ) : (
-              <View testID='home-session-state' style={{ alignItems: 'center' }}>
+              <View testID='home-session-state' style={styles.sessionState}>
                 <View
                   testID='home-icon-bubble'
                   style={[
@@ -294,7 +309,7 @@ function HomeScreenComponent() {
                     activeSession && { backgroundColor: 'rgba(255,255,255,0.05)' },
                   ]}
                 >
-                  <Ionicons name={getStatusIcon()} size={32} color={getStatusColor()} />
+                  <Ionicons name={statusMeta.icon} size={32} color={statusMeta.iconColor} />
                 </View>
 
                 <Text testID='home-location-label' style={styles.label}>
@@ -328,12 +343,7 @@ function HomeScreenComponent() {
                 {activeSession?.status === 'pending_arrival' && (
                   <Text
                     testID='home-geofence-hint'
-                    style={{
-                      color: '#f59e0b',
-                      fontSize: 10,
-                      marginTop: 10,
-                      fontFamily: 'Montserrat_600SemiBold',
-                    }}
+                    style={styles.geofenceHint}
                   >
                     {t.hint_geofence_active}
                   </Text>
@@ -346,7 +356,7 @@ function HomeScreenComponent() {
         <Animated.View entering={FadeInDown.delay(200)} testID='home-primary-action-wrapper'>
           <LuxuryButton
             testID='home-primary-action'
-            style={{ marginBottom: 16 }}
+            style={styles.primaryActionButton}
             text={activeSession ? t.btn_clock_out : t.btn_new_job}
             variant={activeSession ? 'danger' : 'primary'}
             onPress={
@@ -410,19 +420,19 @@ function HomeScreenComponent() {
         />
 
         <GlassModalWrapper visible={showSpecialCard}>
-          <View testID='home-special-card' style={{ alignItems: 'center', padding: 10 }}>
+          <View testID='home-special-card' style={styles.specialCard}>
             <Ionicons
               name='trophy'
               size={40}
               color={COLORS.gold}
-              style={{ marginBottom: 20 }}
+              style={styles.specialCardTrophy}
             />
             <Text style={styles.eggTitle}>WTracker Special Edition</Text>
             <Text style={styles.eggAuthor}>by BDevDPaz</Text>
             <View style={styles.eggDivider} />
             <Text style={styles.eggText}>
               Para uso restringido de{'\n'}
-              <Text style={{ color: '#FFF' }}>Alex León</Text>
+              <Text style={styles.specialCardName}>Alex León</Text>
               {'\n'}
               CEO de WTracker Corp
             </Text>
@@ -431,7 +441,7 @@ function HomeScreenComponent() {
               text={t.btn_close || 'CERRAR'}
               onPress={() => setShowSpecialCard(false)}
               variant='outline'
-              style={{ marginTop: 30 }}
+              style={styles.specialCardCloseButton}
             />
           </View>
         </GlassModalWrapper>
@@ -455,6 +465,11 @@ const styles = StyleSheet.create({
     color: '#FFF',
     letterSpacing: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -474,6 +489,13 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: 'rgba(255,255,255,0.05)',
     marginBottom: 16,
+  },
+  sessionCard: {
+    minHeight: 220,
+    justifyContent: 'center',
+  },
+  sessionState: {
+    alignItems: 'center',
   },
   label: {
     fontFamily: 'Montserrat_700Bold',
@@ -502,6 +524,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_600SemiBold',
     color: COLORS.gold,
     fontSize: 12,
+  },
+  geofenceHint: {
+    color: '#f59e0b',
+    fontSize: 10,
+    marginTop: 10,
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  primaryActionButton: {
+    marginBottom: 16,
   },
   statsContainer: { flexDirection: 'row', gap: 14 },
   statBox: {
@@ -554,7 +585,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  specialCard: {
+    alignItems: 'center',
+    padding: 10,
+  },
+  specialCardTrophy: {
+    marginBottom: 20,
+  },
+  specialCardName: {
+    color: '#FFF',
+  },
+  specialCardCloseButton: {
+    marginTop: 30,
+  },
 });
 
 export default memo(HomeScreenComponent);
-

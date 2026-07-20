@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState, useCallback } from 'react';
+import React, { memo, useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ import { WorkSession } from '../../src/engine/contracts/types';
 import { AuditLog } from '../../src/types';
 import { formatDate, formatTime } from '../../src/utils/dateUtils';
 import {
+  ALL_CHECKOUT_AUDIT_ACTIONS,
   getCheckoutMethodLabel,
   isCheckoutAuditAction,
   log
@@ -37,8 +38,12 @@ import { z } from 'zod';
 type HistorySession = WorkSession & {
   checkout_action_type?: string | null;
 };
+// Optimized projection for history enrichment: we only need these fields to map checkout labels.
+type CheckoutAuditLog = Pick<AuditLog, 'session_id' | 'action_type'>;
 
-function buildCheckoutActionBySessionId(logs: AuditLog[]): Map<number, string> {
+const HISTORY_CONTENT_CONTAINER_STYLE = { padding: 24, paddingBottom: 120 };
+
+function buildCheckoutActionBySessionId(logs: CheckoutAuditLog[]): Map<number, string> {
   const checkoutActionBySessionId = new Map<number, string>();
 
   for (const auditLog of logs) {
@@ -68,13 +73,23 @@ function HistoryScreenComponent() {
   const [editNote, setEditNote] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
       const data = await getHistory();
+      const checkoutAuditActions: readonly string[] = ALL_CHECKOUT_AUDIT_ACTIONS;
+      if (checkoutAuditActions.length === 0) {
+        setSessions(data);
+        return;
+      }
+      const checkoutActionPlaceholders = checkoutAuditActions.map(() => '?').join(', ');
 
-      const logs = await getAllAsync<AuditLog>(
-        `SELECT * FROM audit_logs
-         ORDER BY timestamp DESC`
+      const logs = await getAllAsync<CheckoutAuditLog>(
+        `SELECT session_id, action_type
+         FROM audit_logs
+         WHERE session_id IS NOT NULL
+           AND action_type IN (${checkoutActionPlaceholders})
+         ORDER BY timestamp DESC`,
+        [...checkoutAuditActions]
       );
 
       const checkoutActionBySessionId = buildCheckoutActionBySessionId(logs);
@@ -122,11 +137,11 @@ function HistoryScreenComponent() {
     } catch (_e) {
       log('ROJO', 'ERROR_CRITICO', 'ERROR', 'Error cargando historial', _e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadHistory();
-  }, []);
+  }, [loadHistory]);
 
   const formatTimeInput = (text: string, setter: (val: string) => void) => {
     let clean = text.replace(/[^0-9]/g, '');
@@ -276,7 +291,7 @@ function HistoryScreenComponent() {
                     name="pencil"
                     size={12}
                     color={COLORS.gold}
-                    style={{ marginRight: 6 }}
+                    style={styles.manualEditIcon}
                   />
                 )}
 
@@ -310,8 +325,14 @@ function HistoryScreenComponent() {
           </LuxuryCard>
         </TouchableOpacity>
       );
+
     },
     [openEdit, handleDelete]
+  );
+
+  const emptyHistoryState = useMemo(
+    () => <LuxuryEmptyState text="No hay actividad reciente" icon="time-outline" />,
+    []
   );
 
   return (
@@ -327,7 +348,7 @@ function HistoryScreenComponent() {
           <Text style={styles.backText}>INICIO</Text>
         </TouchableOpacity>
 
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <View style={styles.headerRight}>
           <TouchableOpacity
             testID="history-pdf-button"
             accessibilityRole="button"
@@ -347,8 +368,8 @@ function HistoryScreenComponent() {
       <View style={styles.summaryContainer}>
         <Text style={styles.header}>HISTORIAL</Text>
         <Text style={styles.subHeader}>
-          ESTA SEMANA: <Text style={{ color: '#FFF' }}>{totalHours.toFixed(1)}h</Text> •{' '}
-          <Text style={{ color: COLORS.gold }}>${estEarnings.toFixed(0)}</Text>
+          ESTA SEMANA: <Text style={styles.totalHoursText}>{totalHours.toFixed(1)}h</Text> •{' '}
+          <Text style={styles.totalEarningsText}>${estEarnings.toFixed(0)}</Text>
         </Text>
       </View>
 
@@ -357,14 +378,13 @@ function HistoryScreenComponent() {
         data={sessions}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
-        ListEmptyComponent={
-          <LuxuryEmptyState text="No hay actividad reciente" icon="time-outline" />
-        }
+        contentContainerStyle={HISTORY_CONTENT_CONTAINER_STYLE}
+        ListEmptyComponent={emptyHistoryState}
         showsVerticalScrollIndicator={false}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={true}
       />
 
@@ -444,7 +464,7 @@ function HistoryScreenComponent() {
           error={errors.note}
         />
 
-        <View style={{ gap: 8, marginTop: 10 }}>
+        <View style={styles.modalActions}>
           <LuxuryButton text="GUARDAR CAMBIOS" onPress={saveEdit} variant="primary" />
           <LuxuryButton
             text="CANCELAR"
@@ -465,6 +485,10 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 0,
     gap: 16,
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
   backBtn: {
     flexDirection: 'row',
@@ -497,6 +521,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 6,
   },
+  totalHoursText: {
+    color: '#FFF',
+  },
+  totalEarningsText: {
+    color: COLORS.gold,
+  },
   pdfBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -527,6 +557,9 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  manualEditIcon: {
+    marginRight: 6,
   },
   dot: {
     width: 6,
@@ -589,7 +622,10 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 5,
   },
+  modalActions: {
+    gap: 8,
+    marginTop: 10,
+  },
 });
 
 export default memo(HistoryScreenComponent);
-
