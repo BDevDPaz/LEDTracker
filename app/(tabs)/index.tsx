@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { memo, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -69,7 +69,7 @@ function HomeScreenComponent() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Easter Egg
-  const [, setTapCount] = useState(0);
+  const tapCountRef = useRef(0);
   const [showSpecialCard, setShowSpecialCard] = useState(false);
   const iconScale = useSharedValue(1);
 
@@ -191,14 +191,12 @@ function HomeScreenComponent() {
 
   const handleEasterEggTap = useCallback(() => {
     iconScale.value = withSequence(withSpring(1.5), withSpring(1));
-    setTapCount((prev) => {
-      const nextTap = prev + 1;
-      if (nextTap >= 7) {
-        setShowSpecialCard(true);
-        return 0;
-      }
-      return nextTap;
-    });
+    tapCountRef.current += 1;
+
+    if (tapCountRef.current >= 7) {
+      setShowSpecialCard(true);
+      tapCountRef.current = 0;
+    }
   }, [iconScale]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({

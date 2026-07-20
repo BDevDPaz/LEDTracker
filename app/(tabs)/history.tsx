@@ -38,10 +38,12 @@ import { z } from 'zod';
 type HistorySession = WorkSession & {
   checkout_action_type?: string | null;
 };
+// Optimized projection for history enrichment: we only need these fields to map checkout labels.
+type CheckoutAuditLog = Pick<AuditLog, 'session_id' | 'action_type'>;
 
 const HISTORY_CONTENT_CONTAINER_STYLE = { padding: 24, paddingBottom: 120 };
 
-function buildCheckoutActionBySessionId(logs: AuditLog[]): Map<number, string> {
+function buildCheckoutActionBySessionId(logs: CheckoutAuditLog[]): Map<number, string> {
   const checkoutActionBySessionId = new Map<number, string>();
 
   for (const auditLog of logs) {
@@ -74,15 +76,20 @@ function HistoryScreenComponent() {
   const loadHistory = useCallback(async () => {
     try {
       const data = await getHistory();
-      const checkoutActionPlaceholders = ALL_CHECKOUT_AUDIT_ACTIONS.map(() => '?').join(', ');
+      const checkoutAuditActions: readonly string[] = ALL_CHECKOUT_AUDIT_ACTIONS;
+      if (checkoutAuditActions.length === 0) {
+        setSessions(data);
+        return;
+      }
+      const checkoutActionPlaceholders = checkoutAuditActions.map(() => '?').join(', ');
 
-      const logs = await getAllAsync<AuditLog>(
+      const logs = await getAllAsync<CheckoutAuditLog>(
         `SELECT session_id, action_type
          FROM audit_logs
          WHERE session_id IS NOT NULL
            AND action_type IN (${checkoutActionPlaceholders})
          ORDER BY timestamp DESC`,
-        [...ALL_CHECKOUT_AUDIT_ACTIONS]
+        [...checkoutAuditActions]
       );
 
       const checkoutActionBySessionId = buildCheckoutActionBySessionId(logs);
