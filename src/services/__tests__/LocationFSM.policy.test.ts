@@ -1,3 +1,5 @@
+import * as LocationFSM from '../../LocationFSM';
+
 describe('LocationFSM policy centralization', () => {
   it('uses REQUIRED_STABLE_GEOFENCE_SAMPLES from runtimePolicy', async () => {
     jest.resetModules();
@@ -7,8 +9,6 @@ describe('LocationFSM policy centralization', () => {
         REQUIRED_STABLE_GEOFENCE_SAMPLES: 2,
       },
     }));
-
-    const { LocationFSM } = require('../LocationFSM') as typeof import('../LocationFSM');
 
     const state = new Map<string, string>();
     const storage = {
@@ -21,10 +21,10 @@ describe('LocationFSM policy centralization', () => {
       }),
     };
 
-    const fsm = new LocationFSM(storage);
+    const fsmInstance = new LocationFSM.LocationFSM(storage);
 
-    await fsm.update('Enter', 'site-1');
-    const second = await fsm.update('Enter', 'site-1');
+    await fsmInstance.update('Enter', 'site-1');
+    const second = await fsmInstance.update('Enter', 'site-1');
 
     expect(second.transition).toBe('ENTERED');
   });

@@ -5,6 +5,12 @@ import {
   locationEvidenceObjectCounts,
 } from '../testUtils/fakeSQLiteDatabase';
 
+// Módulos reales importados arriba (sin require)
+import * as dbModule from '../db';
+import * as migrationsModule from '../migrations';
+import * as healthModule from '../dbHealth';
+import * as loggerModule from '../../utils/logger';
+
 async function loadModules(fakeDatabase: FakeSQLiteDatabase) {
   jest.resetModules();
 
@@ -13,11 +19,6 @@ async function loadModules(fakeDatabase: FakeSQLiteDatabase) {
   jest.doMock('expo-sqlite', () => ({
     openDatabaseAsync,
   }));
-
-  const dbModule = require('../db') as typeof import('../db');
-  const migrationsModule = require('../migrations') as typeof import('../migrations');
-  const healthModule = require('../dbHealth') as typeof import('../dbHealth');
-  const loggerModule = require('../../utils/logger') as typeof import('../../utils/logger');
 
   return {
     openDatabaseAsync,

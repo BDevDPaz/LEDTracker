@@ -1,3 +1,5 @@
+import * as backgroundTasksModule from '../../BackgroundTasks';
+
 describe('BackgroundTasks runtime failsafe', () => {
   const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';
 
@@ -136,8 +138,6 @@ describe('BackgroundTasks runtime failsafe', () => {
       lunch_taken: 0,
       date_string: '2026-07-19',
     });
-
-    const backgroundTasksModule = require('../BackgroundTasks') as typeof import('../BackgroundTasks');
 
     runFailsafeCheck = backgroundTasksModule.runFailsafeCheck;
   });
