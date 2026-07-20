@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,23 +14,31 @@ function LegalScreenComponent() {
   const [gpsStatus, setGpsStatus] = useState('Checking...');
   const [notifStatus, setNotifStatus] = useState('Checking...');
 
-  useEffect(() => {
-    const checkPermissions = async () => {
+  const checkPermissions = useCallback(async (isMountedRef: { current: boolean }) => {
       const { status: locStatus } = await Location.getForegroundPermissionsAsync();
       const { status: bgLocStatus } = await Location.getBackgroundPermissionsAsync();
 
-      setGpsStatus(
+      if (isMountedRef.current) {
+        setGpsStatus(
         locStatus === 'granted' && bgLocStatus === 'granted'
           ? 'CONCEDIDO'
           : 'LIMITADO'
       );
+      }
 
       const { status: nStatus } = await Notifications.getPermissionsAsync();
-      setNotifStatus(nStatus === 'granted' ? 'CONCEDIDO' : 'DENEGADO');
-    };
-
-    void checkPermissions();
+      if (isMountedRef.current) {
+        setNotifStatus(nStatus === 'granted' ? 'CONCEDIDO' : 'DENEGADO');
+      }
   }, []);
+
+  useEffect(() => {
+    const mountedRef = { current: true };
+    void checkPermissions(mountedRef);
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [checkPermissions]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -82,7 +90,7 @@ function LegalScreenComponent() {
             text="CONTACTAR SOPORTE"
             onPress={() => Linking.openURL('mailto:support@wtracker.com')}
             variant="outline"
-            style={{ marginTop: 16 }}
+            style={styles.supportButton}
           />
         </LuxuryCard>
 
@@ -90,7 +98,7 @@ function LegalScreenComponent() {
           <Text style={styles.sectionTitle}>CRÉDITOS & LICENCIA</Text>
           <Text style={styles.bodyText}>WTracker Professional Edition</Text>
           <Text style={styles.bodyText}>
-            Developer: <Text style={{ color: COLORS.gold }}>BDevDPaz</Text>
+            Developer: <Text style={styles.highlightText}>BDevDPaz</Text>
           </Text>
           <Text style={styles.bodyText}>Versión: 1.0.0 (Luxury Glass Dark)</Text>
           <Text style={styles.bodyText}>© 2026 Todos los derechos reservados.</Text>
@@ -108,7 +116,7 @@ function LegalScreenComponent() {
           </Text>
         </LuxuryCard>
 
-        <View style={{ height: 100 }} />
+        <View style={styles.scrollFooterSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -180,7 +188,15 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontStyle: 'italic',
   },
+  supportButton: {
+    marginTop: 16,
+  },
+  highlightText: {
+    color: COLORS.gold,
+  },
+  scrollFooterSpacer: {
+    height: 100,
+  },
 });
 
 export default memo(LegalScreenComponent);
-
