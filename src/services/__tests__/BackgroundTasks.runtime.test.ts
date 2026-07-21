@@ -1,4 +1,4 @@
-import * as backgroundTasksModule from '../../BackgroundTasks';
+import * as backgroundTasksModule from '../BackgroundTasks';
 
 describe('BackgroundTasks runtime failsafe', () => {
   const EXIT_TIMESTAMP_KEY = 'LAST_GEOFENCE_EXIT_TIMESTAMP';

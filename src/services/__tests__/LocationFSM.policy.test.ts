@@ -1,4 +1,4 @@
-import * as LocationFSM from '../../LocationFSM';
+import * as LocationFSM from '../LocationFSM';
 
 describe('LocationFSM policy centralization', () => {
   it('uses REQUIRED_STABLE_GEOFENCE_SAMPLES from runtimePolicy', async () => {
