@@ -56,6 +56,11 @@ export const AUDIT_ACTIONS = {
   GEOFENCE_EXIT: 'GEOFENCE_EXIT',
   AUTO_CHECKIN_GPS: 'AUTO_CHECKIN_GPS',
 
+  // README aliases (informational audit rows). Checkout itself is still recorded
+  // with the official AUTO_CHECKOUT_GPS action so existing data/reports keep working.
+  AUTO_ENTRADA: 'AUTO_ENTRADA',
+  AUTO_SALIDA: 'AUTO_SALIDA',
+
   // Runtime Resilience Phase D actions
   RUNTIME_RECONCILE_STARTED: 'RUNTIME_RECONCILE_STARTED',
   RUNTIME_RECONCILE_COMPLETED: 'RUNTIME_RECONCILE_COMPLETED',

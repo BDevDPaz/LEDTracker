@@ -10,7 +10,13 @@ import {
   getAllAsync,
   saveSettings
 } from '../../database/db';
-import { EXIT_TIMESTAMP_KEY, LocationService } from '../../services/LocationManager';
+import {
+  EXIT_TIMESTAMP_KEY,
+  LocationService,
+  startWorksiteTracking,
+  stopWorksiteTracking,
+} from '../../services/LocationManager';
+import { GEOFENCE_ENTRY_RADIUS_M } from '../../services/worksitePolicy';
 import dayjs from '../../utils/dayjsSetup';
 import { AUDIT_ACTIONS, log } from '../../utils/logger';
 import { securityAdapter } from '../../runtime/securityAdapter';
@@ -40,13 +46,18 @@ export async function workTrackerEffects(
               longitude: s.longitude,
             }));
 
-            const initRadius = settings?.tolerance_radius || 200;
+            const initRadius = settings?.tolerance_radius || GEOFENCE_ENTRY_RADIUS_M;
             await LocationService.startMonitoringArrival(initSites, initRadius);
           }
 
           await reconcileRuntimeState('APP_INIT');
 
           const reconciledSession = await getActiveSession();
+
+          // Reanuda el rastreo continuo si hay una sesión activa (p.ej. tras reinicio).
+          if (reconciledSession?.status === 'active') {
+            await startWorksiteTracking();
+          }
 
           dispatch({
             type: 'DATA_LOADED',
@@ -82,7 +93,7 @@ export async function workTrackerEffects(
         }
 
         const currentSettings = state.settings || await getSettings();
-        const radius = currentSettings?.tolerance_radius || 200;
+        const radius = currentSettings?.tolerance_radius || GEOFENCE_ENTRY_RADIUS_M;
 
         await saveSession({
           address: sanitizedAddress,
@@ -129,6 +140,7 @@ export async function workTrackerEffects(
           );
 
           await AsyncStorage.removeItem(EXIT_TIMESTAMP_KEY);
+          await stopWorksiteTracking(state.activeSession.id);
 
           // Only stop monitoring if no more active/pending sessions exist for today
           const pendingSessions = await getAllAsync<any>(
@@ -146,7 +158,7 @@ export async function workTrackerEffects(
               longitude: s.longitude,
             }));
             const currentSettings = state.settings || await getSettings();
-            const radius = currentSettings?.tolerance_radius || 200;
+            const radius = currentSettings?.tolerance_radius || GEOFENCE_ENTRY_RADIUS_M;
             await LocationService.startMonitoringArrival(initSites, radius);
           }
 

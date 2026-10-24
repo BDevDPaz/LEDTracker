@@ -261,6 +261,27 @@ export async function notifyGeofenceExitDetected(siteLabel?: string) {
   );
 }
 
+export const GEOFENCE_EXIT_NOTIFICATION_TYPE = 'GEOFENCE_EXIT';
+
+/** Auto check-out ya ejecutado (> umbral de salida). Al tocarla se abre PostWorkModal. */
+export async function notifyAutoCheckoutGeofenceExit(
+  sessionId: number,
+  siteLabel?: string
+) {
+  const spec = NOTIFICATION_SPECS.AUTO_CHECKOUT_ALERT;
+
+  await scheduleNotificationWithChannel('FAILSAFE_ALERTS', {
+    title: '🏁 Salida registrada',
+    body: siteLabel
+      ? `Saliste de ${siteLabel}. Tu sesión se cerró automáticamente.`
+      : 'Saliste del sitio. Tu sesión se cerró automáticamente.',
+    sound: spec.sound,
+    data: { type: GEOFENCE_EXIT_NOTIFICATION_TYPE, sessionId },
+    color: spec.color,
+    priority: Notifications.AndroidNotificationPriority.MAX,
+  });
+}
+
 export async function scheduleDailyMorningNotification() {
   try {
     const settings = await getSettings();

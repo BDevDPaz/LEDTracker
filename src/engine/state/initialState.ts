@@ -7,7 +7,7 @@ export const initialState: EngineState = {
     employee_name: '',
     employer_name: '',
     company_email: '',
-    tolerance_radius: 200,
+    tolerance_radius: 150,
     hourly_rate: 0,
     language: 'es',
     start_time: '08:00',
