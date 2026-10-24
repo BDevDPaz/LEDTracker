@@ -139,6 +139,8 @@ function SettingsScreenComponent() {
                   onValueChange={(val) => setLanguage(val ? 'en' : 'es')}
                   trackColor={{true: COLORS.gold, false: '#333'}}
                   thumbColor='#FFF'
+                  accessibilityRole="switch"
+                  accessibilityLabel={t.label_lang}
                 />
                 <Text style={[styles.langText, language === 'en' && styles.langActive]}>EN</Text>
               </View>
@@ -184,7 +186,7 @@ function SettingsScreenComponent() {
                   </Text>
               </View>
               {!isAdmin && !showAccess && (
-                <TouchableOpacity testID='settings-admin-unlock' onPress={() => setShowAccess(true)} style={styles.unlockBtn}>
+                <TouchableOpacity testID='settings-admin-unlock' onPress={() => setShowAccess(true)} style={styles.unlockBtn} accessibilityRole="button" accessibilityLabel={t.admin_unlock}>
                     <Text style={styles.unlockBtnText}>{t.admin_unlock}</Text>
                 </TouchableOpacity>
               )}
@@ -202,7 +204,7 @@ function SettingsScreenComponent() {
                     autoFocus
                     containerStyle={styles.pinInputContainer}
                   />
-                  <TouchableOpacity testID='settings-admin-ok' onPress={unlockAdmin} style={styles.okBtn}>
+                  <TouchableOpacity testID='settings-admin-ok' onPress={unlockAdmin} style={styles.okBtn} accessibilityRole="button" accessibilityLabel="Confirmar PIN">
                     <Ionicons name='arrow-forward' color='#000' size={20} />
                   </TouchableOpacity>
                 </View>
@@ -273,7 +275,7 @@ function SettingsScreenComponent() {
                   disabled={isSaving}
                 />
 
-                <TouchableOpacity testID='settings-admin-lock' style={styles.lockBtn} onPress={() => setIsAdmin(false)}>
+                <TouchableOpacity testID='settings-admin-lock' style={styles.lockBtn} onPress={() => setIsAdmin(false)} accessibilityRole="button" accessibilityLabel="Bloquear acceso">
                   <Text style={styles.lockBtnText}>BLOQUEAR ACCESO</Text>
                 </TouchableOpacity>
               </View>
