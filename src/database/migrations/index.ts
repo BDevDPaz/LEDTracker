@@ -8,11 +8,13 @@ import {
 } from '../schemaControl';
 import { migration001FormalizeCoreSchema } from './001_formalizeCoreSchema';
 import { migration002FormalizeLocationEvidence } from './002_formalizeLocationEvidence';
+import { migration003AddSessionStartTimeIndex } from './003_addSessionStartTimeIndex';
 import type { DatabaseMigration } from './types';
 
 const migrations: DatabaseMigration[] = [
   migration001FormalizeCoreSchema,
   migration002FormalizeLocationEvidence,
+  migration003AddSessionStartTimeIndex,
 ];
 
 export interface MigrationRunResult {

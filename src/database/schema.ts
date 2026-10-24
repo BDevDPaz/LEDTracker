@@ -273,9 +273,19 @@ export const LOCATION_EVIDENCE_INDEXES: ExpectedIndex[] = [
   },
 ];
 
+export const SESSION_PERFORMANCE_INDEXES: ExpectedIndex[] = [
+  {
+    name: 'idx_sessions_start_time',
+    tableName: 'work_sessions',
+    createSql:
+      'CREATE INDEX IF NOT EXISTS idx_sessions_start_time ON work_sessions(start_time DESC)',
+  },
+];
+
 export const EXPECTED_INDEXES: ExpectedIndex[] = [
   ...CORE_INDEXES,
   ...LOCATION_EVIDENCE_INDEXES,
+  ...SESSION_PERFORMANCE_INDEXES,
 ];
 
 export const SETTINGS_SEED_SQL = `INSERT OR IGNORE INTO settings (
@@ -294,7 +304,7 @@ export const SETTINGS_SEED_PARAMS = [
   'es',
 ] as const;
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export const LOCATION_EVIDENCE_REQUIRED_COLUMNS =
   LOCATION_EVIDENCE_TABLE.columns.map((entry) => entry.name);

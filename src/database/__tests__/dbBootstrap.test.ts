@@ -76,7 +76,7 @@ describe('database bootstrap hardening', () => {
 
     const emptyResult = await emptyMigrations.runDatabaseMigrations(emptyDatabase);
 
-    expect(emptyResult.appliedVersions).toEqual([1, 2]);
+    expect(emptyResult.appliedVersions).toEqual([1, 2, 3]);
     expect(emptyDatabase.userVersion).toBe(CURRENT_SCHEMA_VERSION);
 
     const partialDatabase = new FakeSQLiteDatabase({ schema: 'core', userVersion: 1 });
@@ -84,9 +84,10 @@ describe('database bootstrap hardening', () => {
 
     const partialResult = await migrationsModule.runDatabaseMigrations(partialDatabase);
 
-    expect(partialResult.appliedVersions).toEqual([2]);
+    expect(partialResult.appliedVersions).toEqual([2, 3]);
     expect(partialDatabase.userVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(partialDatabase.hasTable(locationEvidenceObjectCounts.tableName)).toBe(true);
+    expect(partialDatabase.hasIndex('idx_sessions_start_time')).toBe(true);
   });
 
   it('keeps bootstrap idempotent across repeated initialization', async () => {
