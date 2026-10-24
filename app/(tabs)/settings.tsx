@@ -26,7 +26,7 @@ function SettingsScreenComponent() {
     employee_name: '',
     employer_name: '',
     company_email: '',
-    tolerance_radius: 200,
+    tolerance_radius: 150,
     hourly_rate: 25,
     start_time: '07:00',
     overtime_multiplier: 1.5,

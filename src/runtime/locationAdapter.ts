@@ -57,6 +57,34 @@ export const locationAdapter = {
     }
   },
 
+  startLocationUpdates: async (
+    taskName: string,
+    options: { timeInterval: number; distanceInterval: number }
+  ) => {
+    const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(taskName).catch(() => false);
+    if (alreadyStarted) return;
+    await Location.startLocationUpdatesAsync(taskName, {
+      accuracy: Location.Accuracy.High,
+      timeInterval: options.timeInterval,
+      distanceInterval: options.distanceInterval,
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      activityType: Location.ActivityType.Other,
+      foregroundService: {
+        notificationTitle: 'WTracker: jornada activa',
+        notificationBody: 'Rastreando ubicación para detectar tu salida del sitio.',
+        notificationColor: '#D4AF37',
+      },
+    });
+  },
+
+  stopLocationUpdates: async (taskName: string) => {
+    const started = await Location.hasStartedLocationUpdatesAsync(taskName).catch(() => false);
+    if (started) {
+      await Location.stopLocationUpdatesAsync(taskName);
+    }
+  },
+
   isTaskRegistered: async (taskName: string) => {
     return await TaskManager.isTaskRegisteredAsync(taskName);
   }

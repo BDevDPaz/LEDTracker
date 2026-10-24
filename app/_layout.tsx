@@ -17,6 +17,7 @@ import { useLogFeedback } from '../src/feedback/useLogFeedback';
 import { initDatabase } from '../src/database/db';
 import dayjs from '../src/utils/dayjsSetup';
 import { useRuntimeSupervisor } from '../src/runtime/useRuntimeSupervisor';
+import { resolveNotificationRoute } from '../src/navigation/notificationRouting';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -26,10 +27,14 @@ void SplashScreen.preventAutoHideAsync();
 const LAST_FAILSAFE_CHECK_KEY = 'LAST_FAILSAFE_CHECK_TIMESTAMP';
 
 function handleNotificationAction(router: ReturnType<typeof useRouter>, data: Record<string, unknown>) {
-  if (data.action === 'OPEN_DAILY_SETUP') { router.push('/(tabs)'); setTimeout(() => router.setParams({ showSetup: 'true' }), 100); return; }
-  if (data.action === 'GENERATE_REPORT_PROMPT' || data.action === 'SHOW_REPORT_PROMPT') { router.push('/(tabs)/report'); return; }
-  if (data.action === 'CHECKOUT_DECISION') { router.push('/(tabs)'); setTimeout(() => router.setParams({ showCheckoutPrompt: 'true' }), 100); }
+  const route = resolveNotificationRoute(data);
+  if (!route) return;
+  router.push(route.pathname);
+  const params = route.params;
+  if (params) setTimeout(() => router.setParams(params), 100);
 }
+
+let lastHandledNotificationId: string | null = null;
 
 function FeedbackBridge() { useLogFeedback(); return null; }
 
@@ -76,15 +81,24 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    // Esperar a que el Stack esté montado: en arranque en frío la navegación
+    // antes de appIsReady se pierde.
+    if (!appIsReady) return;
+
     const lastResponse = Notifications.getLastNotificationResponse();
-    if (lastResponse?.notification?.request?.content?.data) { handleNotificationAction(router, lastResponse.notification.request.content.data as Record<string, unknown>); }
+    const lastId = lastResponse?.notification?.request?.identifier ?? null;
+    if (lastResponse?.notification?.request?.content?.data && lastId !== lastHandledNotificationId) {
+      lastHandledNotificationId = lastId;
+      handleNotificationAction(router, lastResponse.notification.request.content.data as Record<string, unknown>);
+    }
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        lastHandledNotificationId = response?.notification?.request?.identifier ?? null;
         const data = (response?.notification?.request?.content?.data as Record<string, unknown>) || {};
         handleNotificationAction(router, data);
       }
     );
     return () => subscription.remove();
-  }, [router]);
+  }, [router, appIsReady]);
 
   const onLayoutRootView = useCallback(async () => { if (appIsReady) { await SplashScreen.hideAsync(); } }, [appIsReady]);
   if (!appIsReady) return null;

@@ -36,6 +36,8 @@ import {
 import { formatTime } from '../../src/utils/dateUtils';
 import { DailySetupModal } from '../../src/components/modals/DailySetupModal';
 import { LunchModal } from '../../src/components/modals/LunchModal';
+import { PostWorkModal } from '../../src/components/modals/PostWorkModal';
+import { LocationService } from '../../src/services/LocationManager';
 import { log } from '../../src/utils/logger';
 import { getDailyCompletedSessions, getSettings } from '../../src/database/db';
 import { runDatabaseWork } from '../../src/database/dbWorkQueue';
@@ -66,6 +68,7 @@ function HomeScreenComponent() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupMode, setSetupMode] = useState<'start' | 'transit'>('start');
   const [showLunchModal, setShowLunchModal] = useState(false);
+  const [showPostWorkModal, setShowPostWorkModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Easter Egg
@@ -147,7 +150,27 @@ function HomeScreenComponent() {
     if (params.showCheckoutPrompt === 'true') {
       setShowLunchModal(true);
     }
-  }, [params.showSetup, params.showCheckoutPrompt]);
+
+    if (params.showPostWork === 'true') {
+      setShowPostWorkModal(true);
+    }
+  }, [params.showSetup, params.showCheckoutPrompt, params.showPostWork]);
+
+  const handlePostWorkEndDay = useCallback(async () => {
+    setShowPostWorkModal(false);
+    router.setParams({ showPostWork: undefined, postWorkSessionId: undefined });
+    // La sesión ya fue cerrada por el auto check-out: solo detenemos monitoreo restante.
+    await LocationService.stopMonitoring();
+    await engine.dispatch({ type: 'SYNC_ACTIVE_SESSION' });
+    showToast(t.toast_shift_ended || 'Jornada finalizada', 'success');
+  }, [router, showToast, t.toast_shift_ended]);
+
+  const handlePostWorkNewJob = useCallback(() => {
+    setShowPostWorkModal(false);
+    router.setParams({ showPostWork: undefined, postWorkSessionId: undefined });
+    setSetupMode('start');
+    setShowSetupModal(true);
+  }, [router]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -411,6 +434,12 @@ function HomeScreenComponent() {
           }}
           onStart={handleSetupSubmit}
           mode={setupMode}
+        />
+
+        <PostWorkModal
+          visible={showPostWorkModal}
+          onEndDay={handlePostWorkEndDay}
+          onNewJob={handlePostWorkNewJob}
         />
 
         <LunchModal

@@ -59,8 +59,8 @@ describe('LocationManager runtime geofence exit', () => {
     }));
 
     jest.doMock('expo-task-manager', () => ({
-      defineTask: jest.fn((_taskName, handler) => {
-        mockGeofenceTaskHandler = handler;
+      defineTask: jest.fn((taskName, handler) => {
+        if (taskName === 'GEOFENCE_TRACKING_TASK') mockGeofenceTaskHandler = handler;
       }),
       isTaskRegisteredAsync: jest.fn(),
     }));
@@ -96,6 +96,8 @@ describe('LocationManager runtime geofence exit', () => {
         stopGeofencing: jest.fn(),
         requestPermissions: jest.fn(),
         geocodeAddress: jest.fn(),
+        startLocationUpdates: jest.fn(),
+        stopLocationUpdates: jest.fn(),
       },
     }));
 
@@ -103,10 +105,12 @@ describe('LocationManager runtime geofence exit', () => {
       ensureDbReady: jest.fn(() => Promise.resolve(mockDb)),
       insertAuditLog,
       getAllAsync: jest.fn(),
+      updateSessionStatus: jest.fn(),
     }));
 
     jest.doMock('../Notifications', () => ({
       notifyGeofenceExitDetected,
+      notifyAutoCheckoutGeofenceExit: jest.fn(),
     }));
 
     jest.doMock('../../runtime/locationEvidence', () => ({

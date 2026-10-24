@@ -13,6 +13,7 @@ describe('workTrackerEffects runtime checkout semantics', () => {
   let getAllAsync: jest.Mock;
   let updateSessionStatus: jest.Mock;
   let stopMonitoring: jest.Mock;
+  let stopWorksiteTracking: jest.Mock;
   let workTrackerEffects: any;
 
   beforeEach(() => {
@@ -26,12 +27,15 @@ describe('workTrackerEffects runtime checkout semantics', () => {
     getAllAsync = jest.fn();
     updateSessionStatus = jest.fn();
     stopMonitoring = jest.fn();
+    stopWorksiteTracking = jest.fn();
 
     jest.doMock('@react-native-async-storage/async-storage', () => ({
       __esModule: true,
       default: mockAsyncStorage,
       ...mockAsyncStorage,
     }));
+
+    jest.doMock('../../services/worksitePolicy', () => ({ GEOFENCE_ENTRY_RADIUS_M: 150 }));
 
     jest.doMock('../../runtime/runtimeSupervisor', () => ({
       reconcileRuntimeState: jest.fn(),
@@ -45,6 +49,8 @@ describe('workTrackerEffects runtime checkout semantics', () => {
 
     jest.doMock('../../services/LocationManager', () => ({
       EXIT_TIMESTAMP_KEY,
+      startWorksiteTracking: jest.fn(),
+      stopWorksiteTracking,
       LocationService: {
         startMonitoringArrival: jest.fn(),
         stopMonitoring,
@@ -125,6 +131,7 @@ describe('workTrackerEffects runtime checkout semantics', () => {
     expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith(EXIT_TIMESTAMP_KEY);
 
     expect(stopMonitoring).toHaveBeenCalled();
+    expect(stopWorksiteTracking).toHaveBeenCalledWith(7);
 
     expect(dispatch).toHaveBeenCalledWith({
       type: 'DATA_LOADED',
